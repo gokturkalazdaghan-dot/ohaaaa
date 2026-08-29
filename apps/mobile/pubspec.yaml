@@ -1,0 +1,25 @@
+name: ohaaaa
+description: Ohaaaa — çok satıcılı süper-agregatör mobil uygulaması.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  # CardThemeData ve Color.withValues() Flutter 3.29 ile geldi.
+  sdk: ">=3.7.0 <4.0.0"
+  flutter: ">=3.29.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Tek harici bağımlılık. Durum yönetimi için Flutter'ın kendi
+  # ChangeNotifier/ListenableBuilder ikilisi yeterlidir; ek bir paket
+  # (provider, riverpod, bloc) bu ölçekte karmaşıklığı artırır.
+  http: ^1.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
