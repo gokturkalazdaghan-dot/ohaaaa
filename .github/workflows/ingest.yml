@@ -1,0 +1,62 @@
+# ============================================================================
+# Otonom alım döngüsü
+# ----------------------------------------------------------------------------
+# "Otonom ajan" pratikte budur: zamanlanmış, deterministik, günlüğü tutulan
+# ve çıkış kodu izlenen bir iş. Sürekli çalışan bir süreç DEĞİLDİR — çöktüğünde
+# sessizce durup kimsenin fark etmediği şey odur.
+#
+# Her çalışma:
+#   • ingest_runs tablosuna kaydedilir (ne zaman, kaç kalem, hangi hata)
+#   • başarısızsa iş kırmızı olur ve bildirim gider
+#   • katalog asla sessizce boşalmaz (boş feed = hata, bkz. pipeline.ts)
+# ============================================================================
+
+name: Ürün alımı
+
+on:
+  schedule:
+    # Her 6 saatte bir. Ortaklık feed'leri bundan sık güncellenmez;
+    # daha sık çekmek yalnızca kaynağı yorar.
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'Yalnızca bu kaynağı çalıştır (slug)'
+        required: false
+      dry_run:
+        description: 'Veritabanına yazmadan dene'
+        type: boolean
+        default: false
+
+concurrency:
+  # Bir önceki çalışma bitmediyse yenisi başlamaz: aynı mağazaya eşzamanlı
+  # istek göndermek nezaket ayarlarını anlamsız kılar.
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build --workspace @ohaaaa/shared
+      - run: npm run build --workspace @ohaaaa/ingest
+
+      - name: Alımı çalıştır
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OHAAAA_USER_AGENT: 'OhaaaaBot/1.0 (+https://ohaaaa.com/bot; iletisim@ohaaaa.com)'
+        run: |
+          node packages/ingest/dist/cli.js \
+            ${{ inputs.source && format('--source={0}', inputs.source) || '' }} \
+            ${{ inputs.dry_run && '--dry-run' || '' }}
