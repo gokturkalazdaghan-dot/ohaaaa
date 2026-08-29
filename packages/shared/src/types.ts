@@ -58,11 +58,42 @@ export interface Category {
   icon: string | null;
 }
 
-/** Bir taşeronun kanonik ürüne verdiği teklif. */
+/**
+ * Teklifi karşılayan taraf.
+ *
+ *   marketplace : Taşeron satar, sipariş bizde oluşur, komisyon keseriz.
+ *   affiliate   : Ortak mağaza satar, kullanıcıyı yönlendiririz, komisyon alırız.
+ *
+ * Bu ayrım arayüzde tek bir yerde görünür: birincide "Sepete ekle",
+ * ikincide "Mağazaya git" düğmesi çıkar. Karşılaştırma, sıralama ve fiyat
+ * mantığı ikisinde de aynıdır.
+ */
+export type Fulfillment = 'marketplace' | 'affiliate';
+
+/** Komisyon karşılığı trafik gönderdiğimiz dış mağaza. */
+export interface Merchant {
+  id: string;
+  slug: string;
+  displayName: string;
+  logoUrl: string | null;
+  homepageUrl: string;
+  rating: number | null;
+}
+
+/** Bir satıcının kanonik ürüne verdiği teklif (taşeron ya da ortak mağaza). */
 export interface Offer {
   id: string;
-  vendorId: string;
+  fulfillment: Fulfillment;
+
+  /** fulfillment === 'marketplace' ise dolu. */
+  vendorId: string | null;
   vendor: Pick<Vendor, 'id' | 'slug' | 'displayName' | 'logoUrl' | 'rating'> | null;
+
+  /** fulfillment === 'affiliate' ise dolu. */
+  merchantId: string | null;
+  merchant: Merchant | null;
+  /** Ortak mağazadaki ürün sayfası. Yönlendirme linki bundan türetilir. */
+  productUrl: string | null;
   title: string;
   sku: string | null;
   imageUrls: string[];
@@ -222,4 +253,16 @@ export interface VendorDashboardStats {
   activeProducts: number;
   outOfStockProducts: number;
   dailyRevenue: Array<{ day: string; revenueCents: number; orderCount: number }>;
+}
+
+/**
+ * Teklifi veren tarafın görünen adı ve puanı — arayüz hangi türde olduğunu
+ * bilmek zorunda kalmasın diye tek yerden çözülür.
+ */
+export function offerSellerName(offer: Offer): string {
+  return offer.vendor?.displayName ?? offer.merchant?.displayName ?? 'Mağaza';
+}
+
+export function offerSellerRating(offer: Offer): number | null {
+  return offer.vendor?.rating ?? offer.merchant?.rating ?? null;
 }

@@ -2,9 +2,15 @@
 
 import { useState } from 'react';
 
-import { discountPercent, formatMoney, type Offer } from '@ohaaaa/shared';
+import {
+  discountPercent,
+  formatMoney,
+  offerSellerName,
+  offerSellerRating,
+  type Offer,
+} from '@ohaaaa/shared';
 
-import { CartIcon, CheckIcon, StarIcon, TruckIcon } from './Icons';
+import { ArrowRightIcon, CartIcon, CheckIcon, StarIcon, TruckIcon } from './Icons';
 import { useCart } from '@/store/cart';
 
 /**
@@ -29,7 +35,14 @@ export function OfferRow({
   const percent = discountPercent(offer.priceCents, offer.compareAtPriceCents);
   const lowStock = offer.stock > 0 && offer.stock <= 5;
 
+  const isAffiliate = offer.fulfillment === 'affiliate';
+  const sellerName = offerSellerName(offer);
+  const sellerRating = offerSellerRating(offer);
+
   function handleAdd() {
+    // Ortak mağaza teklifleri sepete eklenemez; bu düğme onlarda çıkmaz.
+    if (isAffiliate || !offer.vendorId) return;
+
     add({
       productId: offer.id,
       groupSlug,
@@ -38,7 +51,7 @@ export function OfferRow({
       priceCents: offer.priceCents,
       quantity: 1,
       vendorId: offer.vendorId,
-      vendorName: offer.vendor?.displayName ?? 'Mağaza',
+      vendorName: sellerName,
       vendorSlug: offer.vendor?.slug ?? '',
       shippingFeeCents: offer.shippingFeeCents,
       freeShippingThresholdCents: offer.freeShippingThresholdCents,
@@ -65,15 +78,17 @@ export function OfferRow({
       )}
 
       {/* Mağaza */}
-      <div className="flex min-w-0 flex-1 items-center gap-3">
+      {/* min-w: düğme metni uzadığında (“Mağazaya git”) satıcı adının
+          birkaç karaktere kırpılmasını önler. */}
+      <div className="flex min-w-0 flex-1 items-center gap-3 sm:min-w-[10rem]">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand to-electric text-sm font-black text-white">
-          {(offer.vendor?.displayName ?? '?').charAt(0)}
+          {sellerName.charAt(0)}
         </span>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">{offer.vendor?.displayName}</p>
+          <p className="truncate text-sm font-semibold">{sellerName}</p>
           <p className="flex items-center gap-1 text-[11px] text-muted">
             <StarIcon className="h-3 w-3 fill-warning text-warning" />
-            <span className="tabular">{offer.vendor?.rating.toFixed(2) ?? '—'}</span>
+            <span className="tabular">{sellerRating?.toFixed(2) ?? '—'}</span>
             {offer.condition !== 'new' && (
               <span className="ml-1 rounded bg-surface-2 px-1.5 py-0.5">
                 {offer.condition === 'refurbished' ? 'Yenilenmiş' : 'İkinci el'}
@@ -117,25 +132,59 @@ export function OfferRow({
         <p className="tabular mt-0.5 text-[11px] text-muted">
           kargo dahil {formatMoney(offer.totalCostCents)}
         </p>
+        {isAffiliate && (
+          <p className="mt-0.5 text-[10px] text-subtle">satış {sellerName}’de tamamlanır</p>
+        )}
       </div>
 
-      <button
-        type="button"
-        onClick={handleAdd}
-        disabled={offer.stock === 0}
-        className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-40 ${
-          added
-            ? 'bg-success text-white'
-            : isBest
-              ? 'bg-gradient-to-r from-brand to-electric text-white hover:scale-[1.03]'
-              : 'border border-line bg-surface-2 text-fg hover:border-brand/50'
-        }`}
-      >
-        <span className="flex items-center gap-2">
-          {added ? <CheckIcon className="h-4 w-4" /> : <CartIcon className="h-4 w-4" />}
-          {offer.stock === 0 ? 'Tükendi' : added ? 'Eklendi' : 'Sepete ekle'}
-        </span>
-      </button>
+      {/*
+        İki teklif türü, iki farklı eylem:
+          • Taşeron  → sepete eklenir, sipariş bizde oluşur
+          • Ortak    → /git/<id> üzerinden mağazaya yönlendirilir
+
+        Yönlendirme normal bir bağlantıdır (JavaScript değil): kullanıcı
+        yeni sekmede açabilsin, tarayıcı ön yükleme yapabilsin diye.
+        rel="sponsored nofollow" ise reklam kurulunun ve arama motorlarının
+        beklediği açıklamadır — ticari bağlantı olduğunu bildirir.
+      */}
+      {isAffiliate ? (
+        <a
+          href={offer.stock === 0 ? undefined : `/git/${offer.id}`}
+          rel="sponsored nofollow noopener"
+          target="_blank"
+          aria-disabled={offer.stock === 0}
+          className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${
+            offer.stock === 0
+              ? 'pointer-events-none border border-line bg-surface-2 opacity-40'
+              : isBest
+                ? 'bg-gradient-to-r from-brand to-electric text-white hover:scale-[1.03]'
+                : 'border border-line bg-surface-2 text-fg hover:border-brand/50'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            {offer.stock === 0 ? 'Tükendi' : 'Mağazaya git'}
+            {offer.stock > 0 && <ArrowRightIcon className="h-4 w-4" />}
+          </span>
+        </a>
+      ) : (
+        <button
+          type="button"
+          onClick={handleAdd}
+          disabled={offer.stock === 0}
+          className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-40 ${
+            added
+              ? 'bg-success text-white'
+              : isBest
+                ? 'bg-gradient-to-r from-brand to-electric text-white hover:scale-[1.03]'
+                : 'border border-line bg-surface-2 text-fg hover:border-brand/50'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            {added ? <CheckIcon className="h-4 w-4" /> : <CartIcon className="h-4 w-4" />}
+            {offer.stock === 0 ? 'Tükendi' : added ? 'Eklendi' : 'Sepete ekle'}
+          </span>
+        </button>
+      )}
     </li>
   );
 }

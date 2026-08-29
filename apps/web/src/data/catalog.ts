@@ -14,6 +14,7 @@ import 'server-only';
 import type {
   Category,
   FlashDeal,
+  Offer,
   ProductGroupWithOffers,
   SearchResult,
   Vendor,
@@ -34,6 +35,17 @@ export interface SearchParams {
   sort?: SortOption;
   limit?: number;
   offset?: number;
+}
+
+/**
+ * PostgREST tekil ilişkiyi ortama göre dizi ya da nesne döndürür.
+ * Bu farkı her çağrı yerinde tekrar ele almak yerine tek yerde açıyoruz.
+ */
+function unwrapRelation(value: unknown): Record<string, unknown> | null {
+  const unwrapped = Array.isArray(value) ? value[0] : value;
+  return unwrapped && typeof unwrapped === 'object'
+    ? (unwrapped as Record<string, unknown>)
+    : null;
 }
 
 /** Veri kaynağının hangisi olduğunu arayüze bildirir (demo rozeti için). */
@@ -155,10 +167,12 @@ export async function getProductGroup(slug: string): Promise<ProductGroupWithOff
         `id, slug, title, brand, image_url, description, category_id, attributes,
          offer_count, min_price_cents, max_price_cents,
          offers:products (
-           id, vendor_id, title, sku, image_urls, price_cents, compare_at_price_cents,
+           id, fulfillment, vendor_id, merchant_id, product_url,
+           title, sku, image_urls, price_cents, compare_at_price_cents,
            currency, stock, condition, shipping_fee_cents, free_shipping_threshold_cents,
            estimated_delivery_days, status,
-           vendor:vendors ( id, slug, display_name, logo_url, rating )
+           vendor:vendors ( id, slug, display_name, logo_url, rating ),
+           merchant:merchants ( id, slug, display_name, logo_url, homepage_url )
          )`,
       )
       .eq('slug', slug)
@@ -169,18 +183,18 @@ export async function getProductGroup(slug: string): Promise<ProductGroupWithOff
     if (!data) return null;
 
     const offers = ((data.offers as Record<string, unknown>[] | null) ?? [])
-      .map((row) => {
-        const rawVendor = row.vendor;
-        const vendor = (Array.isArray(rawVendor) ? rawVendor[0] : rawVendor) as
-          | Record<string, unknown>
-          | null;
+      .map((row): Offer => {
+        const vendor = unwrapRelation(row.vendor);
+        const merchant = unwrapRelation(row.merchant);
 
         const priceCents = Number(row.price_cents);
         const shippingFeeCents = Number(row.shipping_fee_cents);
 
         return {
           id: String(row.id),
-          vendorId: String(row.vendor_id),
+          fulfillment: (row.fulfillment as Offer['fulfillment']) ?? 'marketplace',
+
+          vendorId: row.vendor_id ? String(row.vendor_id) : null,
           vendor: vendor
             ? {
                 id: String(vendor.id),
@@ -190,6 +204,20 @@ export async function getProductGroup(slug: string): Promise<ProductGroupWithOff
                 rating: Number(vendor.rating),
               }
             : null,
+
+          merchantId: row.merchant_id ? String(row.merchant_id) : null,
+          merchant: merchant
+            ? {
+                id: String(merchant.id),
+                slug: String(merchant.slug),
+                displayName: String(merchant.display_name),
+                logoUrl: merchant.logo_url ? String(merchant.logo_url) : null,
+                homepageUrl: String(merchant.homepage_url),
+                rating: null,
+              }
+            : null,
+          productUrl: row.product_url ? String(row.product_url) : null,
+
           title: String(row.title),
           sku: row.sku ? String(row.sku) : null,
           imageUrls: (row.image_urls as string[] | null) ?? [],

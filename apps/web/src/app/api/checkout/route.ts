@@ -73,6 +73,22 @@ export async function POST(request: Request) {
         );
       }
 
+      // Ortak mağaza teklifi sipariş edilemez — canlı modda create_order()
+      // aynı kuralı uygular; demo modu ondan sapmamalıdır.
+      if (offer.fulfillment === 'affiliate' || !offer.vendorId) {
+        return NextResponse.json(
+          {
+            error: {
+              code: 'validation_failed',
+              message:
+                `"${offer.title}" ortak mağazada satılıyor; ` +
+                `sipariş yerine mağazaya yönlendirme yapılmalı.`,
+            },
+          },
+          { status: 422 },
+        );
+      }
+
       items.push({
         productId: offer.id,
         groupSlug: group.slug,

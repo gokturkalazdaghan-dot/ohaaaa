@@ -6,7 +6,14 @@
  * için demo modundan canlıya geçildiğinde arayüz değişmez.
  */
 
-import type { Category, FlashDeal, Offer, ProductGroupWithOffers, Vendor } from '@ohaaaa/shared';
+import type {
+  Category,
+  FlashDeal,
+  Merchant,
+  Offer,
+  ProductGroupWithOffers,
+  Vendor,
+} from '@ohaaaa/shared';
 
 export const demoCategories: Category[] = [
   { id: 'cat-elektronik', parentId: null, slug: 'elektronik', name: 'Elektronik', icon: 'cpu' },
@@ -67,14 +74,63 @@ const vendorRef = (id: string) => {
   };
 };
 
-function offer(input: Omit<Offer, 'vendor' | 'totalCostCents' | 'currency' | 'condition' | 'status'> &
-  Partial<Pick<Offer, 'condition' | 'status'>>): Offer {
+/** Demo ortak mağazalar — supabase/seed.sql ile aynı. */
+export const demoMerchants: Merchant[] = [
+  {
+    id: 'b1000000-0000-4000-8000-000000000001',
+    slug: 'ornek-magaza-a',
+    displayName: 'Örnek Mağaza A',
+    logoUrl: null,
+    homepageUrl: 'https://magaza-a.example',
+    rating: 4.6,
+  },
+  {
+    id: 'b1000000-0000-4000-8000-000000000002',
+    slug: 'ornek-magaza-b',
+    displayName: 'Örnek Mağaza B',
+    logoUrl: null,
+    homepageUrl: 'https://magaza-b.example',
+    rating: 4.3,
+  },
+];
+
+type OfferInput = Omit<
+  Offer,
+  | 'vendor' | 'merchant' | 'merchantId' | 'productUrl' | 'fulfillment'
+  | 'totalCostCents' | 'currency' | 'condition' | 'status'
+> & Partial<Pick<Offer, 'condition' | 'status'>>;
+
+/** Taşeron teklifi. */
+function offer(input: OfferInput & { vendorId: string }): Offer {
   return {
     ...input,
+    fulfillment: 'marketplace',
     currency: 'TRY',
     condition: input.condition ?? 'new',
     status: input.status ?? 'active',
     vendor: vendorRef(input.vendorId),
+    merchantId: null,
+    merchant: null,
+    productUrl: null,
+    totalCostCents: input.priceCents + input.shippingFeeCents,
+  };
+}
+
+/** Ortak mağaza teklifi — sipariş değil, yönlendirme üretir. */
+function affiliateOffer(
+  input: Omit<OfferInput, 'vendorId'> & { merchantId: string; productUrl: string },
+): Offer {
+  const merchant = demoMerchants.find((m) => m.id === input.merchantId)!;
+
+  return {
+    ...input,
+    fulfillment: 'affiliate',
+    currency: 'TRY',
+    condition: input.condition ?? 'new',
+    status: input.status ?? 'active',
+    vendorId: null,
+    vendor: null,
+    merchant,
     totalCostCents: input.priceCents + input.shippingFeeCents,
   };
 }
@@ -90,10 +146,26 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
       '6.1" Super Retina XDR ekran, A16 Bionic işlemci, 48MP ana kamera, USB-C bağlantı.',
     categoryId: 'cat-elektronik',
     attributes: { Renk: 'Siyah', Depolama: '128GB', Ekran: '6.1 inç' },
-    offerCount: 3,
-    minPriceCents: 5_389_900,
+    offerCount: 5,
+    minPriceCents: 5_349_900,
     maxPriceCents: 5_629_900,
     offers: [
+      affiliateOffer({
+        id: '60000000-0000-4000-8000-000000000001',
+        merchantId: 'b1000000-0000-4000-8000-000000000001',
+        productUrl: 'https://magaza-a.example/urun/iphone-15-128',
+        title: 'Apple iPhone 15 128GB Siyah', sku: 'MA-IP15-128',
+        imageUrls: [], priceCents: 5_349_900, compareAtPriceCents: 6_299_900, stock: 25,
+        shippingFeeCents: 0, freeShippingThresholdCents: 30_000, estimatedDeliveryDays: 2,
+      }),
+      affiliateOffer({
+        id: '60000000-0000-4000-8000-000000000002',
+        merchantId: 'b1000000-0000-4000-8000-000000000002',
+        productUrl: 'https://magaza-b.example/p/iphone15-128gb',
+        title: 'iPhone 15 128 GB', sku: 'MB-APPLE-IP15',
+        imageUrls: [], priceCents: 5_459_900, compareAtPriceCents: null, stock: 8,
+        shippingFeeCents: 2_999, freeShippingThresholdCents: null, estimatedDeliveryDays: 3,
+      }),
       offer({
         id: 'offer-ip15-mv', vendorId: 'vendor-moda-vitrin',
         title: 'iPhone 15 128 GB Siyah (Distribütör Garantili)', sku: 'MVIP15',
@@ -123,10 +195,18 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     description: 'Sektör lideri gürültü engelleme, 30 saat pil ömrü, çok noktalı bağlantı.',
     categoryId: 'cat-elektronik',
     attributes: { Renk: 'Siyah', Tip: 'Kulak üstü', 'Gürültü engelleme': 'Var' },
-    offerCount: 2,
-    minPriceCents: 1_189_900,
+    offerCount: 3,
+    minPriceCents: 1_149_900,
     maxPriceCents: 1_249_000,
     offers: [
+      affiliateOffer({
+        id: '60000000-0000-4000-8000-000000000003',
+        merchantId: 'b1000000-0000-4000-8000-000000000001',
+        productUrl: 'https://magaza-a.example/urun/sony-wh1000xm5',
+        title: 'Sony WH-1000XM5 Kulaklık', sku: 'MA-SONY-XM5',
+        imageUrls: [], priceCents: 1_149_900, compareAtPriceCents: 1_449_900, stock: 60,
+        shippingFeeCents: 0, freeShippingThresholdCents: 30_000, estimatedDeliveryDays: 2,
+      }),
       offer({
         id: 'offer-xm5-tm', vendorId: 'vendor-teknomarkt',
         title: 'Sony WH-1000XM5 Kablosuz Kulaklık Siyah', sku: 'TMXM5',
