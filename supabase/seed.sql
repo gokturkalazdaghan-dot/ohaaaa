@@ -210,4 +210,81 @@ values
    date_trunc('day', now()), date_trunc('day', now()) + interval '1 day')
 on conflict (id) do nothing;
 
+-- ---------------------------------------------------------------------------
+-- Affiliate ortakları ve teklifleri
+-- ---------------------------------------------------------------------------
+-- Aynı kanonik ürüne hem taşeron hem ortak mağaza teklif verebilir; fiyat
+-- karşılaştırma motoru ikisini yan yana gösterir. Kullanıcı için fark yoktur,
+-- bizim için fark "sipariş mi, yönlendirme mi" sorusudur.
+insert into public.merchants
+  (id, slug, display_name, homepage_url, network, status, tracking_id,
+   deeplink_template, default_commission_rate, cookie_window_days, postback_secret)
+values
+  ('b1000000-0000-4000-8000-000000000001', 'ornek-magaza-a', 'Örnek Mağaza A',
+   'https://magaza-a.example', 'ornek-ag', 'active', 'ohaaaa-21',
+   'https://ag.example/c?pub={tracking_id}&sub={subid}&url={url_encoded}',
+   0.0450, 30, 'seed-postback-secret-a'),
+
+  ('b1000000-0000-4000-8000-000000000002', 'ornek-magaza-b', 'Örnek Mağaza B',
+   'https://magaza-b.example', 'direct', 'active', 'ohaaaa',
+   '{url}?ref={tracking_id}&subid={subid}',
+   0.0300, 7, 'seed-postback-secret-b')
+on conflict (id) do nothing;
+
+insert into public.sources
+  (id, merchant_id, slug, name, kind, endpoint_url, field_mapping, schedule_cron)
+values
+  ('c1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001',
+   'magaza-a-genel', 'Örnek Mağaza A — genel feed', 'feed_csv',
+   'https://magaza-a.example/feeds/products.csv',
+   '{"external_id":"id","title":"title","price":"sale_price","gtin":"gtin",
+     "url":"link","image":"image_link","stock":"availability","brand":"brand"}',
+   '0 */6 * * *'),
+
+  ('c1000000-0000-4000-8000-000000000002', 'b1000000-0000-4000-8000-000000000002',
+   'magaza-b-genel', 'Örnek Mağaza B — genel feed', 'feed_xml',
+   'https://magaza-b.example/feeds/products.xml',
+   '{"external_id":"g:id","title":"g:title","price":"g:price","gtin":"g:gtin",
+     "url":"g:link","image":"g:image_link","brand":"g:brand"}',
+   '0 */6 * * *')
+on conflict (id) do nothing;
+
+insert into public.products
+  (id, fulfillment, merchant_id, source_id, group_id, external_id, title, brand,
+   category_id, image_urls, price_cents, compare_at_price_cents, stock,
+   shipping_fee_cents, free_shipping_threshold_cents, estimated_delivery_days,
+   product_url, commission_rate, status)
+values
+  -- iPhone 15: taşeron tekliflerinin yanına iki ortak mağaza teklifi
+  ('60000000-0000-4000-8000-000000000001', 'affiliate',
+   'b1000000-0000-4000-8000-000000000001', 'c1000000-0000-4000-8000-000000000001',
+   '40000000-0000-4000-8000-000000000001', 'MA-IP15-128',
+   'Apple iPhone 15 128GB Siyah', 'Apple', 'c0000000-0000-4000-8000-000000000011',
+   '{https://images.ohaaaa.com/p/iphone-15.jpg}', 5349900, 6299900, 25,
+   0, 30000, 2, 'https://magaza-a.example/urun/iphone-15-128', 0.0250, 'active'),
+
+  ('60000000-0000-4000-8000-000000000002', 'affiliate',
+   'b1000000-0000-4000-8000-000000000002', 'c1000000-0000-4000-8000-000000000002',
+   '40000000-0000-4000-8000-000000000001', 'MB-APPLE-IP15',
+   'iPhone 15 128 GB', 'Apple', 'c0000000-0000-4000-8000-000000000011',
+   '{https://images.ohaaaa.com/p/iphone-15.jpg}', 5459900, null, 8,
+   2999, null, 3, 'https://magaza-b.example/p/iphone15-128gb', null, 'active'),
+
+  -- Sony XM5
+  ('60000000-0000-4000-8000-000000000003', 'affiliate',
+   'b1000000-0000-4000-8000-000000000001', 'c1000000-0000-4000-8000-000000000001',
+   '40000000-0000-4000-8000-000000000002', 'MA-SONY-XM5',
+   'Sony WH-1000XM5 Kulaklık', 'Sony', 'c0000000-0000-4000-8000-000000000013',
+   '{https://images.ohaaaa.com/p/wh1000xm5.jpg}', 1149900, 1449900, 60,
+   0, 30000, 2, 'https://magaza-a.example/urun/sony-wh1000xm5', 0.0500, 'active'),
+
+  -- Airfryer
+  ('60000000-0000-4000-8000-000000000004', 'affiliate',
+   'b1000000-0000-4000-8000-000000000002', 'c1000000-0000-4000-8000-000000000002',
+   '40000000-0000-4000-8000-000000000006', 'MB-PHILIPS-AFXXL',
+   'Philips Airfryer XXL 7.3L', 'Philips', 'c0000000-0000-4000-8000-000000000003',
+   '{https://images.ohaaaa.com/p/airfryer-xxl.jpg}', 774900, 999900, 14,
+   0, 30000, 3, 'https://magaza-b.example/p/philips-airfryer-xxl', null, 'active')
+on conflict (id) do nothing;
+
 commit;

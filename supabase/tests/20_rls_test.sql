@@ -53,12 +53,36 @@ begin
     when insufficient_privilege then null;
   end;
 
-  if (select count(*) from public.products) <> 12 then
-    raise exception 'BAŞARISIZ: anon 12 aktif ürün görmeliydi, % gördü',
+  -- Sabit sayı yerine kural doğrulanır: anon, onaylı taşeronun ve aktif
+  -- ortak mağazanın AKTİF tekliflerinin tamamını görmeli, fazlasını değil.
+  if (select count(*) from public.products) <> (
+       select count(*) from public.products p
+       where p.status = 'active'
+         and (
+           (p.fulfillment = 'marketplace' and exists (
+              select 1 from public.vendors v
+              where v.id = p.vendor_id and v.status = 'approved'))
+           or
+           (p.fulfillment = 'affiliate' and exists (
+              select 1 from public.merchants m
+              where m.id = p.merchant_id and m.status = 'active'))
+         )
+     ) then
+    raise exception 'BAŞARISIZ: anon''un gördüğü ürün kümesi beklenenden farklı (%)',
       (select count(*) from public.products);
   end if;
 
-  raise notice '✓ anon: yalnızca aktif katalog görünüyor; anahtar/sipariş erişimi reddedildi';
+  -- Her iki teklif türü de vitrinde görünmeli: affiliate teklifleri
+  -- politika güncellemesi sırasında sessizce kaybolabilirdi.
+  if not exists (select 1 from public.products where fulfillment = 'affiliate') then
+    raise exception 'BAŞARISIZ: anon affiliate tekliflerini göremiyor';
+  end if;
+
+  if not exists (select 1 from public.products where fulfillment = 'marketplace') then
+    raise exception 'BAŞARISIZ: anon taşeron tekliflerini göremiyor';
+  end if;
+
+  raise notice '✓ anon: her iki teklif türü de görünür, taslak/anahtar/sipariş kapalı';
 end
 $$;
 

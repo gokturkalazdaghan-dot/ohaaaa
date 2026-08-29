@@ -278,6 +278,25 @@ create trigger order_items_decrement_stock
   after insert on public.order_items
   for each row execute function public.tg_order_items_decrement_stock();
 
+-- ---------------------------------------------------------------------------
+-- assert_orderable — bir teklif bizde sipariş edilebilir mi?
+-- ---------------------------------------------------------------------------
+-- Ayrı bir fonksiyondur çünkü kural zamanla genişler (ör. affiliate teklifleri
+-- 005 numaralı migration'da eklendiğinde). Kuralı burada tutmak, 150 satırlık
+-- create_order() gövdesini her kural değişiminde yeniden yazmayı önler.
+create or replace function public.assert_orderable(p_product public.products)
+returns void
+language plpgsql
+immutable
+as $$
+begin
+  if p_product.status <> 'active' then
+    raise exception 'OHAAAA_PRODUCT_UNAVAILABLE: % satışta değil', p_product.title
+      using errcode = 'check_violation';
+  end if;
+end;
+$$;
+
 -- ===========================================================================
 -- create_order — SPLIT-CART çekirdeği
 -- ---------------------------------------------------------------------------
@@ -350,10 +369,8 @@ begin
         v_item ->> 'product_id' using errcode = 'no_data_found';
     end if;
 
-    if v_product.status <> 'active' then
-      raise exception 'OHAAAA_PRODUCT_UNAVAILABLE: % satışta değil', v_product.title
-        using errcode = 'check_violation';
-    end if;
+    -- Satılabilirlik kuralları tek yerde (bkz. assert_orderable).
+    perform public.assert_orderable(v_product);
 
     select * into v_vendor from public.vendors where id = v_product.vendor_id;
 
