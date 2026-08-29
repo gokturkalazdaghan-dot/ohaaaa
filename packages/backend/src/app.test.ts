@@ -13,7 +13,7 @@ import { after, before, test } from 'node:test';
 
 import { createApp } from './app.js';
 import type { Env } from './config/env.js';
-import { generateApiKey } from './lib/apiKey.js';
+import { generateApiKey } from '@ohaaaa/shared/api-key';
 import { createLogger } from './lib/logger.js';
 import type { ServiceClient } from './lib/supabase.js';
 import type { ApiKeyRecord, ApiKeyStore } from './middleware/apiKeyAuth.js';

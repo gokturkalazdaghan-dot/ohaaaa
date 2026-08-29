@@ -18,7 +18,7 @@ import type { NextFunction, Request, Response } from 'express';
 
 import type { ApiScope } from '@ohaaaa/shared';
 
-import { extractPrefix, hashApiKey, safeCompareHash } from '../lib/apiKey.js';
+import { extractPrefix, hashApiKey, safeCompareHash } from '@ohaaaa/shared/api-key';
 import { forbidden, unauthorized } from '../lib/errors.js';
 import type { AuthenticatedVendor } from './context.js';
 

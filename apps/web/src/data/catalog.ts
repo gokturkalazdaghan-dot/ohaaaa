@@ -1,0 +1,360 @@
+/**
+ * Katalog erişim katmanı.
+ *
+ * Tek bir arayüzün arkasında iki kaynak vardır:
+ *   • Supabase yapılandırılmışsa gerçek veritabanı (search_products RPC'si)
+ *   • Değilse yerleşik demo veri kümesi
+ *
+ * Sayfalar hangi kaynağın kullanıldığını bilmez. Bu ayrım sayesinde arayüz,
+ * veritabanı kurulmadan geliştirilebilir ve gözden geçirilebilir.
+ */
+
+import 'server-only';
+
+import type {
+  Category,
+  FlashDeal,
+  ProductGroupWithOffers,
+  SearchResult,
+  Vendor,
+} from '@ohaaaa/shared';
+
+import { isSupabaseConfigured } from '@/lib/env';
+import { createClient } from '@/lib/supabase/server';
+
+import { demoCategories, demoFlashDeals, demoProductGroups, demoVendors } from './demo';
+
+export type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'offers';
+
+export interface SearchParams {
+  query?: string;
+  categoryId?: string;
+  minPriceCents?: number;
+  maxPriceCents?: number;
+  sort?: SortOption;
+  limit?: number;
+  offset?: number;
+}
+
+/** Veri kaynağının hangisi olduğunu arayüze bildirir (demo rozeti için). */
+export function isDemoMode(): boolean {
+  return !isSupabaseConfigured();
+}
+
+/**
+ * Türkçe karakterleri ASCII'ye indirger.
+ * SQL'deki public.normalize_search() ile aynı davranışı üretir; demo modu
+ * ile canlı mod arasında arama sonuçları tutarlı kalsın diye.
+ */
+function normalize(value: string): string {
+  const map: Record<string, string> = {
+    Ğ: 'g', Ü: 'u', Ş: 's', İ: 'i', Ö: 'o', Ç: 'c', I: 'i',
+    ğ: 'g', ü: 'u', ş: 's', ı: 'i', ö: 'o', ç: 'c',
+    Â: 'a', Î: 'i', Û: 'u', â: 'a', î: 'i', û: 'u',
+  };
+  return value.replace(/[ĞÜŞİÖÇIğüşıöçÂÎÛâîû]/g, (char) => map[char] ?? char).toLowerCase();
+}
+
+// ---------------------------------------------------------------------------
+// Arama
+// ---------------------------------------------------------------------------
+export async function searchProducts(params: SearchParams): Promise<SearchResult[]> {
+  const supabase = await createClient();
+
+  if (supabase) {
+    const { data, error } = await supabase.rpc('search_products', {
+      p_query: params.query ?? null,
+      p_category_id: params.categoryId ?? null,
+      p_min_price: params.minPriceCents ?? null,
+      p_max_price: params.maxPriceCents ?? null,
+      p_sort: params.sort ?? 'relevance',
+      p_limit: params.limit ?? 24,
+      p_offset: params.offset ?? 0,
+    });
+
+    if (error) throw new Error(`Arama başarısız: ${error.message}`);
+
+    return (data ?? []).map(
+      (row: Record<string, unknown>): SearchResult => ({
+        groupId: String(row.group_id),
+        slug: String(row.slug),
+        title: String(row.title),
+        brand: row.brand ? String(row.brand) : null,
+        imageUrl: row.image_url ? String(row.image_url) : null,
+        offerCount: Number(row.offer_count),
+        minPriceCents: row.min_price_cents === null ? null : Number(row.min_price_cents),
+        maxPriceCents: row.max_price_cents === null ? null : Number(row.max_price_cents),
+        bestOfferId: row.best_offer_id ? String(row.best_offer_id) : null,
+        bestVendorId: row.best_vendor_id ? String(row.best_vendor_id) : null,
+        bestVendorName: row.best_vendor_name ? String(row.best_vendor_name) : null,
+      }),
+    );
+  }
+
+  return searchDemo(params);
+}
+
+/** Demo modu araması — SQL'deki kelime bazlı AND eşleştirmesini taklit eder. */
+function searchDemo(params: SearchParams): SearchResult[] {
+  const tokens = params.query ? normalize(params.query).split(/\s+/).filter(Boolean) : [];
+
+  let results = demoProductGroups.filter((group) => {
+    const haystack = normalize(`${group.title} ${group.brand ?? ''}`);
+
+    // Her kelime eşleşmeli (AND semantiği) — tek kelime tutmuyorsa elenir.
+    if (!tokens.every((token) => haystack.includes(token))) return false;
+
+    if (params.categoryId && group.categoryId !== params.categoryId) return false;
+    if (params.minPriceCents && (group.minPriceCents ?? 0) < params.minPriceCents) return false;
+    if (params.maxPriceCents && (group.minPriceCents ?? 0) > params.maxPriceCents) return false;
+
+    return true;
+  });
+
+  const sort = params.sort ?? 'relevance';
+  results = [...results].sort((a, b) => {
+    if (sort === 'price_asc') return (a.minPriceCents ?? 0) - (b.minPriceCents ?? 0);
+    if (sort === 'price_desc') return (b.minPriceCents ?? 0) - (a.minPriceCents ?? 0);
+    if (sort === 'offers') return b.offerCount - a.offerCount;
+    return a.title.localeCompare(b.title, 'tr');
+  });
+
+  const offset = params.offset ?? 0;
+  return results.slice(offset, offset + (params.limit ?? 24)).map(toSearchResult);
+}
+
+function toSearchResult(group: ProductGroupWithOffers): SearchResult {
+  // En iyi teklif = en düşük TOPLAM maliyet (ürün + kargo) — SQL ile aynı kural.
+  const best = [...group.offers].sort((a, b) => a.totalCostCents - b.totalCostCents)[0];
+
+  return {
+    groupId: group.id,
+    slug: group.slug,
+    title: group.title,
+    brand: group.brand,
+    imageUrl: group.imageUrl,
+    offerCount: group.offerCount,
+    minPriceCents: group.minPriceCents,
+    maxPriceCents: group.maxPriceCents,
+    bestOfferId: best?.id ?? null,
+    bestVendorId: best?.vendorId ?? null,
+    bestVendorName: best?.vendor?.displayName ?? null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Ürün detayı
+// ---------------------------------------------------------------------------
+export async function getProductGroup(slug: string): Promise<ProductGroupWithOffers | null> {
+  const supabase = await createClient();
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('product_groups')
+      .select(
+        `id, slug, title, brand, image_url, description, category_id, attributes,
+         offer_count, min_price_cents, max_price_cents,
+         offers:products (
+           id, vendor_id, title, sku, image_urls, price_cents, compare_at_price_cents,
+           currency, stock, condition, shipping_fee_cents, free_shipping_threshold_cents,
+           estimated_delivery_days, status,
+           vendor:vendors ( id, slug, display_name, logo_url, rating )
+         )`,
+      )
+      .eq('slug', slug)
+      .eq('offers.status', 'active')
+      .maybeSingle();
+
+    if (error) throw new Error(`Ürün okunamadı: ${error.message}`);
+    if (!data) return null;
+
+    const offers = ((data.offers as Record<string, unknown>[] | null) ?? [])
+      .map((row) => {
+        const rawVendor = row.vendor;
+        const vendor = (Array.isArray(rawVendor) ? rawVendor[0] : rawVendor) as
+          | Record<string, unknown>
+          | null;
+
+        const priceCents = Number(row.price_cents);
+        const shippingFeeCents = Number(row.shipping_fee_cents);
+
+        return {
+          id: String(row.id),
+          vendorId: String(row.vendor_id),
+          vendor: vendor
+            ? {
+                id: String(vendor.id),
+                slug: String(vendor.slug),
+                displayName: String(vendor.display_name),
+                logoUrl: vendor.logo_url ? String(vendor.logo_url) : null,
+                rating: Number(vendor.rating),
+              }
+            : null,
+          title: String(row.title),
+          sku: row.sku ? String(row.sku) : null,
+          imageUrls: (row.image_urls as string[] | null) ?? [],
+          priceCents,
+          compareAtPriceCents:
+            row.compare_at_price_cents === null ? null : Number(row.compare_at_price_cents),
+          currency: 'TRY' as const,
+          stock: Number(row.stock),
+          condition: row.condition as 'new' | 'refurbished' | 'used',
+          shippingFeeCents,
+          freeShippingThresholdCents:
+            row.free_shipping_threshold_cents === null
+              ? null
+              : Number(row.free_shipping_threshold_cents),
+          estimatedDeliveryDays: Number(row.estimated_delivery_days),
+          status: row.status as 'draft' | 'active' | 'out_of_stock' | 'archived',
+          totalCostCents: priceCents + shippingFeeCents,
+        };
+      })
+      .sort((a, b) => a.totalCostCents - b.totalCostCents);
+
+    return {
+      id: String(data.id),
+      slug: String(data.slug),
+      title: String(data.title),
+      brand: data.brand ? String(data.brand) : null,
+      imageUrl: data.image_url ? String(data.image_url) : null,
+      description: data.description ? String(data.description) : null,
+      categoryId: data.category_id ? String(data.category_id) : null,
+      attributes: (data.attributes as Record<string, string> | null) ?? {},
+      offerCount: Number(data.offer_count),
+      minPriceCents: data.min_price_cents === null ? null : Number(data.min_price_cents),
+      maxPriceCents: data.max_price_cents === null ? null : Number(data.max_price_cents),
+      offers,
+    };
+  }
+
+  const group = demoProductGroups.find((candidate) => candidate.slug === slug);
+  if (!group) return null;
+
+  return {
+    ...group,
+    offers: [...group.offers].sort((a, b) => a.totalCostCents - b.totalCostCents),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Kampanyalar, kategoriler, taşeronlar
+// ---------------------------------------------------------------------------
+export async function getFlashDeals(limit = 3): Promise<FlashDeal[]> {
+  const supabase = await createClient();
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('flash_deals')
+      .select(
+        `id, product_id, headline, deal_price_cents, stock_limit, sold_count, ends_at,
+         product:products (
+           title, price_cents, image_urls, group_id,
+           vendor:vendors ( display_name ),
+           group:product_groups ( slug )
+         )`,
+      )
+      .lte('starts_at', new Date().toISOString())
+      .gte('ends_at', new Date().toISOString())
+      .order('priority', { ascending: false })
+      .limit(limit);
+
+    if (error) throw new Error(`Kampanyalar okunamadı: ${error.message}`);
+
+    return (data ?? []).map((row: Record<string, unknown>): FlashDeal => {
+      const rawProduct = row.product;
+      const product = (Array.isArray(rawProduct) ? rawProduct[0] : rawProduct) as
+        | Record<string, unknown>
+        | null;
+
+      const rawVendor = product?.vendor;
+      const vendor = (Array.isArray(rawVendor) ? rawVendor[0] : rawVendor) as
+        | Record<string, unknown>
+        | null;
+
+      const rawGroup = product?.group;
+      const group = (Array.isArray(rawGroup) ? rawGroup[0] : rawGroup) as
+        | Record<string, unknown>
+        | null;
+
+      return {
+        id: String(row.id),
+        productId: String(row.product_id),
+        groupSlug: group?.slug ? String(group.slug) : null,
+        headline: String(row.headline),
+        title: product?.title ? String(product.title) : 'Ürün',
+        imageUrl: (product?.image_urls as string[] | null)?.[0] ?? null,
+        originalPriceCents: product?.price_cents ? Number(product.price_cents) : 0,
+        dealPriceCents: Number(row.deal_price_cents),
+        stockLimit: row.stock_limit === null ? null : Number(row.stock_limit),
+        soldCount: Number(row.sold_count),
+        vendorName: vendor?.display_name ? String(vendor.display_name) : null,
+        endsAt: String(row.ends_at),
+      };
+    });
+  }
+
+  return demoFlashDeals.slice(0, limit);
+}
+
+export async function getCategories(): Promise<Category[]> {
+  const supabase = await createClient();
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('categories')
+      .select('id, parent_id, slug, name, icon')
+      .is('parent_id', null)
+      .eq('is_active', true)
+      .order('sort_order');
+
+    if (error) throw new Error(`Kategoriler okunamadı: ${error.message}`);
+
+    return (data ?? []).map((row) => ({
+      id: String(row.id),
+      parentId: row.parent_id ? String(row.parent_id) : null,
+      slug: String(row.slug),
+      name: String(row.name),
+      icon: row.icon ? String(row.icon) : null,
+    }));
+  }
+
+  return demoCategories;
+}
+
+export async function getVendors(): Promise<Vendor[]> {
+  const supabase = await createClient();
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('vendors')
+      .select(
+        `id, slug, display_name, description, logo_url, status,
+         commission_rate, rating, rating_count, active_product_count`,
+      )
+      .eq('status', 'approved')
+      .order('rating', { ascending: false });
+
+    if (error) throw new Error(`Taşeronlar okunamadı: ${error.message}`);
+
+    return (data ?? []).map((row) => ({
+      id: String(row.id),
+      slug: String(row.slug),
+      displayName: String(row.display_name),
+      description: row.description ? String(row.description) : null,
+      logoUrl: row.logo_url ? String(row.logo_url) : null,
+      status: 'approved' as const,
+      commissionRate: Number(row.commission_rate),
+      rating: Number(row.rating),
+      ratingCount: Number(row.rating_count),
+      activeProductCount: Number(row.active_product_count),
+    }));
+  }
+
+  return demoVendors;
+}
+
+/** Ürün sayfasındaki "Bunlara da bakın" bloğu. */
+export async function getRelatedGroups(slug: string, limit = 4): Promise<SearchResult[]> {
+  const results = await searchProducts({ sort: 'offers', limit: limit + 1 });
+  return results.filter((result) => result.slug !== slug).slice(0, limit);
+}
