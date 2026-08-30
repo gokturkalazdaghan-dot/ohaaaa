@@ -37,7 +37,24 @@ export function isSupabaseConfigured(): boolean {
  * zaten değer eksikse derleme çoktan kırılmış olur.
  */
 function resolveSiteUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  /*
+   * Öncelik sırası:
+   *   1. NEXT_PUBLIC_SITE_URL   — açıkça ayarlanmış, tercih edilen
+   *   2. VERCEL_PROJECT_PRODUCTION_URL — Vercel'in üretim alan adı
+   *
+   * 2. seçenek ilk dağıtımın ÇALIŞMASI içindir: ortam değişkenini
+   * ayarlamadan deploy eden biri, derleme hatası yerine doğru adresle
+   * yayınlanmış bir site alır. Bu değişken yalnızca sunucuda vardır ve
+   * siteUrl yalnızca sunucuda kullanılır (metadata, sitemap, robots, JSON-LD).
+   *
+   * Yine de 1. seçeneği açıkça ayarlamak önerilir: alan adını Vercel'e
+   * bağlamadan önceki dağıtımlarda 2. seçenek geçici bir adres verir.
+   */
+  const vercelProductionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+
+  const configured =
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+    (vercelProductionUrl ? `https://${vercelProductionUrl}` : undefined);
 
   // Sondaki eğik çizgi, `${siteUrl}/urun/x` birleştirmelerinde çift eğik
   // çizgi üretir ve iki farklı URL gibi indekslenir.
@@ -53,10 +70,14 @@ function resolveSiteUrl(): string {
   if (isProduction && isServer && looksLocal) {
     throw new Error(
       [
-        'NEXT_PUBLIC_SITE_URL üretim derlemesinde tanımlı olmalıdır.',
+        'Sitenin kanonik adresi belirlenemedi.',
         '',
         `  Bulunan değer : ${configured ?? '(tanımsız)'}`,
         '  Olması gereken: https://ohaaaa.com',
+        '',
+        'Vercel dışında dağıtıyorsanız NEXT_PUBLIC_SITE_URL ayarlayın.',
+        'Vercel kullanıyorsanız alan adını projeye bağlayın; o zaman',
+        'VERCEL_PROJECT_PRODUCTION_URL kendiliğinden dolar.',
         '',
         'Bu değer sitemap.xml, robots.txt, canonical etiketleri ve yapılandırılmış',
         'veriye gömülür. Yanlış kalırsa site çalışır ama arama motorları hiçbir',

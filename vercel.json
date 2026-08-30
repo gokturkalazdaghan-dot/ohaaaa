@@ -1,0 +1,46 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+
+  "//": [
+    "Monorepo dağıtım yapılandırması.",
+    "",
+    "Vercel varsayılan olarak kök dizinde bir Next.js uygulaması arar ve",
+    "bulamayınca derleme başarısız olur. Bu dosya doğru komutu ve çıktı",
+    "dizinini bildirir; panelde ek ayar yapmaya gerek kalmaz.",
+    "",
+    "@ohaaaa/shared, web'den ÖNCE derlenmelidir: web ondan tip ve sepet",
+    "mantığını içe aktarır. @ohaaaa/backend ve mobil uygulama bu dağıtıma",
+    "dahil değildir — ayrı barındırılırlar."
+  ],
+
+  "framework": "nextjs",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build --workspace @ohaaaa/shared && npm run build --workspace @ohaaaa/web",
+  "outputDirectory": "apps/web/.next",
+
+  "regions": ["fra1"],
+
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "x-content-type-options", "value": "nosniff" },
+        { "key": "referrer-policy", "value": "strict-origin-when-cross-origin" },
+        {
+          "key": "strict-transport-security",
+          "value": "max-age=31536000; includeSubDomains"
+        },
+        {
+          "//": "Tarayıcı özelliklerinden hiçbirine ihtiyacımız yok.",
+          "key": "permissions-policy",
+          "value": "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+        }
+      ]
+    },
+    {
+      "//": "Yönlendirme uç noktası asla önbelleğe alınmamalı: her tıklama tekil bir subid üretir.",
+      "source": "/git/(.*)",
+      "headers": [{ "key": "cache-control", "value": "no-store, private" }]
+    }
+  ]
+}

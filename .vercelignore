@@ -1,0 +1,6 @@
+# Web dağıtımına dahil olmayanlar — yükleme ve derleme süresini kısaltır.
+apps/mobile
+packages/backend
+supabase/tests
+docs
+scripts
