@@ -14,6 +14,13 @@ import { isSupabaseConfigured, supabaseAnonKey, supabaseUrl } from '../env';
 export async function createClient() {
   if (!isSupabaseConfigured()) return null;
 
+  const duringBuild = process.env.NEXT_PHASE === 'phase-production-build';
+  if (duringBuild) {
+    return createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: { getAll: () => [], setAll: () => {} },
+    });
+  }
+
   const cookieStore = await cookies();
 
   return createServerClient(supabaseUrl, supabaseAnonKey, {
