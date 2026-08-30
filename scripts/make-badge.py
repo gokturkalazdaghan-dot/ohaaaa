@@ -26,11 +26,10 @@ S = 1024                      # kare tuval
 CX = CY = S / 2
 FONT = Path('/mnt/skills/examples/canvas-design/canvas-fonts/Outfit-Bold.ttf')
 
-WORD = 'Ohaaaa'               # bir O, bir h, DORT a
-
-# Marka adi dort a ile yazilir. Bu satir, elle duzenlemede iki kez yapilan
-# hatanin (uc a, bes a) bir daha sessizce gecmesini engeller.
-assert WORD == 'O' + 'h' + 'a' * 4, f'Marka adi yanlis: {WORD}'
+# Marka adinin TEK dogruluk kaynagi. Elle 'Ohaaa' ya da 'Ohaaaaa' yazilamaz;
+# harf sayisi burada uretilir. Elle duzenlemede bu hata iki kez yapildi.
+BRAND = 'O' + 'h' + 'a' * 4        # Ohaaaa
+WORD = BRAND
 
 # --- yaricaplar (S=1024 icin) ---
 R_SHADOW = 496
@@ -193,6 +192,53 @@ def render_word(size_px, angle_deg):
     return rotated.crop(box) if box else rotated
 
 
+def verify_letters(badge, angle_deg=17):
+    """Cizilen goruntuyu OKUYARAK harfleri sayar.
+
+    Dosyanin basindaki assert kaynak dizgeyi dogrular; bu ise CIKTIYI
+    dogrular. Yazi tipi bir harfi eksik cizse, olcek bir harfi diskin
+    disinda biraksa ya da parametreler kayip harfleri birlestirse assert
+    bunu yakalamaz - burasi yakalar.
+
+    Yazi egik oldugu icin once duzeltilir: egik metinde sutun izdusumu
+    komsu harfleri birlestirir ve yanlis sayar.
+    """
+    a = np.asarray(badge.convert('RGB')).astype(int)
+    R, G, B = a[:, :, 0], a[:, :, 1], a[:, :, 2]
+    rad = radial((S, S), CX, CY)
+    white = (rad < R_DISC) & (R > 235) & (G > 230) & (B > 220)
+
+    flat = Image.fromarray((white * 255).astype(np.uint8)).rotate(
+        -angle_deg, resample=Image.BICUBIC, expand=True, center=(CX, CY))
+    col = (np.asarray(flat) > 100).sum(axis=0)
+
+    runs, start = [], None
+    for x, v in enumerate(col):
+        if v > 1 and start is None:
+            start = x
+        elif v <= 1 and start is not None:
+            if x - start > 8:
+                runs.append(x - start)
+            start = None
+    if start is not None and len(col) - start > 8:
+        runs.append(len(col) - start)
+
+    if len(runs) != len(BRAND):
+        raise SystemExit(
+            f'  DUR: goruntude {len(runs)} harf blogu var, {len(BRAND)} olmali.\n'
+            f'       Blok genislikleri: {runs}\n'
+            '       Harfler birlesmis ya da bir harf eksik cizilmis olabilir.')
+
+    # Son dort blok 'a' - genislikleri birbirine yakin olmali
+    widths = runs[2:]
+    if len(widths) != BRAND.count('a'):
+        raise SystemExit(f'  DUR: {len(widths)} adet a blogu, {BRAND.count("a")} olmali.')
+    if max(widths) - min(widths) > max(widths) * 0.12:
+        raise SystemExit(f'  DUR: a harfleri esit genislikte degil: {widths}')
+
+    print(f'  harf blogu: {len(runs)} = {", ".join(BRAND)}  |  a genislikleri {widths}')
+
+
 def main() -> None:
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path('ohaaaa-master.png')
     if not FONT.exists():
@@ -227,6 +273,8 @@ def main() -> None:
 
     badge.paste(word, (int(CX - word.width / 2), int(CY - word.height / 2)), word)
     badge.save(out, 'PNG')
+
+    verify_letters(badge)
 
     # Kontrol: yazi ic diskin icinde mi?
     a = np.asarray(badge.convert('RGB')).astype(int)
