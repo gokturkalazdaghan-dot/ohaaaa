@@ -15,7 +15,7 @@
     "build": "npm run build --workspace @ohaaaa/shared && npm run build --workspace @ohaaaa/backend && npm run build --workspace @ohaaaa/web",
     "dev": "npm run dev --workspace @ohaaaa/web",
     "dev:api": "npm run dev --workspace @ohaaaa/backend",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run build --workspace @ohaaaa/shared && npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "db:reset": "supabase db reset",

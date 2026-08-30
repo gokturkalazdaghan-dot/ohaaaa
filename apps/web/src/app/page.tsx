@@ -10,9 +10,6 @@ import { TrustSignals } from '@/components/TrustSignals';
 import { SearchBar } from '@/components/SearchBar';
 import { getCategories, getFlashDeals, getVendors, searchProducts } from '@/data/catalog';
 
-/** Ana sayfa 5 dakikada bir yeniden üretilir: taze fiyat + CDN önbelleği. */
-export const revalidate = 300;
-
 export default async function HomePage() {
   // Bağımsız sorgular paralel çalışır; art arda beklemek sayfayı yavaşlatır.
   const [deals, categories, vendors, trending] = await Promise.all([

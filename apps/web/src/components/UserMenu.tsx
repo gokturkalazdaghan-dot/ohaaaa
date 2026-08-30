@@ -13,7 +13,7 @@ import { isSupabaseConfigured } from '@/lib/env';
  */
 export async function UserMenu() {
   // Demo modunda auth akışı yoktur; panel örnek verilerle gezilebilir.
-  if (!isSupabaseConfigured()) {
+  if (!isSupabaseConfigured() || process.env.NEXT_PHASE === 'phase-production-build') {
     return (
       <Link
         href="/tasoron"
