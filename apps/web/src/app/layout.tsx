@@ -14,6 +14,9 @@ import { gaMeasurementId, isPrelaunch, searchConsoleVerification, siteUrl } from
 
 import './globals.css';
 
+/** Header oturum için cookies() kullanır; derlemede statik sayfa üretme. */
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
