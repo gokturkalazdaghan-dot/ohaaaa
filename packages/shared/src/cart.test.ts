@@ -10,6 +10,7 @@ import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 
 import { addToCart, summarizeCart, updateQuantity } from './cart.js';
+import { allowedVendorOrderTransitions, canTransitionVendorOrder } from './types.js';
 import { calculateCommission, discountPercent, formatMoney, parseMoneyToCents } from './money.js';
 import type { CartItem } from './types.js';
 
@@ -169,4 +170,56 @@ test('para biçimlendirme ve ayrıştırma', () => {
 
   assert.equal(discountPercent(5_499_900, 6_299_900), 13);
   assert.equal(discountPercent(100, 100), null);
+});
+
+// ---------------------------------------------------------------------------
+// Alt sipariş durum geçişleri
+// ---------------------------------------------------------------------------
+/*
+ * Bu tablo hem Express API'sinde hem web uygulamasının uç noktalarında
+ * uygulanır. Testler kuralın kendisini sabitler: bir geçişin sessizce
+ * açılması, alıcıya gönderilmiş bildirimin geri alınabilmesi demektir.
+ */
+test('alt sipariş: ileri yöndeki geçişlere izin verilir', () => {
+  assert.ok(canTransitionVendorOrder('awaiting_vendor', 'accepted'));
+  assert.ok(canTransitionVendorOrder('accepted', 'preparing'));
+  assert.ok(canTransitionVendorOrder('preparing', 'shipped'));
+  assert.ok(canTransitionVendorOrder('shipped', 'delivered'));
+});
+
+test('alt sipariş: geriye dönük geçiş engellenir', () => {
+  assert.equal(canTransitionVendorOrder('shipped', 'preparing'), false);
+  assert.equal(canTransitionVendorOrder('delivered', 'shipped'), false);
+  assert.equal(canTransitionVendorOrder('preparing', 'accepted'), false);
+  assert.equal(canTransitionVendorOrder('accepted', 'awaiting_vendor'), false);
+});
+
+test('alt sipariş: adım atlanamaz', () => {
+  // "Bekliyor"dan doğrudan "kargolandı"ya geçmek, kabul ve hazırlık
+  // adımlarının hiç olmadığı bir sipariş geçmişi üretirdi.
+  assert.equal(canTransitionVendorOrder('awaiting_vendor', 'shipped'), false);
+  assert.equal(canTransitionVendorOrder('accepted', 'delivered'), false);
+});
+
+test('alt sipariş: teslim ve iptal son durumdur', () => {
+  assert.deepEqual([...allowedVendorOrderTransitions('delivered')], []);
+  assert.deepEqual([...allowedVendorOrderTransitions('cancelled')], []);
+  // Teslim edilmiş bir sipariş iptal EDİLEMEZ: iptal bir iade değildir ve
+  // ikisini karıştırmak muhasebeyi bozar.
+  assert.equal(canTransitionVendorOrder('delivered', 'cancelled'), false);
+});
+
+test('alt sipariş: kargolanana kadar iptal mümkün', () => {
+  assert.ok(canTransitionVendorOrder('awaiting_vendor', 'cancelled'));
+  assert.ok(canTransitionVendorOrder('accepted', 'cancelled'));
+  assert.ok(canTransitionVendorOrder('preparing', 'cancelled'));
+  // Kargoya verilmiş bir paket "hiç olmamış" sayılamaz.
+  assert.equal(canTransitionVendorOrder('shipped', 'cancelled'), false);
+});
+
+test('alt sipariş: bilinmeyen durum hiçbir geçişe izin vermez', () => {
+  // Veritabanına yeni bir durum eklenip tablo güncellenmezse, güvenli taraf
+  // "hiçbir şey yapılamaz"dır — sessizce her geçişe izin vermek değil.
+  assert.deepEqual([...allowedVendorOrderTransitions('uydurma_durum')], []);
+  assert.equal(canTransitionVendorOrder('uydurma_durum', 'shipped'), false);
 });

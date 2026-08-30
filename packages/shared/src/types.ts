@@ -28,6 +28,36 @@ export type VendorOrderStatus =
   | 'delivered'
   | 'cancelled';
 
+/**
+ * Alt sipariş durumunun izin verilen geçişleri.
+ *
+ * GERİYE DÖNÜK GEÇİŞ YOK. "Kargolandı"dan "hazırlanıyor"a dönmek, alıcıya
+ * gönderilmiş bir bildirimi geri almak demektir; bir yanlışlık olduğunda
+ * doğru yol iptal ya da yeni bir kayıt açmaktır, geçmişi değiştirmek değil.
+ *
+ * Tablo burada, paylaşılan pakette: aynı kural hem Express API'sinde hem web
+ * uygulamasının uç noktalarında uygulanır. İki kopya olsaydı biri diğerinin
+ * yasakladığı geçişe izin verirdi ve hangisinin doğru olduğu belirsizleşirdi.
+ */
+export const VENDOR_ORDER_TRANSITIONS: Record<string, readonly string[]> = {
+  awaiting_vendor: ['accepted', 'cancelled'],
+  accepted: ['preparing', 'cancelled'],
+  preparing: ['shipped', 'cancelled'],
+  shipped: ['delivered'],
+  delivered: [],
+  cancelled: [],
+};
+
+/** Bir durum geçişine izin verilip verilmediğini söyler. */
+export function canTransitionVendorOrder(from: string, to: string): boolean {
+  return (VENDOR_ORDER_TRANSITIONS[from] ?? []).includes(to);
+}
+
+/** Bir durumdan gidilebilecek durumlar (hata mesajında kullanıcıya söylenir). */
+export function allowedVendorOrderTransitions(from: string): readonly string[] {
+  return VENDOR_ORDER_TRANSITIONS[from] ?? [];
+}
+
 /** Taşeron API anahtarının verebileceği yetkiler. */
 export const API_SCOPES = [
   'products:read',

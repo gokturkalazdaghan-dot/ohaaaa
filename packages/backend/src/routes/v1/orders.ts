@@ -8,22 +8,17 @@
 
 import { Router } from 'express';
 
-import { orderListQuerySchema, vendorOrderPatchSchema } from '@ohaaaa/shared';
+import {
+  allowedVendorOrderTransitions,
+  canTransitionVendorOrder,
+  orderListQuerySchema,
+  vendorOrderPatchSchema,
+} from '@ohaaaa/shared';
 
 import { conflict, notFound } from '../../lib/errors.js';
 import type { ServiceClient } from '../../lib/supabase.js';
 import { requireScope } from '../../middleware/apiKeyAuth.js';
 import { validateBody, validateQuery } from '../../middleware/validate.js';
-
-/** İzin verilen durum geçişleri — geriye dönük geçişler engellenir. */
-const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-  awaiting_vendor: ['accepted', 'cancelled'],
-  accepted: ['preparing', 'cancelled'],
-  preparing: ['shipped', 'cancelled'],
-  shipped: ['delivered'],
-  delivered: [],
-  cancelled: [],
-};
 
 export function ordersRouter(supabase: ServiceClient): Router {
   const router = Router();
@@ -101,9 +96,9 @@ export function ordersRouter(supabase: ServiceClient): Router {
         if (patch.tracking_number !== undefined) updates.tracking_number = patch.tracking_number;
 
         if (patch.status) {
-          const allowed = ALLOWED_TRANSITIONS[String(current.status)] ?? [];
+          const allowed = allowedVendorOrderTransitions(String(current.status));
 
-          if (!allowed.includes(patch.status)) {
+          if (!canTransitionVendorOrder(String(current.status), patch.status)) {
             throw conflict(
               `'${current.status}' durumundan '${patch.status}' durumuna geçilemez.`,
               { current_status: current.status, allowed_transitions: allowed },
