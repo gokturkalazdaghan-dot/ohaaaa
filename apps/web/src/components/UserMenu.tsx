@@ -10,6 +10,12 @@ import { isSupabaseConfigured } from '@/lib/env';
  * Server Component'tir: oturum durumu sunucuda bilinir, istemciye jeton
  * gönderilmez ve "bir an giriş yapmamış görünüp sonra düzelme" (flash of
  * logged-out state) yaşanmaz.
+ *
+ * MOBİL: Bu bölüm eskiden `hidden sm:flex` ile tümüyle gizleniyordu; 640
+ * pikselin altında "Satıcı Ol" ve "Giriş" hiç görünmüyor, başlıkta yalnızca
+ * Sepet kalıyordu. Katalog mağazalardan gelir, mağaza da satıcı sayfasından;
+ * bu bağlantının mobilde kaybolması işin can damarını kesiyordu. Artık
+ * mobilde de duruyor, yalnızca etiket gizlenip simge kalıyor.
  */
 export async function UserMenu() {
   // Demo modunda auth akışı yoktur; panel örnek verilerle gezilebilir.
@@ -17,10 +23,11 @@ export async function UserMenu() {
     return (
       <Link
         href="/tasoron"
-        className="hidden items-center gap-2 rounded-xl border border-line bg-surface px-3.5 py-2 text-sm font-medium text-muted transition-colors hover:border-brand/40 hover:text-fg sm:flex"
+        className="flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-sm font-medium text-muted transition-colors hover:border-brand/40 hover:text-fg sm:px-3.5"
+        aria-label="Satıcı Ol"
       >
         <StoreIcon className="h-4 w-4" />
-        Satıcı Ol
+        <span className="hidden sm:inline">Satıcı Ol</span>
       </Link>
     );
   }
@@ -29,12 +36,14 @@ export async function UserMenu() {
 
   if (!user) {
     return (
-      <div className="hidden items-center gap-2 sm:flex">
+      <div className="flex items-center gap-1.5 sm:gap-2">
         <Link
           href="/tasoron"
-          className="rounded-xl px-3 py-2 text-sm font-medium text-muted transition-colors hover:text-fg"
+          className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm font-medium text-muted transition-colors hover:text-fg sm:px-3"
+          aria-label="Satıcı Ol"
         >
-          Satıcı Ol
+          <StoreIcon className="h-4 w-4 sm:hidden" />
+          <span className="hidden sm:inline">Satıcı Ol</span>
         </Link>
         <Link
           href="/giris"
@@ -49,7 +58,7 @@ export async function UserMenu() {
   const initial = (user.fullName ?? user.email).charAt(0).toUpperCase();
 
   return (
-    <div className="hidden items-center gap-2 sm:flex">
+    <div className="flex items-center gap-1.5 sm:gap-2">
       <Link
         href={user.role === 'admin' ? '/yonetim' : '/tasoron/panel'}
         className="flex items-center gap-2 rounded-xl border border-line bg-surface px-2 py-1.5 text-sm font-medium transition-colors hover:border-brand/40"
@@ -57,7 +66,7 @@ export async function UserMenu() {
         <span className="grid h-7 w-7 place-items-center rounded-lg bg-gradient-to-br from-brand to-electric text-xs font-black text-white">
           {initial}
         </span>
-        <span className="max-w-28 truncate">{user.fullName ?? user.email}</span>
+        <span className="hidden max-w-28 truncate sm:inline">{user.fullName ?? user.email}</span>
       </Link>
 
       {/*
@@ -68,7 +77,7 @@ export async function UserMenu() {
       <form action="/auth/cikis" method="post">
         <button
           type="submit"
-          className="rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:text-fg"
+          className="hidden rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:text-fg sm:block"
         >
           Çıkış
         </button>
