@@ -63,7 +63,13 @@ export default async function ProductPage({ params }: ProductPageProps) {
   if (!group) notFound();
 
   // İlgili ürünler ikincil içeriktir: alınamazsa sayfa yine de gösterilir.
-  const related = await getRelatedGroups(slug, 4).catch(() => []);
+  // Benzer ürünler ürünün KENDİ bağlamıyla aranır: aynı kategori, yakın
+  // fiyat. Bağlam verilmezse bölüm katalog genelini gösterir ve her sayfada
+  // aynı dört ürün çıkar.
+  const related = await getRelatedGroups(slug, 4, {
+    categoryId: group.categoryId,
+    minPriceCents: group.minPriceCents,
+  }).catch(() => []);
 
   /*
    * Fiyat geçmişi ikincil bilgidir: alınamazsa ürün sayfası yine açılmalı.

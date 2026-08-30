@@ -551,8 +551,63 @@ export async function getVendors(): Promise<Vendor[]> {
 }
 
 /** Ürün sayfasındaki "Bunlara da bakın" bloğu. */
-export async function getRelatedGroups(slug: string, limit = 4): Promise<SearchResult[]> {
-  const { results } = await searchProducts({ sort: 'offers', limit: limit + 1 });
+export async function getRelatedGroups(
+  slug: string,
+  limit = 4,
+  context?: { categoryId: string | null; minPriceCents: number | null },
+): Promise<SearchResult[]> {
+  /*
+   * ÖNCEKİ HALİ HER ÜRÜN SAYFASINDA AYNI 4 ÜRÜNÜ GÖSTERİYORDU.
+   *
+   * "En çok mağaza teklifi olanlar" katalog genelinde sabit bir listedir;
+   * ürünle hiçbir ilgisi yoktur. Bir kulaklık sayfasında buzdolabı önermek
+   * bölümü işe yaramaz kılar ve daha kötüsü, ziyaretçiye sitenin ürünü
+   * anlamadığını gösterir.
+   *
+   * Sıralama: önce AYNI KATEGORİ, sonra BENZER FİYAT BANDI. İkisi birlikte
+   * "bunun yerine şunu da alabilirim" sorusunun pratik karşılığıdır.
+   */
+  const categoryId = context?.categoryId ?? undefined;
+
+  // Fiyat bandı: yarısı ile iki katı arası. Kulaklık sayfasında 200 TL'lik
+  // bir kılıf da 20.000 TL'lik bir televizyon da alternatif değildir.
+  const price = context?.minPriceCents ?? null;
+  const minPriceCents = price ? Math.floor(price / 2) : undefined;
+  const maxPriceCents = price ? price * 2 : undefined;
+
+  // Fazladan iste: kendi kendini eleyecek ve bant dışı kalanlar olacak.
+  const wanted = limit + 1;
+
+  if (categoryId) {
+    const sameBand = await searchProducts({
+      categoryId,
+      minPriceCents,
+      maxPriceCents,
+      sort: 'offers',
+      limit: wanted,
+    });
+
+    const picked = sameBand.results.filter((result) => result.slug !== slug);
+    if (picked.length >= limit) return picked.slice(0, limit);
+
+    // Bant çok darsa fiyat koşulunu bırak, kategoriyi koru: aynı kategoriden
+    // uzak fiyatlı bir ürün, başka kategoriden bir üründen daha alakalıdır.
+    const sameCategory = await searchProducts({ categoryId, sort: 'offers', limit: wanted });
+    const merged = [...picked, ...sameCategory.results].filter(
+      (result) => result.slug !== slug,
+    );
+
+    const unique = [...new Map(merged.map((result) => [result.slug, result])).values()];
+    if (unique.length >= limit) return unique.slice(0, limit);
+
+    // Kategori de yetmiyorsa katalog geneliyle tamamla — bölümü boş
+    // bırakmaktansa az alakalı göstermek yeğdir.
+    const fallback = await searchProducts({ sort: 'offers', limit: wanted });
+    const all = [...unique, ...fallback.results].filter((result) => result.slug !== slug);
+    return [...new Map(all.map((result) => [result.slug, result])).values()].slice(0, limit);
+  }
+
+  const { results } = await searchProducts({ sort: 'offers', limit: wanted });
   return results.filter((result) => result.slug !== slug).slice(0, limit);
 }
 
