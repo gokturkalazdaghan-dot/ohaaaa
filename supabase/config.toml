@@ -1,0 +1,74 @@
+# ============================================================================
+# Supabase CLI yapılandırması
+# ----------------------------------------------------------------------------
+# Yerel geliştirme (supabase start) ve migration yönetimi (supabase db push)
+# bu dosyayı okur. Uzak projeye bağlanmak için: supabase link --project-ref <ref>
+# ============================================================================
+
+# Uzak projeye bağlandığınızda `supabase link` bu değeri günceller.
+project_id = "ohaaaa"
+
+[api]
+enabled = true
+port = 54321
+# PostgREST'in dışarı açtığı şemalar. `public` dışına çıkmak gerekmiyor:
+# tüm iş mantığı public şemasındaki fonksiyonlarda.
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+# Tek istekte dönebilecek en fazla satır. Katalog sorguları zaten
+# sayfalanıyor; bu sınır kaçak bir sorgunun veritabanını yormasını önler.
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+# Migration'lar PostgreSQL 16 üzerinde doğrulandı. Kullanılan tüm özellikler
+# (generated columns, pg_trgm word_similarity, make_interval) 15'te de vardır.
+# Uzak projenizin sürümü farklıysa buraya onu yazın: sürüm uyuşmazlığı
+# `supabase db push` sırasında gölge veritabanı hatası verir.
+major_version = 15
+
+[db.migrations]
+# seed.sql, `supabase db reset` sonrasında otomatik çalışır.
+enabled = true
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[studio]
+enabled = true
+port = 54323
+
+[local_smtp]
+# Yerel e-posta yakalayıcı: kayıt/doğrulama postaları buraya düşer,
+# gerçek bir SMTP sağlayıcısı gerekmez. (Eski adı: [inbucket])
+enabled = true
+port = 54324
+
+[auth]
+enabled = true
+# Yerelde web uygulamasının adresi. Üretimde Supabase panelinden ayarlanır.
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/**"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+# Kayıt açık: taşeron başvurusu için gerekli.
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+# Yerelde e-posta doğrulaması kapalı: geliştirme sırasında her kayıt için
+# posta kutusuna gitmek gereksiz yavaşlatır. ÜRETİMDE AÇIK OLMALIDIR.
+enable_confirmations = false
+double_confirm_changes = true
+
+[storage]
+enabled = true
+port = 54325
+# Ürün görselleri için üst sınır.
+file_size_limit = "10MiB"
+
+[analytics]
+enabled = false
