@@ -1,0 +1,41 @@
+{
+  "framework": "nextjs",
+  "regions": [
+    "fra1"
+  ],
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "cd ../.. && npm install",
+  "buildCommand": "cd ../.. && npm run build --workspace @ohaaaa/shared && npm run build --workspace @ohaaaa/web",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "x-content-type-options",
+          "value": "nosniff"
+        },
+        {
+          "key": "referrer-policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "strict-transport-security",
+          "value": "max-age=31536000; includeSubDomains"
+        },
+        {
+          "key": "permissions-policy",
+          "value": "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+        }
+      ]
+    },
+    {
+      "source": "/git/(.*)",
+      "headers": [
+        {
+          "key": "cache-control",
+          "value": "no-store, private"
+        }
+      ]
+    }
+  ]
+}
