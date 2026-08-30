@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { formatMoney } from '@ohaaaa/shared';
 
 import { ProductCard } from '@/components/ProductCard';
+import { RecentlyViewed } from '@/components/RecentlyViewed';
 import { getCategories, getFlashDeals, getVendors, searchProducts } from '@/data/catalog';
 
 export default async function HomePage() {
@@ -50,6 +51,10 @@ export default async function HomePage() {
       </section>
 
       {catalogEmpty && <LaunchState />}
+
+      {/* Geri dönen ziyaretçi kaldığı yerden devam edebilsin. Liste boşsa
+          bölüm hiç çizilmez. */}
+      <RecentlyViewed />
 
       {/* --- Firsatlar ----------------------------------------------------- */}
       {deals.length > 0 && (

@@ -9,6 +9,7 @@ import { ShieldIcon, TruckIcon } from '@/components/Icons';
 import { JsonLd } from '@/components/JsonLd';
 import { OfferRow } from '@/components/OfferRow';
 import { ProductGallery } from '@/components/ProductGallery';
+import { RecentlyViewed, RecordProductView } from '@/components/RecentlyViewed';
 import { PriceHistory } from '@/components/PriceHistory';
 import { ProductCard, resolveProductImage } from '@/components/ProductCard';
 import { getPriceHistory, getProductGroup, getRelatedGroups } from '@/data/catalog';
@@ -206,6 +207,14 @@ export default async function ProductPage({ params }: ProductPageProps) {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <JsonLd data={[productJsonLd, breadcrumbJsonLd]} />
+
+      {/* Ziyareti kaydeder, hiçbir şey çizmez. */}
+      <RecordProductView
+        slug={group.slug}
+        title={group.title}
+        imageUrl={galleryImages[0] ?? null}
+        priceCents={bestOffer?.priceCents ?? group.minPriceCents}
+      />
       <nav aria-label="Sayfa yolu" className="mb-6 flex items-center gap-2 text-xs text-muted">
         <Link href="/" className="hover:text-fg">Ana sayfa</Link>
         <span aria-hidden="true">/</span>
@@ -336,6 +345,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
         </section>
       )}
+
+      {/* Bu ürünün kendisi listede tekrar gösterilmez. */}
+      <RecentlyViewed excludeSlug={group.slug} />
     </div>
   );
 }
