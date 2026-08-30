@@ -4,7 +4,7 @@ import Link from 'next/link';
 export const metadata: Metadata = {
   title: 'Satıcı olun',
   description:
-    'Ohaaaa’da satış: listeleme bedeli yok, komisyon yalnızca gerçekleşen satıştan kesilir. Başvurun, API ile kataloğunuzu bağlayın.',
+    'Ohaaaa’da listeleme ücretsiz. Karşılığı komisyon değil: gönderilerinizde markamızı taşıyorsunuz.',
 };
 
 /*
@@ -23,20 +23,20 @@ export const metadata: Metadata = {
 
 const TERMS = [
   {
-    title: 'Listeleme bedeli yok',
-    body: 'Ürünlerinizi yayınlamak için aylık ücret ya da kurulum bedeli almıyoruz. Maliyet yalnızca satış gerçekleşirse doğar.',
+    title: 'Listeleme ücretsiz',
+    body: 'Aylık ücret yok, kurulum bedeli yok, satıştan komisyon yok. Ürünleriniz Ohaaaa’da bedelsiz yayınlanır.',
   },
   {
-    title: 'Komisyon satıştan sonra',
-    body: 'Komisyon, sipariş tamamlandığında hesaplanır. İptal ve iadelerde komisyon da geri alınır.',
+    title: 'Karşılığı: ambalajınızda markamız',
+    body: 'Gönderilerinizde Ohaaaa koli bandını ve armasını kullanırsınız. Baskı dosyalarını biz veriyoruz.',
   },
   {
     title: 'Fiyatı siz belirlersiniz',
     body: 'Fiyat ve stok sizin sisteminizden gelir. Ohaaaa fiyatınıza müdahale etmez, yalnızca kargo dahil toplamla karşılaştırır.',
   },
   {
-    title: 'Kargo kuralları sizin',
-    body: 'Kargo ücretini ve ücretsiz kargo eşiğinizi siz tanımlarsınız; karşılaştırmada bunlar hesaba katılır.',
+    title: 'Satış sizinle alıcı arasında',
+    body: 'Fatura, garanti, iade ve kargo süreçleri size aittir. Ohaaaa satışın tarafı değildir; karşılaştırır ve yönlendirir.',
   },
 ];
 
@@ -48,13 +48,13 @@ const STEPS = [
   },
   {
     n: '2',
-    title: 'Onay ve API anahtarı',
-    body: 'Başvurunuz değerlendirilir. Onay sonrası panelden kendi API anahtarınızı üretirsiniz.',
+    title: 'Marka kullanımını kabul edin',
+    body: 'Koli bandı ve arma dosyalarını indirir, kullanım kurallarını kabul edersiniz.',
   },
   {
     n: '3',
     title: 'Kataloğu bağlayın',
-    body: 'Tek POST isteğiyle 500 ürüne kadar gönderirsiniz. Fiyat ve stok güncellemeleri aynı uçtan geçer.',
+    body: 'Onay sonrası panelden API anahtarı üretir, tek POST ile 500 ürüne kadar gönderirsiniz.',
   },
 ];
 
@@ -68,8 +68,9 @@ export default function VendorLandingPage() {
           Mağazanızı Ohaaaa’da yayın
         </h1>
         <p className="mt-4 max-w-xl text-base text-muted sm:text-lg">
-          Listeleme bedeli yok. Fiyat ve stok sizin sisteminizden gelir.
-          Komisyon yalnızca satış olursa kesilir.
+          Komisyon almıyoruz, listeleme ücreti almıyoruz. Tek beklentimiz
+          gönderilerinizde markamızı taşımanız — baskı dosyalarını biz
+          veriyoruz.
         </p>
         <div className="mt-7 flex flex-wrap items-center gap-3">
           <Link
@@ -77,6 +78,9 @@ export default function VendorLandingPage() {
             className="rounded-full bg-brand px-6 py-3 text-sm font-bold text-[#fffaf5] transition-colors hover:bg-brand-strong"
           >
             Başvuru formunu doldur
+          </Link>
+          <Link href="/tasoron/marka" className="chip">
+            Marka kılavuzu
           </Link>
           <Link href="/tasoron/api" className="chip">
             API belgeleri

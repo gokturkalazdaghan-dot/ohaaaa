@@ -61,7 +61,16 @@ export function ContentPage({
           '[&_p]:leading-relaxed [&_p]:text-muted',
           '[&_ul]:space-y-2 [&_ul]:pl-5 [&_ul]:text-muted [&_li]:list-disc [&_li]:leading-relaxed',
           '[&_ol]:space-y-2 [&_ol]:pl-5 [&_ol]:text-muted [&_ol>li]:list-decimal',
-          '[&_a]:text-brand-soft [&_a]:underline-offset-2 hover:[&_a]:underline',
+          /*
+           * `.btn` MUAFTIR.
+           *
+           * Bu kural içerideki HER bağlantıyı markanın kırmızısına boyuyordu;
+           * kırmızı zeminli bir indirme düğmesi konduğunda yazı zeminle aynı
+           * renk olup görünmez oldu. Metin bağlantısı ile düğme farklı
+           * şeylerdir; düğmeye `btn` sınıfı verildiğinde bu kural onu atlar.
+           */
+          '[&_a:not(.btn)]:text-brand-soft [&_a:not(.btn)]:underline-offset-2',
+          'hover:[&_a:not(.btn)]:underline',
           '[&_strong]:font-semibold [&_strong]:text-fg',
           '[&_table]:w-full [&_table]:text-sm [&_th]:py-2 [&_th]:text-left [&_th]:font-medium',
           '[&_td]:border-t [&_td]:border-line [&_td]:py-2 [&_td]:align-top [&_td]:text-muted',
