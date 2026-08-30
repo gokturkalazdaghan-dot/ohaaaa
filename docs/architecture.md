@@ -91,19 +91,28 @@ kontrolü elle yapılır.
 
 ---
 
-## 6. Hız sınırlayıcı neden bellekte?
+## 6. Hız sınırı neden veritabanında?
 
-`packages/backend/src/lib/rateLimiter.ts` süreç belleğinde kayan pencere
-tutar. Tek örnek (instance) için doğrudur; yatay ölçeklemede her örnek kendi
-sayacını tutacağı için efektif tavan örnek sayısıyla çarpılır.
+Sayaç eskiden süreç belleğindeydi (`packages/backend/src/lib/rateLimiter.ts`)
+ve bu, tek bir kutuda çalışan bir servis için doğru bir ödünleşmeydi.
 
-**Bilinçli bir ödünleşme:** Redis eklemek, tek bir kutuda çalışan bir sistem
-için işletme maliyeti ve tek hata noktası getirir. `RateLimiter` arayüzü
-korunduğu sürece Redis destekli bir uygulamayla değiştirmek tek dosyalık bir
-iştir.
+Taşeron API'si Next route handler'larına taşınınca varsayım çöktü:
+sunucusuz ortamda her istek ayrı bir örnekte çalışabilir ve bellekteki sayaç
+orada sıfırdan başlar. Sınır **görünürde vardı, uygulanmıyordu** — yeterince
+paralel istek atan biri dakikalık tavanın kat kat üstüne çıkabilirdi.
 
-Kayan pencere tercih edildi çünkü sabit pencere sayacı, pencere sınırında iki
-katı trafiğe izin verir (09:59:59'da 600, 10:00:00'da 600 daha).
+Sayaç artık `public.consume_api_rate_limit()` ile veritabanında tutulur:
+tüm örnekler için tek doğruluk kaynağı. Anahtar başına tek satır, pencere
+değişince sıfırlanır — tablo kendiliğinden temizlenir, ayrı bir toplama
+işine gerek kalmaz.
+
+**Sabit pencere seçildi**, kayan pencere değil: daha kaba ama tek satırlık
+atomik bir UPSERT'e sığar. Amaç adil kullanım, milisaniye hassasiyeti değil.
+
+**Sayaç okunamazsa istek DÜŞÜRÜLMEZ.** Hız sınırı bir koruma önlemidir,
+servisin kendisi değil; sayaç arızası yüzünden tüm taşeron entegrasyonlarını
+durdurmak, korumanın verdiği faydadan büyük bir zarar olurdu. Olay günlüğe
+yazılır.
 
 ---
 

@@ -1,7 +1,11 @@
 # Taşeron API'si
 
-REST, JSON ve tek bir başlık. Temel adres: `https://api.ohaaaa.com`
-(yerelde `http://localhost:4000`).
+REST, JSON ve tek bir başlık. Temel adres **sitenin kendi adresidir**:
+`https://www.ohaaaa.com` (yerelde `http://localhost:3000`).
+
+> API ayrı bir servis değildir. Uç noktalar siteyle aynı dağıtımda,
+> `/api/v1/*` altında sunulur — ayrı bir alan adı, ayrı bir dağıtım ve CORS
+> ayarı gerekmez.
 
 ## Kimlik doğrulama
 
@@ -9,7 +13,7 @@ Her isteğe `x-api-key` başlığını ekleyin (`Authorization: Bearer …` de k
 edilir):
 
 ```sh
-curl http://localhost:4000/api/v1/me \
+curl https://www.ohaaaa.com/api/v1/me \
   -H "x-api-key: ohk_live_9f2c1a7b3d4e5f60_…"
 ```
 

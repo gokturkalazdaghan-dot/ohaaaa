@@ -270,12 +270,14 @@ Ardından:
 
 | Alt alan | Ne için | Not |
 |---|---|---|
-| `api.ohaaaa.com` | Taşeron API'si (`packages/backend`) | Ayrı barındırma; `CORS_ORIGINS=https://ohaaaa.com` |
+| ~~`api.ohaaaa.com`~~ | **Gerekmiyor.** Taşeron API'si siteyle aynı dağıtımda, `/api/v1/*` altında sunulur. Ayrı barındırma, ayrı dağıtım ve CORS ayarı ortadan kalktı. |
 | `cdn.ohaaaa.com` | Ürün görselleri | Supabase Storage veya Cloudflare R2 |
 | `status.ohaaaa.com` | Kesinti sayfası | Sonraya bırakılabilir |
 
-`api` alt alan adını kullanacaksanız `NEXT_PUBLIC_API_BASE_URL` değerini de
-güncelleyin — panelde gösterilen örnek `curl` komutları bu adresi kullanır.
+API'yi ileride ayrı bir alan adına taşırsanız `NEXT_PUBLIC_API_BASE_URL`
+değerini ayarlayın — dokümantasyonda gösterilen örnek `curl` komutları bu
+adresi kullanır. Boş bırakılırsa sitenin kendi adresi gösterilir, ki doğru
+olan da budur.
 
 ---
 

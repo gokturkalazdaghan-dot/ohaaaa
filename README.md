@@ -34,7 +34,8 @@ doldurun, ardından migration'ları uygulayın:
 
 ```sh
 supabase db reset          # migrations + seed
-npm run dev:api            # taşeron API'si :4000
+npm run dev:api            # (isteğe bağlı) Express API'si :4000 — üretimde
+                           # kullanılmaz; uç noktalar web uygulamasında
 ```
 
 ## Depo yapısı
@@ -43,7 +44,7 @@ npm run dev:api            # taşeron API'si :4000
 |---|---|
 | `apps/web` | Next.js 16 (App Router) müşteri vitrini ve taşeron paneli |
 | `apps/mobile` | Flutter iOS/Android istemcisi |
-| `packages/backend` | Taşeron entegrasyon API'si (Express 5, `x-api-key`) |
+| `packages/backend` | Express 5 sürümü. **Üretimde kullanılmıyor**: uç noktalar `apps/web/src/app/api/v1/*` altında, siteyle aynı dağıtımda sunuluyor. |
 | `packages/shared` | Ortak tipler, zod şemaları, para ve sepet mantığı |
 | `supabase/migrations` | Şema, RLS politikaları, iş kuralı fonksiyonları |
 | `supabase/tests` | SQL iddia testleri (split-cart, RLS) |
@@ -101,7 +102,7 @@ komisyon oranını yükseltemez.
 ## Taşeron API'si
 
 ```sh
-curl http://localhost:4000/api/v1/me -H "x-api-key: ohk_live_…"
+curl https://www.ohaaaa.com/api/v1/me -H "x-api-key: ohk_live_…"
 ```
 
 Ayrıntı: [`docs/vendor-api.md`](docs/vendor-api.md) ve uygulama içindeki
