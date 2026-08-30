@@ -35,31 +35,44 @@ ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "apps" / "web"
 
 
-def disc_aspect(im: Image.Image) -> float:
-    """Rozetin turuncu diskinin en/boy orani. 1.0 = daire."""
+def badge_aspect(im: Image.Image) -> float:
+    """Rozet siluetinin en/boy orani. 1.0 = daire.
+
+    Olcum, ic turuncu diskten degil DIS SILUETTEN alinir. Ic disk yatayda
+    beyaz yazi tarafindan kesilir; oradan olcmek kusursuz dairesel bir armayi
+    0.93 gosterip reddedilmesine yol acabilir - kontrolun kendisi hata olur.
+    Dis metal cembere yazi dokunmaz.
+    """
     small = im.convert("RGB").resize((256, 256), Image.LANCZOS)
     px = small.load()
+    # Zemin rengi koselerden okunur
+    corners = [px[2, 2], px[253, 2], px[2, 253], px[253, 253]]
+    br = sum(c[0] for c in corners) / 4
+    bg_ = sum(c[1] for c in corners) / 4
+    bb = sum(c[2] for c in corners) / 4
+
     xs, ys = [], []
     for y in range(256):
         for x in range(256):
             r, g, b = px[x, y]
-            if r > 140 and (r - b) > 80 and g < 190:
+            # Esik yuksek: yumusak golge silueti sisirmesin
+            if abs(r - br) + abs(g - bg_) + abs(b - bb) > 120:
                 xs.append(x)
                 ys.append(y)
     if not xs:
-        return 1.0  # turuncu bulunamadi; kontrolu atla
+        return 1.0
     w = max(xs) - min(xs)
     h = max(ys) - min(ys)
     return w / h if h else 1.0
 
 
 def square(im: Image.Image) -> Image.Image:
-    """Kareye getir - GERMEDEN, kenar ekleyerek. Germek diski ovallestirir."""
+    """Kareye getir - GERMEDEN, saydam kenar ekleyerek. Germek diski ovallestirir."""
     if im.width == im.height:
         return im
     side = max(im.width, im.height)
-    canvas = Image.new("RGB", (side, side), PAPER)
-    canvas.paste(im, ((side - im.width) // 2, (side - im.height) // 2))
+    canvas = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    canvas.paste(im, ((side - im.width) // 2, (side - im.height) // 2), im)
     return canvas
 
 
@@ -71,21 +84,25 @@ def main() -> None:
     if not src.exists():
         sys.exit(f"Bulunamadi: {src}")
 
-    master = Image.open(src).convert("RGB")
+    master = Image.open(src).convert("RGBA")
     print(f"master: {src.name}  {master.width}x{master.height}")
 
     if min(master.size) < 512:
         print(f"  UYARI: {min(master.size)} px kucuk. 1024x1024 onerilir;")
         print("         opengraph gorseli buyutuldugunde bulanik cikar.")
 
-    aspect = disc_aspect(master)
-    if abs(aspect - 1.0) > 0.08:
+    aspect = badge_aspect(master)
+    # Tolerans bilerek genis. Bu kontrol bir hassas olcum degil, kaba bozulma
+    # alarmi: yumusak golge ve kenar yumusatmasi olcumu birkac puan oynatir,
+    # ama gercek hata (139x208 = 0.67) bunun cok otesinde. Dar tolerans,
+    # saglam bir armayi reddedip kontrolun kendisini hataya cevirirdi.
+    if abs(aspect - 1.0) > 0.15:
         sys.exit(
-            f"  DUR: rozetin diski en/boy {aspect:.3f} - oval, daire degil.\n"
+            f"  DUR: rozet silueti en/boy {aspect:.3f} - oval, daire degil.\n"
             "       Master gorsel bozulmus. Kaynagi duzeltmeden ikon uretmek,\n"
             "       hatayi her boyuta kopyalar."
         )
-    print(f"  disk en/boy {aspect:.3f} - daire")
+    print(f"  siluet en/boy {aspect:.3f} - daire")
 
     master = square(master)
 
@@ -104,8 +121,10 @@ def main() -> None:
     # yerlestirilir; canvasa germek burada da ovallestirirdi.
     og = Image.new("RGB", (1200, 630), PAPER)
     badge = 460
-    og.paste(master.resize((badge, badge), Image.LANCZOS),
-             ((1200 - badge) // 2, (630 - badge) // 2))
+    small = master.resize((badge, badge), Image.LANCZOS)
+    # Alfa maskesi ZORUNLU: maskesiz yapistirmak, rozetin kendi kare tuvalini
+    # kagit zeminin uzerine gorunur bir dikdortgen olarak birakir.
+    og.paste(small, ((1200 - badge) // 2, (630 - badge) // 2), small)
     og_path = WEB / "src/app/opengraph-image.png"
     og.save(og_path, "PNG", optimize=True)
     print(f"  {og_path.relative_to(ROOT)}  1200x630")
