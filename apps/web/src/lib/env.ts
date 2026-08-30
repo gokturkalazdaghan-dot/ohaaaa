@@ -21,3 +21,14 @@ export function isSupabaseConfigured(): boolean {
 
 export const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 export const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000';
+
+// --- SEO ve ölçümleme ------------------------------------------------------
+/** Google Analytics ölçüm kimliği (G-XXXXXXX). Boşsa betik hiç yüklenmez. */
+export const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? '';
+
+/**
+ * Google Search Console doğrulama kodu (madde 19).
+ * DNS veya HTML dosyası yöntemi de kullanılabilir; meta etiketi en hızlısıdır.
+ */
+export const searchConsoleVerification =
+  process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION ?? '';

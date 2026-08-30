@@ -5,9 +5,11 @@ import { notFound } from 'next/navigation';
 import { formatMoney } from '@ohaaaa/shared';
 
 import { ShieldIcon, TruckIcon } from '@/components/Icons';
+import { JsonLd } from '@/components/JsonLd';
 import { OfferRow } from '@/components/OfferRow';
 import { ProductCard, ProductThumb } from '@/components/ProductCard';
 import { getProductGroup, getRelatedGroups } from '@/data/catalog';
+import { siteUrl } from '@/lib/env';
 
 export const revalidate = 120;
 
@@ -47,8 +49,100 @@ export default async function ProductPage({ params }: ProductPageProps) {
       ? group.offers[group.offers.length - 1]!.totalCostCents - (bestOffer?.totalCostCents ?? 0)
       : 0;
 
+  const productUrl = `${siteUrl}/urun/${group.slug}`;
+
+  /*
+   * Ürün yapılandırılmış verisi.
+   *
+   * Fiyat karşılaştırma siteleri için EN YÜKSEK GETİRİLİ SEO işidir:
+   * `AggregateOffer` sayesinde arama sonucunda "5 satıcı · 53.499 – 56.299 TL"
+   * biçiminde zengin sonuç çıkar. Rakip listelerin çoğunda bu yoktur.
+   *
+   * Kurallar:
+   *   • Fiyatlar sayfada GÖRÜNEN fiyatlarla birebir aynı olmalı; farklı veri
+   *     göstermek yapılandırılmış veri ihlalidir ve zengin sonuç kaybettirir.
+   *   • Stoksuz teklifler dışarıda bırakılır; `offerCount` satılabilir olanı sayar.
+   *   • priceValidUntil zorunlu değil ama önerilir: fiyatın ne zamana kadar
+   *     güvenilir sayılacağını bildirir.
+   */
+  const sellableOffers = group.offers.filter((offer) => offer.stock > 0);
+
+  const priceValidUntil = new Date(Date.now() + 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+
+  const productJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    '@id': `${productUrl}#product`,
+    name: group.title,
+    description: group.description ?? undefined,
+    ...(group.brand ? { brand: { '@type': 'Brand', name: group.brand } } : {}),
+    ...(group.imageUrl ? { image: [group.imageUrl] } : {}),
+    url: productUrl,
+    ...(sellableOffers.length > 0
+      ? {
+          offers: {
+            '@type': 'AggregateOffer',
+            priceCurrency: 'TRY',
+            lowPrice: (Math.min(...sellableOffers.map((o) => o.priceCents)) / 100).toFixed(2),
+            highPrice: (Math.max(...sellableOffers.map((o) => o.priceCents)) / 100).toFixed(2),
+            offerCount: sellableOffers.length,
+            priceValidUntil,
+            availability: 'https://schema.org/InStock',
+            offers: sellableOffers.map((offer) => ({
+              '@type': 'Offer',
+              price: (offer.priceCents / 100).toFixed(2),
+              priceCurrency: offer.currency,
+              availability: 'https://schema.org/InStock',
+              itemCondition:
+                offer.condition === 'new'
+                  ? 'https://schema.org/NewCondition'
+                  : offer.condition === 'refurbished'
+                    ? 'https://schema.org/RefurbishedCondition'
+                    : 'https://schema.org/UsedCondition',
+              seller: {
+                '@type': 'Organization',
+                name: offer.vendor?.displayName ?? offer.merchant?.displayName ?? 'Mağaza',
+              },
+              // Kargo, karşılaştırmanın merkezinde: şemada da bildirilir.
+              shippingDetails: {
+                '@type': 'OfferShippingDetails',
+                shippingRate: {
+                  '@type': 'MonetaryAmount',
+                  value: (offer.shippingFeeCents / 100).toFixed(2),
+                  currency: 'TRY',
+                },
+                deliveryTime: {
+                  '@type': 'ShippingDeliveryTime',
+                  transitTime: {
+                    '@type': 'QuantitativeValue',
+                    minValue: Math.max(1, offer.estimatedDeliveryDays - 1),
+                    maxValue: offer.estimatedDeliveryDays,
+                    unitCode: 'DAY',
+                  },
+                },
+              },
+            })),
+          },
+        }
+      : {}),
+  };
+
+  /** Sayfa yolu şeması — arama sonucunda kırıntı yolu gösterir. */
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Ana sayfa', item: siteUrl },
+      { '@type': 'ListItem', position: 2, name: 'Ürünler', item: `${siteUrl}/arama` },
+      { '@type': 'ListItem', position: 3, name: group.title, item: productUrl },
+    ],
+  };
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <JsonLd data={[productJsonLd, breadcrumbJsonLd]} />
       <nav aria-label="Sayfa yolu" className="mb-6 flex items-center gap-2 text-xs text-muted">
         <Link href="/" className="hover:text-fg">Ana sayfa</Link>
         <span aria-hidden="true">/</span>

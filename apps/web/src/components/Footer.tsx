@@ -2,17 +2,25 @@ import Link from 'next/link';
 
 import { Logo } from './Logo';
 
+/**
+ * Alt bilgi bağlantıları (iç linkleme).
+ *
+ * Her bağlantı GERÇEK bir sayfaya gider. Var olmayan sayfalara giden
+ * yer tutucu bağlantılar hem kullanıcıyı hem arama motorunu yanıltır;
+ * "yakında" diye bir sayfaya bağlamak, hiç bağlamamaktan kötüdür.
+ */
 const LINK_GROUPS = [
   {
     title: 'Ohaaaa',
     links: [
-      { label: 'Hakkımızda', href: '/' },
-      { label: 'Nasıl çalışır?', href: '/' },
-      { label: 'Kariyer', href: '/' },
+      { label: 'Hakkımızda', href: '/hakkimizda' },
+      { label: 'Sıkça sorulan sorular', href: '/sss' },
+      { label: 'Ortaklık açıklaması', href: '/ortaklik-aciklamasi' },
+      { label: 'Bize ulaşın', href: '/iletisim' },
     ],
   },
   {
-    title: 'Taşeronlar',
+    title: 'Satıcılar',
     links: [
       { label: 'Satıcı ol', href: '/tasoron' },
       { label: 'Başvuru yap', href: '/tasoron/basvuru' },
@@ -21,11 +29,12 @@ const LINK_GROUPS = [
     ],
   },
   {
-    title: 'Yardım',
+    title: 'Yasal',
     links: [
-      { label: 'Sipariş takibi', href: '/' },
-      { label: 'İade ve değişim', href: '/' },
-      { label: 'İletişim', href: '/' },
+      { label: 'Gizlilik politikası', href: '/gizlilik' },
+      { label: 'Kullanım şartları', href: '/kosullar' },
+      { label: 'KVKK başvurusu', href: '/gizlilik#kvkk' },
+      { label: 'Çerez tercihleri', href: '/gizlilik#cerezler' },
     ],
   },
 ];
@@ -64,7 +73,14 @@ export function Footer() {
 
         <div className="mt-12 flex flex-col gap-3 border-t border-line pt-6 text-xs text-subtle sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} Ohaaaa. Tüm hakları saklıdır.</p>
-          <p>Fiyatlar taşeronlar tarafından belirlenir ve anlık olarak değişebilir.</p>
+          <p className="max-w-xl sm:text-right">
+            Fiyatlar satıcılar tarafından belirlenir ve anlık değişebilir. Bazı
+            bağlantılarımız ortaklık bağlantısıdır; bu size ek maliyet getirmez ve
+            sıralamayı etkilemez.{' '}
+            <Link href="/ortaklik-aciklamasi" className="underline underline-offset-2">
+              Ayrıntı
+            </Link>
+          </p>
         </div>
       </div>
     </footer>

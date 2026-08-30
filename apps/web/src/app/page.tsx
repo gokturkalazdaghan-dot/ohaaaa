@@ -6,6 +6,7 @@ import { formatMoney } from '@ohaaaa/shared';
 import { FlashDeals } from '@/components/FlashDeals';
 import { categoryIcons, ArrowRightIcon, ShieldIcon, StarIcon, StoreIcon, TruckIcon } from '@/components/Icons';
 import { ProductCard } from '@/components/ProductCard';
+import { TrustSignals } from '@/components/TrustSignals';
 import { SearchBar } from '@/components/SearchBar';
 import { getCategories, getFlashDeals, getVendors, searchProducts } from '@/data/catalog';
 
@@ -30,6 +31,7 @@ export default async function HomePage() {
         <FlashDeals deals={deals} />
         <TrendingProducts results={trending} />
         <VendorShowcase vendors={vendors} />
+        <TrustSignals />
         <VendorCta />
       </div>
     </>
@@ -105,7 +107,7 @@ function CategoryStrip({ categories }: { categories: Awaited<ReturnType<typeof g
           return (
             <Link
               key={category.id}
-              href={`/arama?kategori=${category.slug}`}
+              href={`/kategori/${category.slug}`}
               className="group flex flex-col items-center gap-3 rounded-2xl border border-line bg-surface p-5 text-center transition-all duration-300 hover:-translate-y-1 hover:border-brand/45 hover:shadow-[var(--glow-brand)]"
               style={{ animation: `rise 0.5s cubic-bezier(0.16,1,0.3,1) ${index * 45}ms both` }}
             >

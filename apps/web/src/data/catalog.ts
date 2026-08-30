@@ -11,6 +11,7 @@
 
 import 'server-only';
 
+import { offerSellerName } from '@ohaaaa/shared';
 import type {
   Category,
   FlashDeal,
@@ -149,8 +150,11 @@ function toSearchResult(group: ProductGroupWithOffers): SearchResult {
     minPriceCents: group.minPriceCents,
     maxPriceCents: group.maxPriceCents,
     bestOfferId: best?.id ?? null,
-    bestVendorId: best?.vendorId ?? null,
-    bestVendorName: best?.vendor?.displayName ?? null,
+    // En ucuz teklif bir ortak mağazaya aitse `vendor` boştur; satıcı adını
+    // iki türden hangisi olursa olsun tek yerden çözen yardımcıyla okuyoruz.
+    // Aksi halde affiliate teklifleri kartta isimsiz görünür.
+    bestVendorId: best?.vendorId ?? best?.merchantId ?? null,
+    bestVendorName: best ? offerSellerName(best) : null,
   };
 }
 

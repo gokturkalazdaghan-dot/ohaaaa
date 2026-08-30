@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 
 import { formatMoney, type SearchResult } from '@ohaaaa/shared';
@@ -90,10 +91,58 @@ function ProductThumb({ title }: { title: string }) {
       style={{
         background: `radial-gradient(120% 120% at 30% 20%, hsl(${hash} 70% 22%) 0%, hsl(${(hash + 45) % 360} 65% 12%) 60%, var(--surface-2) 100%)`,
       }}
+      /*
+       * Yer tutucu bir görsel bilgi taşımaz; ekran okuyucuya "A harfi"
+       * okutmak gürültüdür. Bu yüzden role="img" + alt metni YERİNE
+       * tamamen gizlenir — ürün adı zaten kartın içinde yazılıdır.
+       *
+       * Gerçek ürün görselleri bağlandığında bu bileşen <Image> ile
+       * değiştirilecek ve alt metni ürün adından üretilecektir
+       * (bkz. ProductImage).
+       */
       aria-hidden="true"
     >
       <span className="text-4xl font-black text-white/85">{title.charAt(0).toUpperCase()}</span>
     </div>
+  );
+}
+
+/**
+ * Gerçek ürün görseli (madde 13 ve 17).
+ *
+ * Görsel yoksa yer tutucuya düşer. `next/image` kullanılır: otomatik
+ * WebP/AVIF dönüşümü, boyut değişkeleri ve tembel yükleme (lazy loading)
+ * bundan gelir — görsel optimizasyonun tamamı tek bileşende.
+ */
+export function ProductImage({
+  src,
+  title,
+  brand,
+  priority = false,
+}: {
+  src: string | null;
+  title: string;
+  brand?: string | null;
+  priority?: boolean;
+}) {
+  if (!src) return <ProductThumb title={title} />;
+
+  return (
+    <Image
+      src={src}
+      /*
+       * Alt metni tanımlayıcı olmalı ama anahtar kelime doldurulmamalıdır.
+       * "Ürün görseli" gibi ifadeler değersizdir: ekran okuyucu zaten
+       * "görsel" der. Marka + ürün adı doğru bilgiyi taşır.
+       */
+      alt={brand ? `${brand} ${title}` : title}
+      fill
+      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 320px"
+      className="object-contain transition-transform duration-500 group-hover:scale-105"
+      // Vitrindeki ilk görsel LCP ölçüsünü belirler; tembel yüklenmemeli.
+      priority={priority}
+      loading={priority ? undefined : 'lazy'}
+    />
   );
 }
 

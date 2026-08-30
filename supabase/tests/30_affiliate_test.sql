@@ -291,7 +291,42 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------
--- 9) Tıklama/dönüşüm verisi sızmamalı
+-- 9) Arama sonucunda satıcı adı iki teklif türü için de dolu olmalı
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_name text;
+  v_id   uuid;
+begin
+  -- iPhone'un en ucuz teklifi bir ORTAK MAĞAZAYA ait (5.349.900).
+  select best_vendor_name, best_vendor_id into v_name, v_id
+  from public.search_products('iphone');
+
+  if v_name is null then
+    raise exception 'BAŞARISIZ: en ucuz teklif ortak mağazaya aitken satıcı adı boş döndü';
+  end if;
+
+  if v_id is null then
+    raise exception 'BAŞARISIZ: satıcı kimliği boş döndü';
+  end if;
+
+  if v_name <> 'Örnek Mağaza A' then
+    raise exception 'BAŞARISIZ: yanlış satıcı adı döndü: %', v_name;
+  end if;
+
+  -- Taşeron teklifinin en ucuz olduğu bir üründe de ad dolu olmalı.
+  select best_vendor_name into v_name from public.search_products('pegasus');
+
+  if v_name is null then
+    raise exception 'BAŞARISIZ: taşeron teklifinde satıcı adı boş döndü';
+  end if;
+
+  raise notice '✓ arama sonucu: satıcı adı hem taşeron hem ortak mağaza için dolu';
+end
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 10) Tıklama/dönüşüm verisi sızmamalı
 -- ---------------------------------------------------------------------------
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"22222222-2222-4222-8222-222222222222","role":"authenticated"}';
