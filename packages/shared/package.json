@@ -18,6 +18,10 @@
     "./affiliate": {
       "types": "./dist/affiliate.d.ts",
       "default": "./dist/affiliate.js"
+    },
+    "./product-sync": {
+      "types": "./dist/productSync.d.ts",
+      "default": "./dist/productSync.js"
     }
   },
   "files": [
@@ -34,6 +38,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "@supabase/supabase-js": "^2.112.4"
   }
 }

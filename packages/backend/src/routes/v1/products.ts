@@ -19,7 +19,7 @@ import { notFound } from '../../lib/errors.js';
 import type { ServiceClient } from '../../lib/supabase.js';
 import { requireScope } from '../../middleware/apiKeyAuth.js';
 import { validateBody, validateQuery } from '../../middleware/validate.js';
-import { syncProducts } from '../../services/productSync.js';
+import { syncProducts } from '@ohaaaa/shared/product-sync';
 
 export function productsRouter(supabase: ServiceClient): Router {
   const router = Router();

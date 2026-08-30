@@ -6,7 +6,7 @@
  * ettiği için yetkilendirme bu satırların sorumluluğundadır.
  */
 
-import { syncProducts } from '@ohaaaa/backend/product-sync';
+import { syncProducts } from '@ohaaaa/shared/product-sync';
 import { productFeedRequestSchema, productListQuerySchema } from '@ohaaaa/shared';
 
 import { ApiError, authenticate, errorResponse, logRequest } from '@/lib/api/vendorAuth';

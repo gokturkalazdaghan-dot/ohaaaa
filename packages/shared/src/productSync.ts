@@ -17,17 +17,21 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import type { ProductFeedItem } from '@ohaaaa/shared';
+import type { ProductFeedItem } from './schemas.js';
 
 /*
- * Bu dosya hem Express API'si hem de web uygulamasindaki route handler'lari
- * tarafindan kullanilir. Bu yuzden pakete ozel HICBIR seye bagli degildir:
- * yalnizca Supabase istemci tipine ve paylasilan sema tiplerine.
+ * NEDEN BU DOSYA `shared` ICINDE?
  *
- * Neden tek kopya? Kanonik urun eslestirmesi ("hangi iki teklif ayni
- * urundur") sitenin en kritik kuralidir. Iki kopya zamanla ayrisir ve
- * ayrisma sessizdir: bir yol iki farkli urunu birlestirir, kullanici
- * yanlis urunu satin alir.
+ * Kanonik urun eslestirmesi ("hangi iki teklif ayni urundur") sitenin en
+ * kritik kuralidir ve iki yerden cagrilir: Express API'si ve web
+ * uygulamasinin route handler'lari. Iki kopya zamanla ayrisir; ayrisma da
+ * sessizdir - bir yol iki farkli urunu birlestirir, kullanici yanlis urunu
+ * satin alir. Bu yuzden tek kopya, ikisinin de zaten derledigi pakette.
+ *
+ * `@supabase/supabase-js` yalnizca TIP olarak alinir (`import type`), yani
+ * derlemede silinir. Uretilen JavaScript'te bu paketten hicbir sey yoktur;
+ * `shared` calisma zamaninda bagimsiz kalir ve tarayici paketini
+ * sismeye ugratmaz.
  */
 type ServiceClient = SupabaseClient;
 

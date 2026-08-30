@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "installCommand": "npm install",
-  "buildCommand": "npm run build --workspace @ohaaaa/shared && npm run build --workspace @ohaaaa/backend && npm run build --workspace @ohaaaa/web",
+  "buildCommand": "npm run build --workspace @ohaaaa/shared && npm run build --workspace @ohaaaa/web",
   "regions": [
     "fra1"
   ],
