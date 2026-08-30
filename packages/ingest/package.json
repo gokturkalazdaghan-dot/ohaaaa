@@ -1,0 +1,24 @@
+{
+  "name": "@ohaaaa/ingest",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ürün veri alım hattı — ortaklık feed'leri ve izin verilen kaynaklar",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": { "ohaaaa-ingest": "./dist/cli.js" },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "start": "node dist/cli.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test \"dist/**/*.test.js\""
+  },
+  "dependencies": {
+    "@ohaaaa/shared": "*",
+    "@supabase/supabase-js": "^2.112.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.9.2"
+  }
+}

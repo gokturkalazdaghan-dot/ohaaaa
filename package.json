@@ -1,0 +1,27 @@
+{
+  "name": "ohaaaa-ecosystem",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ohaaaa — çok satıcılı e-ticaret süper-agregatörü (monorepo)",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/web"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @ohaaaa/shared && npm run build --workspace @ohaaaa/backend && npm run build --workspace @ohaaaa/web",
+    "dev": "npm run dev --workspace @ohaaaa/web",
+    "dev:api": "npm run dev --workspace @ohaaaa/backend",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:reset": "supabase db reset",
+    "db:push": "supabase db push"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}

@@ -1,0 +1,56 @@
+# Her itmede (push) ve her PR'da çalışan doğrulama.
+#
+# Bu iş yeşil değilse kod birleştirilmez. "Otonom kod güncellemesi"nin
+# güvenli hâli budur: değişikliği makine önerir, testler doğrular, insan
+# birleştirir. Denetimsiz otomatik dağıtım, para taşıyan bir sistemde
+# hızlandırdığından çok daha fazlasını riske atar.
+
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ohaaaa_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports: ['5432:5432']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Tip denetimi
+        run: npm run typecheck
+
+      - name: Birim testleri
+        run: npm test
+
+      - name: SQL migration ve güvenlik testleri
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/ohaaaa_test
+          PGPASSWORD: postgres
+        run: ./scripts/verify-sql.sh
+
+      - name: Derleme
+        run: npm run build

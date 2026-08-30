@@ -1,0 +1,26 @@
+{
+  "name": "@ohaaaa/backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Taşeron entegrasyon API'si — x-api-key doğrulama, ürün beslemesi ve sipariş akışı",
+  "type": "module",
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "dev": "node --watch --experimental-strip-types src/server.ts",
+    "start": "node dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test \"dist/**/*.test.js\""
+  },
+  "dependencies": {
+    "@ohaaaa/shared": "*",
+    "@supabase/supabase-js": "^2.112.4",
+    "express": "^5.2.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.9.2"
+  }
+}
