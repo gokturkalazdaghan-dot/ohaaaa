@@ -1,9 +1,8 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-import { formatMoney } from '@ohaaaa/shared';
-
 import { DataUnavailable } from '@/components/DataUnavailable';
+import { ProductCard } from '@/components/ProductCard';
 import { getCategories, searchProducts, type SortOption } from '@/data/catalog';
 
 export const revalidate = 120;
@@ -139,23 +138,11 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       {results.length === 0 ? (
         <EmptyState query={q} />
       ) : (
-        <ul className="mt-8 divide-y divide-line border-y border-line">
+        <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
           {results.map((result) => (
-            <li key={result.groupId} className="py-3">
-              <Link href={`/urun/${result.slug}`} className="text-fg hover:underline">
-                {result.title}
-              </Link>
-              {result.minPriceCents !== null && (
-                <p className="mt-1 tabular text-sm font-semibold text-brand">
-                  {formatMoney(result.minPriceCents)}
-                  {result.offerCount > 1 ? (
-                    <span className="ml-2 font-normal text-muted">{result.offerCount} mağaza</span>
-                  ) : null}
-                </p>
-              )}
-            </li>
+            <ProductCard key={result.groupId} result={result} />
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );
