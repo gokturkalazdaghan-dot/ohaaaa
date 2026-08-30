@@ -29,13 +29,7 @@ FONT = Path('/mnt/skills/examples/canvas-design/canvas-fonts/Outfit-Bold.ttf')
 # Marka adinin TEK dogruluk kaynagi. Elle 'Ohaaa' ya da 'Ohaaaaa' yazilamaz;
 # harf sayisi burada uretilir. Elle duzenlemede bu hata iki kez yapildi.
 BRAND = 'O' + 'h' + 'a' * 4        # Ohaaaa
-
-# Kompakt işaret: 36-52 pikselde tam ad okunmuyor (ölçüldü; 64 pikselden
-# önce harfler birkaç piksele düşüyor). Başlığa ve favicon'a 64 piksellik
-# arma koymak başlığı gereksiz yükseltir. Bu yüzden küçük boyut için ayrı
-# bir işaret üretilir: aynı disk, aynı çember, aynı segment halkası - ama
-# kısa ve o boyutta okunan bir kelime.
-COMPACT = 'Oh!'
+WORD = BRAND
 
 # --- yaricaplar (S=1024 icin) ---
 R_SHADOW = 496
@@ -147,14 +141,14 @@ def build_disc(rad):
     return disc + grain
 
 
-def render_word(word, size_px, angle_deg):
+def render_word(size_px, angle_deg):
     """Kelimeyi 3B kabartma hissiyle ciz; (RGBA gorsel) dondurur."""
     font = ImageFont.truetype(str(FONT), size_px)
 
     pad = size_px
-    tmp = Image.new('L', (int(size_px * len(word) * 1.2) + pad * 2, size_px * 3), 0)
+    tmp = Image.new('L', (int(size_px * len(WORD) * 1.1) + pad * 2, size_px * 3), 0)
     d = ImageDraw.Draw(tmp)
-    d.text((pad, pad), word, font=font, fill=255)
+    d.text((pad, pad), WORD, font=font, fill=255)
     bbox = tmp.getbbox()
     glyphs = tmp.crop(bbox)
 
@@ -198,7 +192,7 @@ def render_word(word, size_px, angle_deg):
     return rotated.crop(box) if box else rotated
 
 
-def verify_letters(badge, word, angle_deg=17):
+def verify_letters(badge, angle_deg=17):
     """Cizilen goruntuyu OKUYARAK harfleri sayar.
 
     Dosyanin basindaki assert kaynak dizgeyi dogrular; bu ise CIKTIYI
@@ -229,32 +223,24 @@ def verify_letters(badge, word, angle_deg=17):
     if start is not None and len(col) - start > 8:
         runs.append(len(col) - start)
 
-    if len(runs) != len(word):
+    if len(runs) != len(BRAND):
         raise SystemExit(
-            f'  DUR: goruntude {len(runs)} harf blogu var, {len(word)} olmali.\n'
+            f'  DUR: goruntude {len(runs)} harf blogu var, {len(BRAND)} olmali.\n'
             f'       Blok genislikleri: {runs}\n'
             '       Harfler birlesmis ya da bir harf eksik cizilmis olabilir.')
 
     # Son dort blok 'a' - genislikleri birbirine yakin olmali
     widths = runs[2:]
-    # Tam ad icin ek kontrol: dort 'a' esit genislikte olmali.
-    if word == BRAND:
-        if len(widths) != BRAND.count('a'):
-            raise SystemExit(f'  DUR: {len(widths)} adet a blogu, {BRAND.count("a")} olmali.')
-        if max(widths) - min(widths) > max(widths) * 0.12:
-            raise SystemExit(f'  DUR: a harfleri esit genislikte degil: {widths}')
+    if len(widths) != BRAND.count('a'):
+        raise SystemExit(f'  DUR: {len(widths)} adet a blogu, {BRAND.count("a")} olmali.')
+    if max(widths) - min(widths) > max(widths) * 0.12:
+        raise SystemExit(f'  DUR: a harfleri esit genislikte degil: {widths}')
 
-    print(f'  harf blogu: {len(runs)} = {", ".join(word)}')
+    print(f'  harf blogu: {len(runs)} = {", ".join(BRAND)}  |  a genislikleri {widths}')
 
 
 def main() -> None:
-    args = [a for a in sys.argv[1:] if a != '--compact']
-    compact = '--compact' in sys.argv
-    word = COMPACT if compact else BRAND
-    # Kompakt isarette kelime kisa oldugu icin diski daha cok doldurabilir.
-    fill = 0.74 if compact else 0.90
-
-    out = Path(args[0]) if args else Path('ohaaaa-master.png')
+    out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path('ohaaaa-master.png')
     if not FONT.exists():
         sys.exit(f'Yazi tipi yok: {FONT}')
 
@@ -278,18 +264,17 @@ def main() -> None:
     # --- Yazi: ic diske SIGACAK sekilde olceklenir -------------------------
     # Referansta kelime diski %97 doldurup dorduncu harfe yer birakmamisti.
     # Burada hedef genislik acikca sinirlanir.
-    target_w = 2 * R_DISC * fill
+    target_w = 2 * R_DISC * 0.90
     size_px = 300
-    word_img = render_word(word, size_px, 17)
-    scale = target_w / word_img.width
-    word_img = word_img.resize(
-        (max(1, int(word_img.width * scale)), max(1, int(word_img.height * scale))),
-        Image.LANCZOS)
+    word = render_word(size_px, 17)
+    scale = target_w / word.width
+    word = word.resize((max(1, int(word.width * scale)), max(1, int(word.height * scale))),
+                       Image.LANCZOS)
 
-    badge.paste(word_img, (int(CX - word_img.width / 2), int(CY - word_img.height / 2)), word_img)
+    badge.paste(word, (int(CX - word.width / 2), int(CY - word.height / 2)), word)
     badge.save(out, 'PNG')
 
-    verify_letters(badge, word)
+    verify_letters(badge)
 
     # Kontrol: yazi ic diskin icinde mi?
     a = np.asarray(badge.convert('RGB')).astype(int)

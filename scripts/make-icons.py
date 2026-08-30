@@ -2,7 +2,7 @@
 """
 OHAAAA - tek master gorselden tum ikon setini uretir.
 
-    python3 scripts/make-icons.py <master.png> [kompakt-isaret.png]
+    python3 scripts/make-icons.py <master.png>
 
 NEDEN BU BETIK VAR
 Rozet daha once elle olceklenirken 139x208'e ezilmisti: daire oval olmustu ve
@@ -10,22 +10,11 @@ bu, sitenin her sayfasindaki logoda goruluyordu. Elle yeniden boyutlandirmada
 bu hata sessizdir - kimse 40x40 bir gorseli olcmez. Betik once en/boy oranini
 OLCER ve bozuksa durur, sonra her cikti icin kareligi korur.
 
-IKI VARLIK, IKI ISI
-Tam arma 1024 piksellik bir cizimdir; 36-52 piksele indiginde icindeki
-"Ohaaaa" harfleri birkac piksele duser ve okunmaz olur (olculdu: 64 pikselden
-once okunmuyor). Baslikta ya da favicon'da 64 piksellik arma kullanmak ise
-basligi gereksiz yukseltir.
-
-Bu yuzden kucuk boyutlar icin ayri bir isaret uretilir: ayni disk, ayni
-cember, ayni segment halkasi - ama "Oh!" yazar ve 32 pikselde bile okunur.
-Kompakt isaret verilirse favicon ve baslik logosu ondan, buyuk boyutlu
-ciktilar tam armadan uretilir.
-
 URETILENLER
-    apps/web/src/app/icon.png            256x256   tarayici sekmesi  ← kompakt
-    apps/web/public/ohaaaa-badge.png     256x256   basliktaki logo   ← kompakt
-    apps/web/src/app/apple-icon.png      180x180   iOS ana ekran     ← tam arma
-    apps/web/src/app/opengraph-image.png 1200x630  link onizlemesi   ← tam arma
+    apps/web/src/app/icon.png            256x256   tarayici sekmesi (Next otomatik bulur)
+    apps/web/src/app/apple-icon.png      180x180   iOS ana ekran
+    apps/web/public/ohaaaa-badge.png     256x256   basliktaki logo
+    apps/web/src/app/opengraph-image.png 1200x630  WhatsApp/X/Facebook onizlemesi
 
 GEREKSINIM
     pip install Pillow
@@ -88,16 +77,12 @@ def square(im: Image.Image) -> Image.Image:
 
 
 def main() -> None:
-    if len(sys.argv) not in (2, 3):
+    if len(sys.argv) != 2:
         sys.exit(__doc__)
 
     src = Path(sys.argv[1])
     if not src.exists():
         sys.exit(f"Bulunamadi: {src}")
-
-    mark_src = Path(sys.argv[2]) if len(sys.argv) == 3 else None
-    if mark_src and not mark_src.exists():
-        sys.exit(f"Bulunamadi: {mark_src}")
 
     master = Image.open(src).convert("RGBA")
     print(f"master: {src.name}  {master.width}x{master.height}")
@@ -121,22 +106,14 @@ def main() -> None:
 
     master = square(master)
 
-    small = master
-    if mark_src:
-        small = square(Image.open(mark_src).convert("RGBA"))
-        aspect_mark = badge_aspect(small)
-        if abs(aspect_mark - 1.0) > 0.15:
-            sys.exit(f"  DUR: kompakt isaret en/boy {aspect_mark:.3f} - oval.")
-        print(f"  kompakt isaret: {mark_src.name}  siluet {aspect_mark:.3f}")
-
     outputs = [
-        (WEB / "src/app/icon.png", 256, small),          # tarayici sekmesi: 16-32 px'e iner
-        (WEB / "public/ohaaaa-badge.png", 256, small),   # baslik: 36 px
-        (WEB / "src/app/apple-icon.png", 180, master),   # iOS ana ekran: buyuk gorunur
+        (WEB / "src/app/icon.png", 256),
+        (WEB / "src/app/apple-icon.png", 180),
+        (WEB / "public/ohaaaa-badge.png", 256),
     ]
-    for path, size, source in outputs:
+    for path, size in outputs:
         path.parent.mkdir(parents=True, exist_ok=True)
-        source.resize((size, size), Image.LANCZOS).save(path, "PNG", optimize=True)
+        master.resize((size, size), Image.LANCZOS).save(path, "PNG", optimize=True)
         print(f"  {path.relative_to(ROOT)}  {size}x{size}")
 
     # --- Onizleme gorseli ---------------------------------------------------
