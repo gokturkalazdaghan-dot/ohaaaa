@@ -1,9 +1,14 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent, type KeyboardEvent } from 'react';
 
 import { SearchIcon } from './Icons';
+import {
+  SearchSuggestions,
+  useSearchSuggestions,
+  type Suggestion,
+} from './SearchSuggestions';
 import { VisualSearchButton } from './VisualSearchButton';
 import { VoiceSearchButton } from './VoiceSearchButton';
 
@@ -27,9 +32,82 @@ export function SearchBar({
   const params = useSearchParams();
   const [value, setValue] = useState(params.get('q') ?? '');
 
+  const listId = useId();
+  const [focused, setFocused] = useState(false);
+  const [rawActiveIndex, setActiveIndex] = useState(-1);
+
+  const suggestions = useSearchSuggestions(value);
+
+  /*
+   * Vurgulu satır liste SINIRLARINA kırpılır.
+   *
+   * Kullanıcı 5. öneriyi seçiliyken bir harf daha yazarsa liste kısalabilir;
+   * kırpılmasaydı Enter var olmayan bir öğeyi seçmeye çalışır ya da eski
+   * indeks yeni listede BAŞKA bir öneriye denk gelirdi.
+   */
+  const activeIndex = rawActiveIndex < suggestions.length ? rawActiveIndex : -1;
+
   function submit(event: FormEvent) {
     event.preventDefault();
+
+    // Klavyeyle bir öneri vurgulanmışsa Enter onu seçer, ham metni değil.
+    const active = activeIndex >= 0 ? suggestions[activeIndex] : undefined;
+    if (active) {
+      selectSuggestion(active);
+      return;
+    }
+
     runSearch(value);
+  }
+
+  /**
+   * Öneri seçimi.
+   *
+   * Tür başına farklı hedef: ürün ve kategori kendi sayfasına gider, marka
+   * ise metin aramasına — marka bir sayfa değil, sonuçlar üzerinde bir
+   * filtredir. Kullanıcıyı olmayan bir "marka sayfası"na göndermek 404
+   * üretirdi.
+   */
+  function selectSuggestion(item: Suggestion) {
+    setFocused(false);
+    setActiveIndex(-1);
+
+    if (item.kind === 'urun' && item.slug) {
+      setValue(item.suggestion);
+      router.push(`/urun/${item.slug}`);
+      return;
+    }
+
+    if (item.kind === 'kategori' && item.slug) {
+      setValue('');
+      router.push(`/kategori/${item.slug}`);
+      return;
+    }
+
+    runSearch(item.suggestion);
+  }
+
+  /** Yukarı/aşağı ok ile öneri gezinmesi, Escape ile kapatma. */
+  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    const items = suggestions;
+    if (items.length === 0) return;
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveIndex((current) => (current + 1) % items.length);
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveIndex((current) => (current <= 0 ? items.length - 1 : current - 1));
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      setActiveIndex(-1);
+      setFocused(false);
+    }
   }
 
   /** Metin aramasını çalıştırır; kutu da aynı metni gösterir. */
@@ -77,6 +155,19 @@ export function SearchBar({
               name="q"
               value={value}
               onChange={(event) => setValue(event.target.value)}
+              onFocus={() => setFocused(true)}
+              // Kapanış GECİKTİRİLİR: öneriye tıklarken girdi önce blur olur,
+              // hemen kapatılsaydı tıklama boşluğa düşerdi.
+              onBlur={() => setTimeout(() => setFocused(false), 120)}
+              onKeyDown={onKeyDown}
+              role="combobox"
+              aria-expanded={focused}
+              aria-controls={listId}
+              aria-autocomplete="list"
+              aria-activedescendant={
+                activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined
+              }
+              autoComplete="off"
               autoFocus={autoFocus}
               placeholder={
                 'Ürün, marka veya model'
@@ -107,6 +198,14 @@ export function SearchBar({
             </button>
           </div>
         </div>
+
+        <SearchSuggestions
+          items={suggestions}
+          open={focused}
+          activeIndex={activeIndex}
+          onSelect={selectSuggestion}
+          listId={listId}
+        />
       </form>
 
       {isHero && (

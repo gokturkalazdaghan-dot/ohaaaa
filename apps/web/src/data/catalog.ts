@@ -236,6 +236,55 @@ function toSearchResult(group: ProductGroupWithOffers): SearchResult {
   };
 }
 
+/** Yazarken tamamlama önerisi. */
+export interface SearchSuggestion {
+  suggestion: string;
+  kind: 'marka' | 'kategori' | 'urun';
+  slug: string | null;
+  resultCount: number;
+}
+
+/**
+ * Arama önerileri.
+ *
+ * Hata FIRLATMAZ. Öneri şeridi aramanın kendisi değil, ona giden kısayoldur;
+ * alınamadığında kullanıcı yazmaya devam edip Enter'a basabilmelidir. Bir
+ * öneri isteğinin başarısızlığı yüzünden arama kutusunu bozmak, sağladığı
+ * kolaylıktan çok daha pahalıya mal olur.
+ */
+export async function getSearchSuggestions(
+  query: string,
+  limit = 8,
+): Promise<SearchSuggestion[]> {
+  const trimmed = query.trim();
+  // Tek harf için öneri anlamsız: neredeyse tüm katalog eşleşir.
+  if (trimmed.length < 2) return [];
+
+  const supabase = createAnonClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase.rpc('search_suggestions', {
+    p_query: trimmed,
+    p_limit: limit,
+  });
+
+  if (error) {
+    console.error(
+      JSON.stringify({ level: 'error', msg: 'Öneriler alınamadı', error: error.message }),
+    );
+    return [];
+  }
+
+  return (data ?? []).map(
+    (row: Record<string, unknown>): SearchSuggestion => ({
+      suggestion: String(row.suggestion),
+      kind: row.kind as SearchSuggestion['kind'],
+      slug: row.slug ? String(row.slug) : null,
+      resultCount: Number(row.result_count),
+    }),
+  );
+}
+
 /**
  * Barkoda (GTIN) göre kanonik ürün araması.
  *
