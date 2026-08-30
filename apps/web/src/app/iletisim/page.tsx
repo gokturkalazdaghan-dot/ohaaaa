@@ -55,34 +55,23 @@ export default function ContactPage() {
       description="Talebinizi doğru kişiye ulaştırmak için konuya göre ayrı kanallarımız var."
       breadcrumb="İletişim"
     >
-      <div className="grid gap-4 sm:grid-cols-2">
+      <ul className="divide-y divide-line border-y border-line">
         {CHANNELS.map((channel) => (
-          <article key={channel.email} className="card p-5">
+          <li key={channel.email} className="py-5">
             <h2 className="!mt-0 text-base font-semibold">{channel.title}</h2>
             <p className="mt-2 text-sm leading-relaxed text-muted">{channel.description}</p>
-
-            <a
-              href={`mailto:${channel.email}`}
-              className="mt-3 block font-mono text-sm text-brand-soft"
-            >
-              {channel.email}
-            </a>
-
-            <p className="mt-1 text-[11px] text-subtle">
-              Yanıt süresi: {channel.responseTime}
+            <p className="mt-2 text-sm">
+              <a href={`mailto:${channel.email}`}>{channel.email}</a>
+              <span className="text-subtle"> — {channel.responseTime}</span>
             </p>
-
             {'action' in channel && channel.action && (
-              <Link
-                href={channel.action.href}
-                className="mt-3 inline-block rounded-lg border border-line px-3 py-1.5 text-xs font-medium !text-fg no-underline transition-colors hover:border-brand/50"
-              >
-                {channel.action.label}
-              </Link>
+              <p className="mt-2 text-sm">
+                <Link href={channel.action.href}>{channel.action.label}</Link>
+              </p>
             )}
-          </article>
+          </li>
         ))}
-      </div>
+      </ul>
 
       <h2>Mesaj gönderin</h2>
       <ContactForm />
