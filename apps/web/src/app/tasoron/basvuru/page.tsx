@@ -9,8 +9,8 @@ export const metadata: Metadata = {
 
 export default function VendorApplicationPage() {
   return (
-    <div className="mx-auto max-w-2xl px-4 py-14 sm:px-6">
-      <h1 className="text-3xl font-black tracking-tight">Taşeron başvurusu</h1>
+    <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
+      <h1 className="text-3xl font-bold tracking-tight text-fg">Taşeron başvurusu</h1>
       <p className="mt-2 leading-relaxed text-muted">
         Formu doldurun; vergi numarası doğrulaması sonrası hesabınız genellikle 1 iş günü
         içinde onaylanır. Onay sonrası panelden API anahtarınızı oluşturup kataloğunuzu
