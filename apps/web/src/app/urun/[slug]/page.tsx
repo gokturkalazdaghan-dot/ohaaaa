@@ -8,8 +8,9 @@ import { DataUnavailable } from '@/components/DataUnavailable';
 import { ShieldIcon, TruckIcon } from '@/components/Icons';
 import { JsonLd } from '@/components/JsonLd';
 import { OfferRow } from '@/components/OfferRow';
+import { PriceHistory } from '@/components/PriceHistory';
 import { ProductCard, ProductImage } from '@/components/ProductCard';
-import { getProductGroup, getRelatedGroups } from '@/data/catalog';
+import { getPriceHistory, getProductGroup, getRelatedGroups } from '@/data/catalog';
 import { siteUrl } from '@/lib/env';
 
 type ProductPageProps = { params: Promise<{ slug: string }> };
@@ -62,6 +63,13 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   // İlgili ürünler ikincil içeriktir: alınamazsa sayfa yine de gösterilir.
   const related = await getRelatedGroups(slug, 4).catch(() => []);
+
+  /*
+   * Fiyat geçmişi ikincil bilgidir: alınamazsa ürün sayfası yine açılmalı.
+   * Bu yüzden ayrı bir çağrı ve kendi catch'i var — geçmiş yüzünden ürün
+   * sayfasının 500 vermesi, kullanıcıya hiçbir şey göstermemek olurdu.
+   */
+  const priceHistory = await getPriceHistory(group.id, 90).catch(() => []);
 
   // Teklifler zaten toplam maliyete göre sıralı gelir (veri katmanında).
   const bestOffer = group.offers[0];
@@ -183,6 +191,14 @@ export default async function ProductPage({ params }: ProductPageProps) {
               brand={group.brand}
             />
           </div>
+
+          {bestOffer && (
+            <PriceHistory
+              points={priceHistory}
+              currentCents={bestOffer.priceCents}
+              compareAtCents={bestOffer.compareAtPriceCents}
+            />
+          )}
 
           {Object.keys(group.attributes).length > 0 && (
             <div className="card p-5">

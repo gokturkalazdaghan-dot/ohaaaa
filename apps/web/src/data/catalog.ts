@@ -11,11 +11,13 @@
 
 import 'server-only';
 
-import { offerSellerName } from '@ohaaaa/shared';
+import { offerSellerName
+} from '@ohaaaa/shared';
 import type {
   Category,
   FlashDeal,
   Offer,
+  PricePoint,
   ProductGroupWithOffers,
   SearchResult,
   Vendor,
@@ -392,4 +394,43 @@ export async function getVendors(): Promise<Vendor[]> {
 export async function getRelatedGroups(slug: string, limit = 4): Promise<SearchResult[]> {
   const results = await searchProducts({ sort: 'offers', limit: limit + 1 });
   return results.filter((result) => result.slug !== slug).slice(0, limit);
+}
+
+/**
+ * Ürün grubunun günlük en düşük fiyat geçmişi.
+ *
+ * Demo modunda gerçek gözlem yoktur. UYDURMA GEÇMİŞ ÜRETİLMEZ: sahte bir
+ * fiyat eğrisi, sitenin en güvene dayalı iddiasını ("bu indirim gerçek mi")
+ * temelinden çürütür. Demo modunda boş dizi döner ve arayüz bölümü hiç
+ * göstermez.
+ */
+export async function getPriceHistory(
+  groupId: string,
+  days = 90,
+): Promise<PricePoint[]> {
+  const supabase = createAnonClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase.rpc('price_history', {
+    p_group_id: groupId,
+    p_days: days,
+  });
+
+  if (error) {
+    // Geçmiş ikincil bir bilgidir; alınamazsa ürün sayfası yine açılmalı.
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        msg: 'Fiyat geçmişi alınamadı',
+        groupId,
+        error: error.message,
+      }),
+    );
+    return [];
+  }
+
+  return (data ?? []).map((row: { day: string; min_price_cents: number | string }) => ({
+    day: String(row.day).slice(0, 10),
+    minPriceCents: Number(row.min_price_cents),
+  }));
 }
