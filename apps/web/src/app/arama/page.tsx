@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
+import { formatMoney } from '@ohaaaa/shared';
+
 import { DataUnavailable } from '@/components/DataUnavailable';
-import { SearchIcon } from '@/components/Icons';
-import { ProductCard } from '@/components/ProductCard';
 import { getCategories, searchProducts, type SortOption } from '@/data/catalog';
 
 export const revalidate = 120;
@@ -85,7 +85,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
       <header>
-        <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
+        <h1 className="text-2xl font-bold tracking-tight text-fg">
           {q ? (
             <>
               <span className="text-muted">Arama:</span> {q}
@@ -139,16 +139,23 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       {results.length === 0 ? (
         <EmptyState query={q} />
       ) : (
-        <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-          {results.map((result, index) => (
-            <div
-              key={result.groupId}
-              style={{ animation: `rise 0.45s cubic-bezier(0.16,1,0.3,1) ${index * 30}ms both` }}
-            >
-              <ProductCard result={result} />
-            </div>
+        <ul className="mt-8 divide-y divide-line border-y border-line">
+          {results.map((result) => (
+            <li key={result.groupId} className="py-3">
+              <Link href={`/urun/${result.slug}`} className="text-fg hover:underline">
+                {result.title}
+              </Link>
+              {result.minPriceCents !== null && (
+                <p className="mt-1 tabular text-sm font-semibold text-brand">
+                  {formatMoney(result.minPriceCents)}
+                  {result.offerCount > 1 ? (
+                    <span className="ml-2 font-normal text-muted">{result.offerCount} mağaza</span>
+                  ) : null}
+                </p>
+              )}
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );
@@ -167,10 +174,8 @@ function FilterChip({
     <Link
       href={href}
       aria-current={active ? 'true' : undefined}
-      className={`rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors ${
-        active
-          ? 'border-brand bg-brand/15 text-brand-soft'
-          : 'border-line bg-surface text-muted hover:border-brand/40 hover:text-fg'
+      className={`text-sm ${
+        active ? 'font-semibold text-fg' : 'text-muted hover:underline'
       }`}
     >
       {children}
@@ -180,25 +185,19 @@ function FilterChip({
 
 function EmptyState({ query }: { query?: string }) {
   return (
-    <div className="mt-16 flex flex-col items-center gap-4 text-center">
-      <div className="grid h-16 w-16 place-items-center rounded-2xl bg-surface-2 text-subtle">
-        <SearchIcon className="h-8 w-8" />
-      </div>
-      <div>
-        <p className="text-lg font-semibold">
-          {query ? `"${query}" için sonuç bulunamadı` : 'Henüz ürün yok'}
-        </p>
-        <p className="mt-1.5 max-w-md text-sm text-muted">
-          Yazımı kontrol edin veya daha genel bir terim deneyin. Türkçe karakter kullanmanız
-          gerekmez — “kulaklik” de “kulaklık” sonuçlarını getirir.
-        </p>
-      </div>
-      <Link
-        href="/arama"
-        className="rounded-xl border border-line bg-surface px-4 py-2 text-sm font-medium transition-colors hover:border-brand/50"
-      >
-        Tüm ürünleri gör
-      </Link>
+    <div className="mt-10 text-left">
+      <p className="font-semibold text-fg">
+        {query ? `"${query}" için sonuç yok` : 'Henüz ürün yok'}
+      </p>
+      <p className="mt-2 max-w-xl text-sm text-muted">
+        Yazımı kontrol edin veya daha genel bir terim deneyin. Türkçe karakter şart değil —
+        “kulaklik” de “kulaklık” sonuçlarını getirir.
+      </p>
+      <p className="mt-4 text-sm">
+        <Link href="/arama" className="text-brand underline-offset-2 hover:underline">
+          Tüm ürünler
+        </Link>
+      </p>
     </div>
   );
 }
