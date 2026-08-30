@@ -37,9 +37,12 @@ function Placeholder({ seed }: { seed: string }) {
   for (let i = 0; i < seed.length; i += 1) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
 
   // Sicak paletin icinde kal: 18-42 derece (turuncu-amber) arasi.
+  // Yer tutucu, gorsel alaninin ACIK zeminiyle uyumlu kalir: kart koyu diye
+  // yer tutucuyu da koyu yapmak, fotografi olan ve olmayan kartlari
+  // birbirinden kopuk gosterirdi.
   const hue = 18 + (hash % 24);
-  const from = `hsl(${hue} 46% 92%)`;
-  const to = `hsl(${hue + 10} 40% 84%)`;
+  const from = `hsl(${hue} 30% 93%)`;
+  const to = `hsl(${hue + 10} 26% 86%)`;
 
   return (
     <div
@@ -71,14 +74,20 @@ export function ProductCard({ result }: { result: SearchResult }) {
 
   return (
     <Link href={`/urun/${result.slug}`} className="card-link group flex h-full flex-col overflow-hidden">
-      <div className="aspect-4/3 overflow-hidden bg-surface-2">
+      {/*
+        Görsel alanının zemini AÇIK, kartın geri kalanı koyu.
+        Ürün fotoğrafları beyaz fonda çekilir; koyu bir kutunun içinde beyaz
+        fonlu fotoğraf ada gibi durur. Açık zemin fotoğrafın kendi fonuyla
+        birleşir ve kesik görünmez.
+      */}
+      <div className="aspect-4/3 overflow-hidden bg-surface-photo">
         {image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={image}
             alt=""
             loading="lazy"
-            className="h-full w-full bg-surface object-contain transition-transform duration-300 group-hover:scale-105"
+            className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
           <Placeholder seed={result.slug} />

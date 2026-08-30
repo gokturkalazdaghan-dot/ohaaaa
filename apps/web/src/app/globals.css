@@ -2,40 +2,70 @@
 
 /*
  * Ohaaaa vitrin.
- * Tuğla kırmızı + kağıt zemin. Koyu tema yok. Cam, glow, gradyan yazı yok.
+ * Siyah zemin + turuncu vurgu. Cam, glow, gradyan yazı yok.
+ *
+ * NEDEN KOYU
+ * Koli bandı siyah zemin üzerine beyaz basılıyor; site, favicon ve arma
+ * aynı dili konuşsun diye zemin de koyu. Turuncu marka rengi korundu:
+ * bant ve favicon zaten üretildi, marka rengini değiştirmek onları da
+ * çöpe atmak olurdu.
+ *
+ * KOYU ZEMİNİN BEDELİ — ÜRÜN FOTOĞRAFLARI
+ * Ürün fotoğrafları beyaz fonda çekilir. Koyu kartın içinde beyaz fonlu
+ * bir fotoğraf ada gibi durur. Bu yüzden kart görsel alanının zemini
+ * --surface-photo ile AÇIK tutulur: fotoğraf kendi fonuna oturur, kart
+ * koyu kalır. Renkli zeminde fotoğrafın renk algısı da kayardı; nötr
+ * açık gri bunu yapmaz.
  */
 
 :root {
-  --bg: #f3eee6;
-  --bg-elevated: #fffaf5;
-  --surface: #fffaf5;
-  --surface-2: #ebe4da;
-  --surface-hover: #e4dcd0;
-  --line: #e2d6c9;
-  --line-strong: #cbbbaa;
+  --bg: #0b0b0d;
+  --bg-elevated: #141419;
+  --surface: #141419;
+  --surface-2: #1c1c23;
+  --surface-hover: #23232b;
+  --line: #2a2a33;
+  --line-strong: #3a3a45;
 
-  --text: #1a1512;
-  --text-muted: #5c4f46;
-  --text-subtle: #7a6b60;
+  /* Ürün görsellerinin oturduğu açık zemin. Bkz. yukarıdaki not. */
+  --surface-photo: #f4f4f6;
 
-  --brand: #c13515;
-  --brand-strong: #9f2b12;
-  --brand-soft: #c13515;
-  --electric: #c13515;
-  --electric-soft: #c13515;
-  --cyan: #c13515;
-  --oha: #c13515;
-  --oha-soft: #c13515;
+  --text: #ffffff;
+  --text-muted: #b4b4c0;
+  --text-subtle: #8a8a99;
 
-  --success: #2f6b3a;
-  --warning: #9a6700;
-  --danger: #9b1c1c;
+  /*
+   * Marka turuncusu koyu zeminde AÇILDI. Açık zemindeki tuğla kırmızısı
+   * (#c13515) siyah üstünde koyu kalıp okunmuyordu; armanın disk rengi
+   * (#e9692a) hem daha parlak hem armayla birebir aynı.
+   */
+  --brand: #e9692a;
+  --brand-strong: #c13515;
+  --brand-soft: #f08b55;
+  --electric: #e9692a;
+  --electric-soft: #f08b55;
+  --cyan: #e9692a;
+  --oha: #e9692a;
+  --oha-soft: #f08b55;
+
+  /*
+   * Durum renkleri koyu zemin için AÇILDI. Açık zemine göre seçilmiş koyu
+   * yeşil/sarı/kırmızı siyah üstünde okunmuyordu.
+   */
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --danger: #f87171;
 
   --glow-brand: none;
   --glow-oha: none;
-  --ring: #c13515;
+  --ring: #e9692a;
 
-  color-scheme: light;
+  /*
+   * Tarayıcıya "bu sayfa koyu" demek şart: kaydırma çubuğu, form denetimleri
+   * ve otomatik doldurma renkleri buna göre çizilir. Söylenmezse beyaz bir
+   * kaydırma çubuğu ve beyaz zeminli girdi kutuları çıkar.
+   */
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -46,6 +76,7 @@
   --color-surface-hover: var(--surface-hover);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
+  --color-surface-photo: var(--surface-photo);
   --color-fg: var(--text);
   --color-muted: var(--text-muted);
   --color-subtle: var(--text-subtle);
@@ -68,14 +99,23 @@
 
 /*
  * Yukseklik (elevation) olcegi.
- * Kagit zeminli bir vitrinde kartlari cizgiyle degil GOLGEYLE ayirmak,
- * urunu one cikarir. Golgeler sicak tonlu: notr siyah golge, kagit zeminin
- * uzerinde gri ve olu durur.
+ *
+ * KOYU ZEMINDE GOLGE ISE YARAMAZ. Acik zeminde kart, altina dusurdugu
+ * golgeyle ayrisir; siyah uzerinde siyah golge gorunmez. Koyu arayuzlerde
+ * yukseklik IKI seyle anlatilir:
+ *   1. Yuzey rengi: yukarideki katman biraz daha ACIK olur.
+ *   2. Ust kenarda ince bir isik cizgisi (inset), isigin yukaridan
+ *      geldigini soyler.
+ * Golge tamamen atilmaz - derinlik hissi icin korunur ama tek basina
+ * tasiyici degildir.
  */
 :root {
-  --shadow-sm: 0 1px 2px rgba(74, 44, 24, 0.06);
-  --shadow-md: 0 2px 4px rgba(74, 44, 24, 0.06), 0 8px 20px rgba(74, 44, 24, 0.08);
-  --shadow-lg: 0 4px 8px rgba(74, 44, 24, 0.07), 0 18px 40px rgba(74, 44, 24, 0.12);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5),
+               inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.55), 0 10px 24px rgba(0, 0, 0, 0.45),
+               inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.6), 0 20px 48px rgba(0, 0, 0, 0.55),
+               inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
 @layer base {

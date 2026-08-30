@@ -29,8 +29,9 @@ try:
 except ImportError:
     sys.exit("Pillow gerekli:  pip install Pillow")
 
-# globals.css ile ayni: --bg (kagit zemin)
-PAPER = (0xF3, 0xEE, 0xE6)
+# globals.css ile ayni: --bg. Site koyu zemine gectiginde bu da gecti;
+# aksi halde WhatsApp/X onizlemesi acik zeminli cikip siteyle celisirdi.
+GROUND = (0x0B, 0x0B, 0x0D)
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "apps" / "web"
@@ -137,7 +138,7 @@ def main() -> None:
     # --- Onizleme gorseli ---------------------------------------------------
     # 1200x630 baglanti onizlemesi. Rozet kagit zemine ORANTISI KORUNARAK
     # yerlestirilir; canvasa germek burada da ovallestirirdi.
-    og = Image.new("RGB", (1200, 630), PAPER)
+    og = Image.new("RGB", (1200, 630), GROUND)
     badge = 460
     small = master.resize((badge, badge), Image.LANCZOS)
     # Alfa maskesi ZORUNLU: maskesiz yapistirmak, rozetin kendi kare tuvalini

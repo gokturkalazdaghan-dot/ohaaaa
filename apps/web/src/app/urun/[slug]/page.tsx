@@ -183,7 +183,11 @@ export default async function ProductPage({ params }: ProductPageProps) {
       <div className="grid gap-8 lg:grid-cols-[minmax(0,420px)_1fr]">
         {/* Görsel ve özellikler */}
         <div className="space-y-5">
-          <div className="group relative aspect-square overflow-hidden rounded-2xl border border-line bg-surface-2">
+          {/*
+            Görsel zemini AÇIK: ürün fotoğrafları beyaz fonda çekilir, koyu bir
+            kutunun içinde ada gibi durur. Kart ızgarasındaki çözümün aynısı.
+          */}
+          <div className="group relative aspect-square overflow-hidden rounded-2xl border border-line bg-surface-photo">
             <ProductImage
               src={group.imageUrl}
               slug={group.slug}

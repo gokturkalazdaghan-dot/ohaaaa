@@ -104,7 +104,7 @@ const siteJsonLd = [
 ];
 
 export const viewport: Viewport = {
-  themeColor: '#F3EEE6',
+  themeColor: '#0B0B0D',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
