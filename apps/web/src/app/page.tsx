@@ -21,7 +21,7 @@ export default async function HomePage() {
 
   return (
     <>
-      <Hero />
+      <Hero vendorCount={vendors.length} />
 
       <div className="space-y-20 pb-8">
         <CategoryStrip categories={categories} />
@@ -35,7 +35,7 @@ export default async function HomePage() {
   );
 }
 
-function Hero() {
+function Hero({ vendorCount }: { vendorCount: number }) {
   return (
     <section className="relative overflow-hidden border-b border-line">
       {/* Arka plan ışımaları — tamamen dekoratif.
@@ -53,19 +53,18 @@ function Hero() {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
           </span>
-          3 mağaza, 12 milyon ürün, tek arama
+          {vendorCount} mağaza, tek arama
         </span>
 
         <h1 className="mt-7 text-4xl font-black leading-[1.05] tracking-tight sm:text-6xl">
-          Aynı ürün, <span className="text-gradient">onlarca mağaza</span>.
+          Aynı ürün, <span className="text-gradient">farklı mağazalar</span>.
           <br />
-          En iyi fiyatı biz buluruz.
+          En iyi fiyatı önde tutarız.
         </h1>
 
         <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted sm:text-lg">
-          Ohaaaa, Türkiye’nin bütün satıcılarını tek çatı altında toplar. Kargo dahil
-          <strong className="font-semibold text-fg"> gerçek toplam maliyeti</strong> karşılaştırır,
-          farklı mağazalardan aldıklarınızı tek sepette birleştirir.
+          Kargo dahil gerçek tutarı karşılaştır. Farklı mağazalardan aldıklarını
+          tek sepete koy.
         </p>
 
         <div className="mx-auto mt-10 max-w-3xl">
@@ -76,10 +75,10 @@ function Hero() {
 
         <dl className="mx-auto mt-14 grid max-w-3xl grid-cols-2 gap-4 sm:grid-cols-4">
           {[
-            { label: 'Aktif taşeron', value: '3' },
-            { label: 'Karşılaştırılan ürün', value: '12M+' },
-            { label: 'Ortalama tasarruf', value: '%18' },
-            { label: 'Memnuniyet', value: '4.7/5' },
+            { label: 'Mağaza', value: String(vendorCount) },
+            { label: 'Fiyat', value: 'Kargo dahil' },
+            { label: 'Sıralama', value: 'Satılık değil' },
+            { label: 'Sepet', value: 'Tek ödeme' },
           ].map((stat) => (
             <div key={stat.label} className="rounded-xl border border-line bg-surface/60 p-3 backdrop-blur">
               <dd className="tabular text-xl font-black text-fg sm:text-2xl">{stat.value}</dd>
@@ -215,21 +214,19 @@ function VendorCta() {
           aria-hidden="true"
         />
 
-        <div className="relative grid gap-8 lg:grid-cols-[1.4fr_1fr] lg:items-center">
+        <div className="relative max-w-2xl">
           <div>
             <span className="inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-3 py-1 text-xs font-semibold text-brand-soft">
               <StoreIcon className="h-3.5 w-3.5" />
-              Taşeronlar için
+              Satıcılar için
             </span>
 
             <h2 className="mt-5 text-3xl font-black leading-tight tracking-tight sm:text-4xl">
-              Ürünlerinizi 15 dakikada Ohaaaa’ya taşıyın.
+              Mağazanı Ohaaaa’da aç.
             </h2>
 
             <p className="mt-4 max-w-xl leading-relaxed text-muted">
-              Tek bir REST çağrısıyla kataloğunuzu senkronize edin. Kendi API anahtarınızı
-              panelden oluşturun, stok ve fiyatı anlık güncelleyin, siparişleri aynı API’den
-              okuyun. Kurulum ücreti yok; yalnızca satıştan komisyon.
+              Ürünlerini ekle, fiyatın kargo dahil sıralansın. Komisyon yalnızca satıştan.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
@@ -240,39 +237,9 @@ function VendorCta() {
                 Hemen başvur
                 <ArrowRightIcon className="h-4 w-4" />
               </Link>
-              <Link
-                href="/tasoron/api"
-                className="rounded-xl border border-line bg-surface px-6 py-3 font-semibold transition-colors hover:border-brand/45"
-              >
-                API dokümantasyonu
-              </Link>
             </div>
           </div>
 
-          {/* Entegrasyonun ne kadar basit olduğunu göstermek, uzun bir
-              açıklamadan daha ikna edici. */}
-          <div className="overflow-hidden rounded-xl border border-line bg-bg">
-            <div className="flex items-center gap-1.5 border-b border-line px-4 py-2.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-danger/70" />
-              <span className="h-2.5 w-2.5 rounded-full bg-warning/70" />
-              <span className="h-2.5 w-2.5 rounded-full bg-success/70" />
-              <span className="ml-2 font-mono text-[11px] text-subtle">ürün-besle.sh</span>
-            </div>
-            <pre className="overflow-x-auto p-4 font-mono text-[11px] leading-relaxed text-muted">
-              <code>{`curl -X POST https://api.ohaaaa.com/api/v1/products \\
-  -H "x-api-key: $OHAAAA_KEY" \\
-  -H "content-type: application/json" \\
-  -d '{
-    "products": [{
-      "external_id": "SKU-001",
-      "title": "Ürün adı",
-      "gtin": "8690000000001",
-      "price_cents": 129900,
-      "stock": 42
-    }]
-  }'`}</code>
-            </pre>
-          </div>
         </div>
       </div>
     </section>
