@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Plus_Jakarta_Sans } from 'next/font/google';
+import { Outfit, Plus_Jakarta_Sans } from 'next/font/google';
 
 import { Analytics } from '@/components/Analytics';
 import { ConsentBanner } from '@/components/ConsentBanner';
@@ -23,6 +23,19 @@ import './globals.css';
  * Google'a istek gitmez, bu yuzden hem gizlilik hem de yukleme suresi acisindan
  * <link> etiketinden iyidir.
  */
+/*
+ * Arma Outfit Bold ile cizildi. Basliktaki arma yazisi artik CANLI METIN
+ * (harfler tek tek hareket edebilsin diye), dolayisiyla ayni yazi tipinin
+ * tarayicida da bulunmasi gerekiyor - yoksa favicon ile baslik farkli
+ * harflerle yazilmis gorunur.
+ */
+const outfit = Outfit({
+  subsets: ['latin', 'latin-ext'],
+  weight: ['700'],
+  display: 'swap',
+  variable: '--font-outfit',
+});
+
 const jakarta = Plus_Jakarta_Sans({
   subsets: ['latin', 'latin-ext'],     // latin-ext: Turkce ğ ş ı İ ç ö ü
   weight: ['400', '500', '600', '700', '800'],
@@ -96,7 +109,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="tr" className={jakarta.variable}>
+    <html lang="tr" className={`${jakarta.variable} ${outfit.variable}`}>
       <head>
         <JsonLd data={siteJsonLd} />
       </head>

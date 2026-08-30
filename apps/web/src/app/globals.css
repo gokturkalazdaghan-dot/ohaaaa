@@ -184,41 +184,52 @@
   }
 
   /*
-   * Armadaki "Ohaaaa" yazisinin donup ziplamasi.
+   * Armadaki "Ohaaaa" harfleri, dokununca SIRAYLA buyuyup kuculur.
    *
-   * Yazi diskten AYRI bir katman oldugu icin kendi basina hareket edebilir;
-   * tek parca PNG'de bu mumkun degildi.
+   * Harfler tek tek hareket edebilsin diye yazi canli metin; gecikme
+   * (animation-delay) harf basina 55 ms artiyor, boylece dalga soldan saga
+   * akiyor. Toplam 6 x 55 + 380 = 710 ms'yi gecmiyor.
    *
-   * Hareket kucuk tutuldu: 8 derece donus, %12 buyume, 520 ms. Basliktaki
-   * bir ogenin her sayfa gecisinde gozu cekmesi rahatsiz eder; amac fark
-   * edilen ama yormayan bir selamlama.
+   * Buyume orani %24'te tutuldu. %38 denendi ve kareler halinde bakildiginda
+   * buyuyen "a"lar birbirine giriyordu: 7 piksellik harflerde ve dar harf
+   * araliginda daha fazlasi kelimeyi bozuyor.
    */
-  @keyframes oha-zipla {
-    0%   { transform: rotate(0deg)   translateY(0)     scale(1); }
-    30%  { transform: rotate(-8deg)  translateY(-11%)  scale(1.12); }
-    55%  { transform: rotate(5deg)   translateY(3%)    scale(0.97); }
-    78%  { transform: rotate(-2deg)  translateY(-3%)   scale(1.03); }
-    100% { transform: rotate(0deg)   translateY(0)     scale(1); }
-  }
-
   .oha-word {
-    transform-origin: center;
+    color: #fffdfa;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1;
+    text-shadow: 0 0.5px 1px rgba(110, 40, 10, 0.35);
+    white-space: nowrap;
   }
 
-  .group:hover .oha-word,
-  .group:focus-visible .oha-word {
-    animation: oha-zipla 520ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  .oha-letter {
+    display: inline-block;
+    transform-origin: center bottom;
+  }
+
+  @keyframes oha-harf {
+    0%,
+    100% { transform: scale(1); }
+    45%  { transform: scale(1.24); }
+  }
+
+  .group:hover .oha-letter,
+  .group:focus-visible .oha-letter,
+  .oha-word-tap .oha-letter {
+    animation: oha-harf 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
   }
 
   /*
    * Hareketi azaltilmis modda animasyon YOK.
    * Bu bir zevk meselesi degil: vestibuler rahatsizligi olan kullanicilarda
-   * donen ve ziplayan ogeler bas donmesi ve mide bulantisi yapabilir.
-   * Isletim sistemi bunu bildirdiginde uyulur.
+   * hareketli ogeler bas donmesi ve mide bulantisi yapabilir. Isletim
+   * sistemi bunu bildirdiginde uyulur.
    */
   @media (prefers-reduced-motion: reduce) {
-    .group:hover .oha-word,
-    .group:focus-visible .oha-word {
+    .group:hover .oha-letter,
+    .group:focus-visible .oha-letter,
+    .oha-word-tap .oha-letter {
       animation: none;
     }
   }
