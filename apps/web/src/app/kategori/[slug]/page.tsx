@@ -39,8 +39,9 @@ type CategoryPageProps = {
 
 /** Tüm kategoriler derleme zamanında üretilir: sayıları az, değişimleri seyrek. */
 export async function generateStaticParams() {
-  const categories = await getCategories();
-  return categories.map((category) => ({ slug: category.slug }));
+  // Boş: bu sayfa layout'taki cookies()/oturum yüzünden zaten dinamik.
+  // Derleme zamanında getCategories() (ve dolaylı cookies) çağırma.
+  return [];
 }
 
 export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
