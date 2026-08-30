@@ -149,7 +149,12 @@ export async function getSearchFacets(params: {
 }): Promise<SearchFacets> {
   const empty: SearchFacets = { minPriceCents: null, maxPriceCents: null, categories: [] };
   const supabase = createAnonClient();
-  if (!supabase) return empty;
+
+  // Demo modunda facet'ler yerleşik veri kümesinden hesaplanır. Boş dönseydi
+  // filtre rayı yerelde HİÇ görünmezdi ve depoyu klonlayan biri arayüzün o
+  // parçasını hiç göremezdi — oysa amaç tam tersi: tek komutla dolu bir
+  // pazar yeri görmek.
+  if (!supabase) return demoFacets(params);
 
   const { data, error } = await supabase.rpc('search_facets', {
     p_query: params.query ?? null,
@@ -176,6 +181,43 @@ export async function getSearchFacets(params: {
       slug: String(c.slug),
       name: String(c.name),
       count: Number(c.count),
+    })),
+  };
+}
+
+/**
+ * Demo modu facet hesabı — SQL'deki search_facets ile aynı kuralları izler.
+ *
+ * Önemli iki kural birebir korunur:
+ *   • Fiyat sınırları FİYAT FİLTRESİ UYGULANMADAN hesaplanır; yoksa kullanıcı
+ *     aralığı daralttıkça kaydırıcı da daralır ve geri genişletilemez.
+ *   • Kategori sayaçları KATEGORİ FİLTRESİ UYGULANMADAN hesaplanır; kullanıcı
+ *     başka bir kategoride kaç sonuç olduğunu seçmeden önce görebilmeli.
+ */
+function demoFacets(params: { query?: string; categoryId?: string }): SearchFacets {
+  const matched = searchDemo({ query: params.query, limit: demoProductGroups.length }).results;
+
+  const inScope = matched.filter((result) => {
+    if (!params.categoryId) return true;
+    const group = demoProductGroups.find((candidate) => candidate.id === result.groupId);
+    return group?.categoryId === params.categoryId;
+  });
+
+  const prices = inScope
+    .map((result) => result.minPriceCents)
+    .filter((price): price is number => price !== null);
+
+  return {
+    minPriceCents: prices.length > 0 ? Math.min(...prices) : null,
+    maxPriceCents: prices.length > 0 ? Math.max(...prices) : null,
+    categories: demoCategories.map((category) => ({
+      id: category.id,
+      slug: category.slug,
+      name: category.name,
+      count: matched.filter((result) => {
+        const group = demoProductGroups.find((candidate) => candidate.id === result.groupId);
+        return group?.categoryId === category.id;
+      }).length,
     })),
   };
 }
@@ -261,7 +303,7 @@ export async function getSearchSuggestions(
   if (trimmed.length < 2) return [];
 
   const supabase = createAnonClient();
-  if (!supabase) return [];
+  if (!supabase) return demoSuggestions(trimmed, limit);
 
   const { data, error } = await supabase.rpc('search_suggestions', {
     p_query: trimmed,
@@ -283,6 +325,59 @@ export async function getSearchSuggestions(
       resultCount: Number(row.result_count),
     }),
   );
+}
+
+/**
+ * Demo modu önerileri — SQL'deki search_suggestions ile aynı sırayı izler:
+ * marka, kategori, ürün. Sonuç vermeyen öneri gösterilmez.
+ */
+function demoSuggestions(query: string, limit: number): SearchSuggestion[] {
+  const q = normalize(query);
+  const out: SearchSuggestion[] = [];
+
+  // 1) Markalar
+  const brandCounts = new Map<string, number>();
+  for (const group of demoProductGroups) {
+    if (!group.brand) continue;
+    if (!normalize(group.brand).includes(q)) continue;
+    brandCounts.set(group.brand, (brandCounts.get(group.brand) ?? 0) + 1);
+  }
+  for (const [brand, count] of brandCounts) {
+    out.push({ suggestion: brand, kind: 'marka', slug: null, resultCount: count });
+  }
+
+  // 2) Kategoriler
+  for (const category of demoCategories) {
+    if (!normalize(category.name).includes(q)) continue;
+    const count = demoProductGroups.filter((group) => group.categoryId === category.id).length;
+    if (count > 0) {
+      out.push({
+        suggestion: category.name,
+        kind: 'kategori',
+        slug: category.slug,
+        resultCount: count,
+      });
+    }
+  }
+
+  // 3) Ürünler
+  for (const group of demoProductGroups) {
+    if (!normalize(`${group.title} ${group.brand ?? ''}`).includes(q)) continue;
+    out.push({
+      suggestion: group.title,
+      kind: 'urun',
+      slug: group.slug,
+      resultCount: group.offerCount,
+    });
+  }
+
+  // Baştan eşleşen, içinde geçenden önce gelir — SQL tarafındaki sıralamayla aynı.
+  return out
+    .sort((a, b) => {
+      const rank = (value: string) => (normalize(value).startsWith(q) ? 0 : 1);
+      return rank(a.suggestion) - rank(b.suggestion) || b.resultCount - a.resultCount;
+    })
+    .slice(0, limit);
 }
 
 /**
