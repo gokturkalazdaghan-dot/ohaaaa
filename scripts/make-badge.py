@@ -47,6 +47,11 @@ WORD = BRAND
 #   3. Harflerde 3B pah YOK. Pah ve yan yuz, 32 pikselde harfin kendisinden
 #      kalin kalir ve konturu yer. Duz beyaz + hafif golge daha okunakli.
 ANGLE = 0                     # yatay: kucuk boyutta en net okunan
+
+# O ile h arasindaki yaklastirma (punto orani). Iki harf birbirine degsin
+# diye negatif kern uygulanir; deger olcerek bulundu (asagidaki dogrulama
+# artik 6 degil 5 harf blogu bekler: "Oh" tek blok sayilir).
+KERN_OH = 0.135
 R_SHADOW = 496
 R_RIM_OUT = 486               # gumus cember disi
 R_RIM_IN = 452                # gumus cember ici (once 438 - cember inceldi)
@@ -142,7 +147,18 @@ def render_word(size_px, angle_deg):
     pad = size_px
     tmp = Image.new('L', (int(size_px * len(WORD) * 1.1) + pad * 2, size_px * 3), 0)
     d = ImageDraw.Draw(tmp)
-    d.text((pad, pad), WORD, font=font, fill=255)
+
+    # Harfler TEK TEK ciziliyor, cunku O ile h'nin BIRLESMESI isteniyor.
+    # Tek seferde d.text(WORD) cagirmak yazi tipinin varsayilan araligini
+    # kullanir; oradan O-h ciftine ozel bir yaklastirma yapilamaz.
+    x = float(pad)
+    for i, ch in enumerate(WORD):
+        d.text((x, pad), ch, font=font, fill=255)
+        x += font.getlength(ch)
+        if i == 0:
+            # O'dan sonra h'yi iceri cek: iki harf birbirine degsin.
+            x -= size_px * KERN_OH
+
     bbox = tmp.getbbox()
     glyphs = tmp.crop(bbox)
 
@@ -206,20 +222,23 @@ def verify_letters(badge, angle_deg=0):
     if start is not None and len(col) - start > 8:
         runs.append(len(col) - start)
 
-    if len(runs) != len(BRAND):
+    # O ile h birlesik cizildigi icin tek blok sayilir: 6 harf -> 5 blok.
+    expected = len(BRAND) - 1
+    if len(runs) != expected:
         raise SystemExit(
-            f'  DUR: goruntude {len(runs)} harf blogu var, {len(BRAND)} olmali.\n'
+            f'  DUR: goruntude {len(runs)} harf blogu var, {expected} olmali\n'
+            '       ("Oh" birlesik oldugu icin tek blok sayilir).\n'
             f'       Blok genislikleri: {runs}\n'
             '       Harfler birlesmis ya da bir harf eksik cizilmis olabilir.')
 
-    # Son dort blok 'a' - genislikleri birbirine yakin olmali
-    widths = runs[2:]
+    # Ilk blok "Oh"; kalan dortu 'a'.
+    widths = runs[1:]
     if len(widths) != BRAND.count('a'):
         raise SystemExit(f'  DUR: {len(widths)} adet a blogu, {BRAND.count("a")} olmali.')
     if max(widths) - min(widths) > max(widths) * 0.12:
         raise SystemExit(f'  DUR: a harfleri esit genislikte degil: {widths}')
 
-    print(f'  harf blogu: {len(runs)} = {", ".join(BRAND)}  |  a genislikleri {widths}')
+    print(f'  harf blogu: {len(runs)} (Oh + {len(widths)} adet a)  |  a genislikleri {widths}')
 
 
 def main() -> None:

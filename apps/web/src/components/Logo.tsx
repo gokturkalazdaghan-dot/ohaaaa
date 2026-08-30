@@ -24,14 +24,22 @@ import { useCallback, useRef, useState } from 'react';
  * süre dolunca kaldırılıyor: parmak kalksa bile animasyon tamamlanır.
  */
 
-const LETTERS = ['O', 'h', 'a', 'a', 'a', 'a'];
+/*
+ * "Oh" TEK parça: armada O ile h birleşik çiziliyor (negatif kern), o yüzden
+ * burada da tek birim olarak hareket etmeli. Ayrı ayrı ölçeklenselerdi
+ * büyürken aradaki bağ kopar ve harfler birbirinden ayrılırdı.
+ */
+const UNITS = ['Oh', 'a', 'a', 'a', 'a'];
+
+/** O ile h arasındaki yaklaştırma — make-badge.py'deki KERN_OH ile aynı. */
+const KERN_OH = 0.135;
 
 // Armadan ölçülen oranlar (bkz. assets/brand/ohaaaa-word-1024.png)
-const WORD_WIDTH_RATIO = 0.753; // yazı genişliği / arma genişliği (asıldan ölçüldü)
+const WORD_WIDTH_RATIO = 0.751; // yazı genişliği / arma genişliği (asıldan ölçüldü)
 // Punto katsayısı: canlı metin tarayıcıda ölçülüp asıldaki 0,753 oranına
 // oturtuldu. Yazı tipi metriklerinden hesaplamak yerine ölçmek daha güvenli;
 // Outfit'in ascender oranı sürümle değişebilir.
-const WORD_SHIFT_RATIO = -0.005; // dikey kayma / arma yüksekliği
+const WORD_SHIFT_RATIO = -0.006; // dikey kayma / arma yüksekliği
 
 /** Son harfin animasyonu bitene kadar geçen süre. */
 const TAP_MS = 640;
@@ -65,16 +73,23 @@ export function Logo({ className = '' }: { className?: string }) {
           style={{
             transform: `translateY(${WORD_SHIFT_RATIO * 100}%)`,
             fontFamily: 'var(--font-outfit), sans-serif',
-            fontSize: `${WORD_WIDTH_RATIO * 0.2706 * 36}px`,
+            fontSize: `${WORD_WIDTH_RATIO * 0.2795 * 36}px`,
           }}
         >
-          {LETTERS.map((ch, i) => (
+          {UNITS.map((ch, i) => (
             <span
               key={`${ch}-${i}`}
               className="oha-letter"
-              style={{ animationDelay: `${i * 55}ms` }}
+              style={{ animationDelay: `${i * 62}ms` }}
             >
-              {ch}
+              {ch === 'Oh' ? (
+                <>
+                  O
+                  <span style={{ marginLeft: `-${KERN_OH}em` }}>h</span>
+                </>
+              ) : (
+                ch
+              )}
             </span>
           ))}
         </span>
