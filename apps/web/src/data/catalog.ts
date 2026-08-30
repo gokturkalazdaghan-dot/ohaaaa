@@ -236,6 +236,41 @@ function toSearchResult(group: ProductGroupWithOffers): SearchResult {
   };
 }
 
+/**
+ * Barkoda (GTIN) göre kanonik ürün araması.
+ *
+ * Barkod, ürün eşleştirmesinin EN GÜVENİLİR sinyalidir: küresel olarak
+ * benzersizdir ve yazım farkından etkilenmez. Kamerayla okunan bir barkod bu
+ * yüzden metin aramasına çevrilmez, doğrudan burada aranır — "Sony WH-1000XM5"
+ * yazıp yanlış modeli bulma ihtimali ortadan kalkar.
+ *
+ * Bulunamazsa hata değil `null` döner: bilinmeyen bir barkod, kataloğumuzda
+ * o ürünün henüz olmaması demektir; kullanıcıya normal arama önerilir.
+ */
+export async function findGroupByGtin(
+  gtin: string,
+): Promise<{ slug: string; title: string } | null> {
+  const supabase = createAnonClient();
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('product_groups')
+      .select('slug, title')
+      .eq('gtin', gtin)
+      .maybeSingle();
+
+    if (error) throw new Error(`Barkod aranamadı: ${error.message}`);
+    if (!data) return null;
+
+    return { slug: String(data.slug), title: String(data.title) };
+  }
+
+  // Demo veri kümesinde barkod alanı yok; UYDURULMAZ da. Barkod araması
+  // yalnızca gerçek katalogda anlamlıdır, bu yüzden demo modunda "bulunamadı"
+  // döner ve arayüz kullanıcıyı metin aramasına yönlendirir.
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Ürün detayı
 // ---------------------------------------------------------------------------

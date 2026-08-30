@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 
 import { formatMoney } from '@ohaaaa/shared';
@@ -7,6 +8,7 @@ import { DataUnavailable } from '@/components/DataUnavailable';
 import { Pagination } from '@/components/Pagination';
 import { ProductCard } from '@/components/ProductCard';
 import {
+  findGroupByGtin,
   getSearchFacets,
   searchProducts,
   type SearchFacets,
@@ -33,8 +35,22 @@ type SearchPageProps = {
     min?: string;
     max?: string;
     sayfa?: string;
+    barkod?: string;
   }>;
 };
+
+/**
+ * Barkod biçimi doğrulaması.
+ *
+ * EAN-8, UPC-E, UPC-A, EAN-13 ve ITF-14: hepsi yalnızca rakamdır ve 8-14
+ * hane arasındadır. Biçim tutmuyorsa veritabanına hiç gidilmez — URL'e
+ * herkes her şeyi yazabilir.
+ */
+function readGtin(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  return /^[0-9]{8,14}$/.test(trimmed) ? trimmed : null;
+}
 
 export async function generateMetadata({ searchParams }: SearchPageProps): Promise<Metadata> {
   const { q } = await searchParams;
@@ -69,6 +85,25 @@ function readPositiveInt(raw: string | undefined, max: number): number | undefin
 export default async function SearchPage({ searchParams }: SearchPageProps) {
   const params = await searchParams;
   const { q, kategori, sirala } = params;
+
+  /*
+   * Barkod yolu.
+   *
+   * Kameradan okunan barkod metin aramasına ÇEVRİLMEZ: barkod kesin bir
+   * kimliktir, bulanık eşleşmeye sokmak yanlış ürünü öne çıkarabilir.
+   * Tam eşleşme bulunursa doğrudan ürün sayfasına gidilir — kullanıcı
+   * telefonu kutuya tutup tek sonucu gördüğünde bir adım daha atmamalı.
+   */
+  const gtin = readGtin(params.barkod);
+  let barcodeMiss: string | null = null;
+
+  if (gtin) {
+    // Barkod araması başarısız olursa sayfa DÜŞMEZ: metin aramasına devam
+    // edilir ve kullanıcıya barkodun bulunamadığı söylenir.
+    const match = await findGroupByGtin(gtin).catch(() => null);
+    if (match) redirect(`/urun/${match.slug}`);
+    barcodeMiss = gtin;
+  }
 
   const sort = SORT_OPTIONS.some((option) => option.value === sirala)
     ? (sirala as SortOption)
@@ -148,6 +183,18 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+      {/* Barkod okundu ama katalogda yok: sessizce boş sonuç göstermek
+          kullanıcıya aramanın bozuk olduğunu düşündürürdü. */}
+      {barcodeMiss && (
+        <p
+          role="status"
+          className="mb-6 rounded-xl border border-line bg-surface px-4 py-3 text-sm text-muted"
+        >
+          <strong className="text-fg">{barcodeMiss}</strong> barkodlu ürün henüz katalogda
+          yok. Ürün adını yazarak arayabilirsiniz.
+        </p>
+      )}
+
       <header>
         <h1 className="text-2xl font-bold tracking-tight text-fg">
           {q ? (

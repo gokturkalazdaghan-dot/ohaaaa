@@ -4,6 +4,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 
 import { SearchIcon } from './Icons';
+import { VisualSearchButton } from './VisualSearchButton';
+import { VoiceSearchButton } from './VoiceSearchButton';
 
 const SUGGESTIONS = ['iPhone 15', 'kulaklık', 'airfryer', 'koşu ayakkabısı', 'süpürge'];
 
@@ -27,8 +29,27 @@ export function SearchBar({
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    const query = value.trim();
+    runSearch(value);
+  }
+
+  /** Metin aramasını çalıştırır; kutu da aynı metni gösterir. */
+  function runSearch(text: string) {
+    const query = text.trim();
+    setValue(query);
     router.push(query ? `/arama?q=${encodeURIComponent(query)}` : '/arama');
+  }
+
+  /**
+   * Barkod aramasi metin aramasindan AYRI bir parametreyle gider.
+   *
+   * Barkodu `q` ile göndermek onu bir metin sorgusuna çevirirdi; barkod ise
+   * kesin bir kimliktir ve bulanık eşleşmeye sokulmamalı. Ayrı parametre,
+   * sunucunun tam eşleşme araması ve tek sonuçta doğrudan ürüne yönlendirmesi
+   * anlamına gelir.
+   */
+  function runBarcodeSearch(gtin: string) {
+    setValue('');
+    router.push(`/arama?barkod=${encodeURIComponent(gtin)}`);
   }
 
   const isHero = size === 'hero';
@@ -43,11 +64,13 @@ export function SearchBar({
           }`}
         >
           <div
-            className={`flex items-center gap-3 rounded-2xl bg-bg-elevated ${
-              isHero ? 'px-5 py-4' : 'px-4 py-2.5'
+            className={`flex items-center rounded-2xl bg-bg-elevated ${
+              isHero ? 'gap-2 px-5 py-3' : 'gap-1.5 px-3 py-1.5'
             }`}
           >
-            <SearchIcon className={isHero ? 'h-6 w-6 text-muted' : 'h-5 w-5 text-muted'} />
+            <SearchIcon
+              className={isHero ? 'ml-1 h-6 w-6 text-muted' : 'ml-1 h-5 w-5 text-muted'}
+            />
 
             <input
               type="search"
@@ -59,9 +82,19 @@ export function SearchBar({
                 'Ürün, marka veya model'
               }
               aria-label="Ürün ara"
-              className={`w-full bg-transparent text-fg outline-none placeholder:text-subtle ${
+              className={`w-full min-w-0 bg-transparent px-1 text-fg outline-none placeholder:text-subtle ${
                 isHero ? 'text-lg' : 'text-sm'
               }`}
+            />
+
+            {/* Kamera ve mikrofon, gönder düğmesinin SOLUNDA: klavye sırası
+                "yaz → sesle söyle → fotoğraf çek → ara" olur. Gönder düğmesi
+                en sonda kalır, çünkü akışı bitiren odur. */}
+            <VoiceSearchButton onResult={runSearch} compact={!isHero} />
+            <VisualSearchButton
+              onQuery={runSearch}
+              onBarcode={runBarcodeSearch}
+              compact={!isHero}
             />
 
             <button

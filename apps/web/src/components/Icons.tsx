@@ -34,6 +34,27 @@ export const SearchIcon = (p: IconProps) => (
   </Icon>
 );
 
+export const CameraIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2l1.1-2h8.4l1.1 2h2.2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z" />
+    <circle cx="12" cy="13" r="3.4" />
+  </Icon>
+);
+
+export const MicIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="9" y="2.5" width="6" height="11" rx="3" />
+    <path d="M5 11.5a7 7 0 0 0 14 0" />
+    <path d="M12 18.5V21.5" />
+  </Icon>
+);
+
+export const BarcodeIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3.5 5.5v13M7 5.5v13M10.5 5.5v13M14 5.5v13M17.5 5.5v13M20.5 5.5v13" />
+  </Icon>
+);
+
 export const CartIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M2.5 3h2l2.2 11.2a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 2-1.55L20.5 7H6" />
