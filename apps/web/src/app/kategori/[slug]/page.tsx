@@ -24,8 +24,6 @@ import { siteUrl } from '@/lib/env';
  * Ayrı yol vermek bu çelişkiyi kökten çözer ve temiz URL bonusu getirir.
  */
 
-export const revalidate = 600;
-
 const SORT_OPTIONS: Array<{ value: SortOption; label: string }> = [
   { value: 'offers', label: 'En çok mağaza' },
   { value: 'price_asc', label: 'Artan fiyat' },
@@ -36,13 +34,6 @@ type CategoryPageProps = {
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ sirala?: string }>;
 };
-
-/** Tüm kategoriler derleme zamanında üretilir: sayıları az, değişimleri seyrek. */
-export async function generateStaticParams() {
-  // Boş: bu sayfa layout'taki cookies()/oturum yüzünden zaten dinamik.
-  // Derleme zamanında getCategories() (ve dolaylı cookies) çağırma.
-  return [];
-}
 
 export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
   const { slug } = await params;

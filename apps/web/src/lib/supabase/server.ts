@@ -7,20 +7,19 @@
  */
 
 import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 
 import { isSupabaseConfigured, supabaseAnonKey, supabaseUrl } from '../env';
 
 export async function createClient() {
   if (!isSupabaseConfigured()) return null;
 
-  const duringBuild = process.env.NEXT_PHASE === 'phase-production-build';
-  if (duringBuild) {
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
     return createServerClient(supabaseUrl, supabaseAnonKey, {
       cookies: { getAll: () => [], setAll: () => {} },
     });
   }
 
+  const { cookies } = await import('next/headers');
   const cookieStore = await cookies();
 
   return createServerClient(supabaseUrl, supabaseAnonKey, {

@@ -12,8 +12,6 @@ import { ProductCard, ProductThumb } from '@/components/ProductCard';
 import { getProductGroup, getRelatedGroups } from '@/data/catalog';
 import { siteUrl } from '@/lib/env';
 
-export const revalidate = 120;
-
 type ProductPageProps = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
