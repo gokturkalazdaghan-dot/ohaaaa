@@ -22,16 +22,27 @@ export default function PrivacyPage() {
       <Notice tone="warning">
         <strong>Yayına almadan önce:</strong> Bu metin teknik olarak sistemin gerçekte ne
         yaptığını doğru anlatır, ancak <strong>hukuki incelemeden geçmemiştir</strong>.
-        Köşeli parantezli alanlar şirket bilgileriyle doldurulmalı ve bir avukat
-        tarafından gözden geçirilmelidir. VERBİS kaydı yükümlülüğünüz olup olmadığını da
-        kontrol ettirin.
+        Köşeli parantezli alanlar işletme bilgileriyle doldurulmalı ve bir avukat
+        tarafından gözden geçirilmelidir.
+        <br />
+        <br />
+        <strong>VERBİS:</strong> Yıllık çalışan sayısı 50’den az ve mali bilanço toplamı
+        eşiğin altında olan veri sorumluları genellikle VERBİS kaydından muaftır. Ancak
+        <strong> ana faaliyeti özel nitelikli kişisel veri işlemek olanlar</strong> için
+        muafiyet uygulanmaz. Durumunuzu bir hukukçuya teyit ettirin — muafiyet
+        varsayımıyla hareket etmek idari para cezasına konu olabilir.
       </Notice>
 
       <h2>1. Veri sorumlusu</h2>
       <p>
-        6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) uyarınca veri sorumlusu
-        [Şirket ticari unvanı]’dır. Adres: [açık adres]. Başvurularınız için:{' '}
+        6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) uyarınca veri sorumlusu,{' '}
+        <strong>Armanalabs</strong> işletme adıyla faaliyet gösteren{' '}
+        <strong>[Ad Soyad]</strong>’dır. Adres: [açık adres]. Başvurularınız için:{' '}
         <a href="mailto:kvkk@ohaaaa.com">kvkk@ohaaaa.com</a>
+      </p>
+      <p>
+        Ohaaaa bir şahıs işletmesi tarafından işletilmektedir; veri sorumlusu sıfatı
+        tüzel kişiye değil, işletme sahibi gerçek kişiye aittir.
       </p>
 
       <h2>2. İşlediğimiz veriler</h2>

@@ -23,13 +23,23 @@ export default function TermsPage() {
         <strong>Yayına almadan önce:</strong> Bu metin sistemin gerçek işleyişini doğru
         anlatır ancak <strong>hukuki incelemeden geçmemiştir</strong>. Köşeli parantezli
         alanlar doldurulmalı ve bir avukat tarafından gözden geçirilmelidir.
+        <br />
+        <br />
+        <strong>ETBİS kaydı:</strong> 6563 sayılı Kanun kapsamında e-ticaret hizmet
+        sağlayıcıları ve aracı hizmet sağlayıcıları, şahıs işletmesi olsalar dahi ETBİS’e
+        kayıt olmakla yükümlüdür. Kayıt numarası sitede yayımlanmalıdır.
       </Notice>
 
       <h2>1. Taraflar</h2>
       <p>
-        Bu şartlar, [Şirket ticari unvanı] (“Ohaaaa”, “biz”) tarafından işletilen
-        ohaaaa.com sitesinin kullanımını düzenler. Siteyi kullanarak bu şartları kabul
-        etmiş sayılırsınız.
+        Bu şartlar, <strong>Armanalabs</strong> işletme adıyla faaliyet gösteren{' '}
+        <strong>[Ad Soyad]</strong> (“Ohaaaa”, “biz”) tarafından işletilen ohaaaa.com
+        sitesinin kullanımını düzenler. Siteyi kullanarak bu şartları kabul etmiş
+        sayılırsınız.
+      </p>
+      <p>
+        İşletme bilgilerinin tamamı <Link href="/iletisim">iletişim sayfasında</Link>{' '}
+        yayımlanmıştır.
       </p>
 
       <h2>2. Ohaaaa ne yapar, ne yapmaz</h2>

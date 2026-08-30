@@ -87,36 +87,63 @@ export default function ContactPage() {
       <h2>Mesaj gönderin</h2>
       <ContactForm />
 
-      <h2>Şirket bilgileri</h2>
+      <h2>İşletme bilgileri</h2>
       <table>
         <tbody>
           <tr>
-            <td style={{ width: '35%' }}>Unvan</td>
-            <td>[Şirket ticari unvanı]</td>
+            <td style={{ width: '38%' }}>Ticari unvan</td>
+            <td>
+              [Ad Soyad]
+              <br />
+              <span className="text-xs text-subtle">
+                Şahıs firmalarında ticari unvan, işletme sahibinin adı ve soyadıdır.
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <td>İşletme adı</td>
+            <td>Armanalabs</td>
           </tr>
           <tr>
             <td>Adres</td>
             <td>[Açık adres]</td>
           </tr>
           <tr>
-            <td>Vergi dairesi / no</td>
-            <td>[Vergi dairesi] / [Vergi no]</td>
+            <td>Vergi dairesi</td>
+            <td>[Vergi dairesi]</td>
           </tr>
           <tr>
-            <td>MERSİS</td>
-            <td>[MERSİS numarası]</td>
+            <td>Vergi / TC kimlik no</td>
+            <td>[TC kimlik no veya vergi no]</td>
           </tr>
           <tr>
-            <td>KEP adresi</td>
-            <td>[KEP adresi]</td>
+            <td>Ticaret sicil no</td>
+            <td>
+              [Sicil no] <span className="text-xs text-subtle">— kayıtlıysa</span>
+            </td>
+          </tr>
+          <tr>
+            <td>ETBİS kayıt no</td>
+            <td>[ETBİS numarası]</td>
+          </tr>
+          <tr>
+            <td>E-posta</td>
+            <td>
+              <a href="mailto:destek@ohaaaa.com">destek@ohaaaa.com</a>
+            </td>
+          </tr>
+          <tr>
+            <td>Telefon</td>
+            <td>[Telefon]</td>
           </tr>
         </tbody>
       </table>
 
       <p className="text-sm">
-        <strong>Not:</strong> Köşeli parantezli alanlar şirket kuruluş bilgileriyle
-        doldurulmalıdır. E-Ticaret Kanunu (6563) ve Mesafeli Sözleşmeler Yönetmeliği bu
-        bilgilerin sitede erişilebilir olmasını zorunlu kılar.
+        <strong>Not:</strong> Köşeli parantezli alanlar işletme bilgileriyle
+        doldurulmalıdır. 6563 sayılı Elektronik Ticaretin Düzenlenmesi Hakkında Kanun ve
+        Mesafeli Sözleşmeler Yönetmeliği, bu bilgilerin sitede kolayca erişilebilir
+        olmasını zorunlu kılar.
       </p>
     </ContentPage>
   );
