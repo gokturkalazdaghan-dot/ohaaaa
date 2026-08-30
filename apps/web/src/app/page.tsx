@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { formatMoney } from '@ohaaaa/shared';
 
+import { ProductCard } from '@/components/ProductCard';
 import { getCategories, getFlashDeals, getVendors, searchProducts } from '@/data/catalog';
 
 export default async function HomePage() {
@@ -62,23 +63,11 @@ export default async function HomePage() {
               tümü
             </Link>
           </h2>
-          <ul className="mt-3 divide-y divide-line border-y border-line">
+          <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
             {trending.map((result) => (
-              <li key={result.groupId} className="py-3">
-                <Link href={`/urun/${result.slug}`} className="text-fg hover:underline">
-                  {result.title}
-                </Link>
-                {result.minPriceCents !== null && (
-                  <p className="mt-1 tabular text-sm font-semibold text-brand">
-                    {formatMoney(result.minPriceCents)}
-                    {result.offerCount > 1 ? (
-                      <span className="ml-2 font-normal text-muted">{result.offerCount} mağaza</span>
-                    ) : null}
-                  </p>
-                )}
-              </li>
+              <ProductCard key={result.groupId} result={result} />
             ))}
-          </ul>
+          </div>
         </section>
       )}
 
