@@ -59,20 +59,7 @@ function resolveSiteUrl(): string {
 
   // Sondaki eğik çizgi, `${siteUrl}/urun/x` birleştirmelerinde çift eğik
   // çizgi üretir ve iki farklı URL gibi indekslenir.
-  let normalized = configured?.replace(/\/+$/, '') ?? '';
-
-  // Vercel 308s apex → www. If siteUrl stays on the apex (NEXT_PUBLIC_SITE_URL
-  // or VERCEL_PROJECT_PRODUCTION_URL), Next's canonicalHost() 308s the other
-  // way and browsers loop until curl 47.
-  try {
-    const parsed = new URL(normalized);
-    if (parsed.hostname === 'ohaaaa.com') {
-      parsed.hostname = 'www.ohaaaa.com';
-      normalized = parsed.origin;
-    }
-  } catch {
-    // leave normalized as-is; the production check below still applies
-  }
+  const normalized = configured?.replace(/\/+$/, '') ?? '';
 
   const isProduction = process.env.NODE_ENV === 'production';
   const isServer = typeof window === 'undefined';
