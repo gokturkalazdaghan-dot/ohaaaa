@@ -8,7 +8,7 @@ import { DataUnavailable } from '@/components/DataUnavailable';
 import { ShieldIcon, TruckIcon } from '@/components/Icons';
 import { JsonLd } from '@/components/JsonLd';
 import { OfferRow } from '@/components/OfferRow';
-import { ProductCard, ProductThumb } from '@/components/ProductCard';
+import { ProductCard, ProductImage } from '@/components/ProductCard';
 import { getProductGroup, getRelatedGroups } from '@/data/catalog';
 import { siteUrl } from '@/lib/env';
 
@@ -176,7 +176,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
         {/* Görsel ve özellikler */}
         <div className="space-y-5">
           <div className="group relative aspect-square overflow-hidden rounded-2xl border border-line bg-surface-2">
-            <ProductThumb title={group.title} />
+            <ProductImage
+              src={group.imageUrl}
+              slug={group.slug}
+              title={group.title}
+              brand={group.brand}
+            />
           </div>
 
           {Object.keys(group.attributes).length > 0 && (
