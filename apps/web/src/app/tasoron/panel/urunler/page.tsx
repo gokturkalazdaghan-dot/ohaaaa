@@ -4,6 +4,16 @@ import { discountPercent, formatMoney } from '@ohaaaa/shared';
 
 import { demoProductGroups } from '@/data/demo';
 
+/*
+ * Oturuma bağlı sayfalar ASLA önbelleğe alınmamalıdır. Next, `cookies()`
+ * çağrısını görürse rotayı kendiliğinden dinamik yapar — ama demo modunda
+ * Supabase istemcisi çerezlere hiç dokunmadan null döndüğü için bu sinyal
+ * oluşmuyor ve sayfa statik üretiliyordu. Bir yöneticinin verisinin
+ * önbellekten başkasına servis edilmesi ihtimali, açık bir bildirimle
+ * kapatılacak kadar ciddidir.
+ */
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'Ürünler',
   robots: { index: false, follow: false },

@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 
 import { formatMoney } from '@ohaaaa/shared';
 
+import { DataUnavailable } from '@/components/DataUnavailable';
 import { ShieldIcon, TruckIcon } from '@/components/Icons';
 import { JsonLd } from '@/components/JsonLd';
 import { OfferRow } from '@/components/OfferRow';
@@ -36,11 +37,33 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { slug } = await params;
-  const group = await getProductGroup(slug);
+
+  /*
+   * "Ürün yok" ile "veriye ulaşamıyoruz" AYRI durumlardır ve ayrı
+   * yanıtlanmalıdır: birincisi 404, ikincisi geçici bir kesinti. İkisini
+   * karıştırmak, kesinti sırasında Google'a tüm kataloğun silindiğini
+   * bildirmek demektir.
+   */
+  let group: Awaited<ReturnType<typeof getProductGroup>>;
+
+  try {
+    group = await getProductGroup(slug);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        msg: 'Ürün sayfası veri kaynağına ulaşamadı',
+        slug,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+    return <DataUnavailable />;
+  }
 
   if (!group) notFound();
 
-  const related = await getRelatedGroups(slug, 4);
+  // İlgili ürünler ikincil içeriktir: alınamazsa sayfa yine de gösterilir.
+  const related = await getRelatedGroups(slug, 4).catch(() => []);
 
   // Teklifler zaten toplam maliyete göre sıralı gelir (veri katmanında).
   const bestOffer = group.offers[0];

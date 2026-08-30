@@ -1,11 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
-
-import { vendorApplicationSchema } from '@ohaaaa/shared';
+import { useActionState, useState } from 'react';
+import { useFormStatus } from 'react-dom';
 
 import { AlertIcon, CheckIcon } from './Icons';
+import { submitApplication, type ApplicationResult } from '@/app/tasoron/basvuru/actions';
 
 /**
  * Taşeron başvuru formu.
@@ -15,11 +15,16 @@ import { AlertIcon, CheckIcon } from './Icons';
  * girdi sunucuda reddedilmez; kural tek yerde yaşar.
  */
 export function VendorApplicationForm() {
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [submitted, setSubmitted] = useState(false);
+  const [state, formAction] = useActionState<ApplicationResult, FormData>(
+    submitApplication,
+    {},
+  );
+
   const [slugTouched, setSlugTouched] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [slug, setSlug] = useState('');
+
+  const errors = state.fieldErrors ?? {};
 
   /** Mağaza adından otomatik slug türetir (kullanıcı elle değiştirmediyse). */
   function onDisplayNameChange(value: string) {
@@ -37,33 +42,39 @@ export function VendorApplicationForm() {
     }
   }
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setErrors({});
+  /*
+   * Doğrulama artık SUNUCUDA yapılıyor (aynı zod şemasıyla). İstemci
+   * doğrulaması bir kolaylıktır, güvenlik önlemi değildir — form curl ile
+   * de gönderilebilir. Tek kaynakta tutmak, ikisinin ayrışmasını önler.
+   */
 
-    const formData = new FormData(event.currentTarget);
-    const candidate = Object.fromEntries(formData.entries());
-
-    const parsed = vendorApplicationSchema.safeParse(candidate);
-
-    if (!parsed.success) {
-      const fieldErrors: Record<string, string> = {};
-      for (const issue of parsed.error.issues) {
-        const field = issue.path[0];
-        if (typeof field === 'string' && !fieldErrors[field]) {
-          fieldErrors[field] = issue.message;
-        }
-      }
-      setErrors(fieldErrors);
-      return;
-    }
-
-    // Canlı kurulumda burada supabase.from('vendors').insert(...) çağrılır;
-    // RLS politikası kaydın 'pending' durumunda açılmasını zorunlu kılar.
-    setSubmitted(true);
+  if (state.needsAuth) {
+    return (
+      <div className="card mt-8 p-6 text-center">
+        <h2 className="text-lg font-bold">Önce hesap oluşturun</h2>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
+          Başvurunuzu size bağlayabilmemiz ve panelinize erişebilmeniz için bir
+          hesaba ihtiyacımız var. Kayıt 30 saniye sürer.
+        </p>
+        <div className="mt-5 flex justify-center gap-2">
+          <Link
+            href="/kayit"
+            className="rounded-xl bg-gradient-to-r from-brand to-electric px-5 py-2.5 text-sm font-semibold text-white"
+          >
+            Hesap oluştur
+          </Link>
+          <Link
+            href="/giris?devam=/tasoron/basvuru"
+            className="rounded-xl border border-line px-5 py-2.5 text-sm font-medium transition-colors hover:border-brand/50"
+          >
+            Giriş yap
+          </Link>
+        </div>
+      </div>
+    );
   }
 
-  if (submitted) {
+  if (state.ok) {
     return (
       <div className="card-glow mt-10 p-8 text-center">
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-success/12 text-success">
@@ -85,7 +96,7 @@ export function VendorApplicationForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="card mt-8 space-y-5 p-6" noValidate>
+    <form action={formAction} className="card mt-8 space-y-5 p-6" noValidate>
       <Field
         label="Mağaza adı"
         name="display_name"
@@ -137,17 +148,37 @@ export function VendorApplicationForm() {
         hint="Ürün gamınızı ve tedarik gücünüzü kısaca anlatın (en az 20 karakter)."
       />
 
-      <button
-        type="submit"
-        className="w-full rounded-xl bg-gradient-to-r from-brand to-electric px-5 py-3 font-semibold text-white transition-transform hover:scale-[1.01]"
-      >
-        Başvuruyu gönder
-      </button>
+      {state.error && (
+        <p
+          role="alert"
+          className="flex items-start gap-2 rounded-xl border border-danger/30 bg-danger/10 p-3 text-xs text-danger"
+        >
+          <AlertIcon className="mt-0.5 h-4 w-4 shrink-0" />
+          {state.error}
+        </p>
+      )}
+
+      <SubmitButton />
 
       <p className="text-center text-[11px] text-subtle">
         Göndererek satıcı sözleşmesini ve komisyon koşullarını kabul etmiş olursunuz.
       </p>
     </form>
+  );
+}
+
+/** `useFormStatus` yalnızca formun ALTINDAKİ bir bileşenden okunabilir. */
+function SubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="w-full rounded-xl bg-gradient-to-r from-brand to-electric px-5 py-3 font-semibold text-white transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {pending ? 'Gönderiliyor…' : 'Başvuruyu gönder'}
+    </button>
   );
 }
 

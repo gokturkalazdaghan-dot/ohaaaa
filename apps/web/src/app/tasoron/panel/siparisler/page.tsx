@@ -2,7 +2,19 @@ import type { Metadata } from 'next';
 
 import { formatMoney } from '@ohaaaa/shared';
 
-import { buildDemoOrders } from '@/data/vendorDemo';
+import { DataSourceNotice } from '@/components/DataSourceNotice';
+import { getOwnedVendor, getSessionUser } from '@/lib/auth';
+import { getVendorOrders } from '@/data/vendorStats';
+
+/*
+ * Oturuma bağlı sayfalar ASLA önbelleğe alınmamalıdır. Next, `cookies()`
+ * çağrısını görürse rotayı kendiliğinden dinamik yapar — ama demo modunda
+ * Supabase istemcisi çerezlere hiç dokunmadan null döndüğü için bu sinyal
+ * oluşmuyor ve sayfa statik üretiliyordu. Bir yöneticinin verisinin
+ * önbellekten başkasına servis edilmesi ihtimali, açık bir bildirimle
+ * kapatılacak kadar ciddidir.
+ */
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Siparişler',
@@ -17,11 +29,16 @@ const STATUS_META = {
   delivered: { label: 'Teslim edildi', className: 'bg-success/12 text-success' },
 } as const;
 
-export default function VendorOrdersPage() {
-  const orders = buildDemoOrders();
+export default async function VendorOrdersPage() {
+  const user = await getSessionUser();
+  const vendor = user ? await getOwnedVendor(user.id) : null;
+
+  const { orders, isLive } = await getVendorOrders(vendor?.id ?? null);
 
   return (
     <div className="space-y-5">
+      <DataSourceNotice isLive={isLive} vendorStatus={vendor?.status ?? null} />
+
       <header>
         <h2 className="text-lg font-bold">Siparişler</h2>
         <p className="mt-1 text-sm text-muted">

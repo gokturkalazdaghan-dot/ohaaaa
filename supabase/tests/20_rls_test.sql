@@ -266,5 +266,41 @@ begin
 end
 $$;
 
+-- ---------------------------------------------------------------------------
+-- 8) Taşeron kaydı açan kullanıcı otomatik olarak vendor rolüne yükselir
+-- ---------------------------------------------------------------------------
+reset role;
+
+do $$
+declare
+  v_user uuid := '55555555-5555-4555-8555-555555555555';  -- müşteri
+  v_role public.user_role;
+begin
+  if (select role from public.users where id = v_user) <> 'customer' then
+    raise exception 'BAŞARISIZ: test kullanıcısı customer olmalıydı';
+  end if;
+
+  insert into public.vendors (owner_id, slug, display_name)
+  values (v_user, 'test-magaza-rol', 'Test Mağaza');
+
+  select role into v_role from public.users where id = v_user;
+
+  if v_role <> 'vendor' then
+    raise exception 'BAŞARISIZ: rol vendor''a yükselmedi (%)', v_role;
+  end if;
+
+  -- Admin rolü korunmalı: yönetici mağaza açarsa yetkisi düşmemeli.
+  insert into public.vendors (owner_id, slug, display_name)
+  values ('11111111-1111-4111-8111-111111111111', 'admin-magaza', 'Admin Mağaza');
+
+  if (select role from public.users
+       where id = '11111111-1111-4111-8111-111111111111') <> 'admin' then
+    raise exception 'BAŞARISIZ: admin rolü vendor''a düşürüldü';
+  end if;
+
+  raise notice '✓ rol yükseltme: taşeron kaydı vendor yapıyor, admin korunuyor';
+end
+$$;
+
 reset role;
 rollback;

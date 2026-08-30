@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 
 import { formatMoney } from '@ohaaaa/shared';
 
+import { DataUnavailable } from '@/components/DataUnavailable';
 import { JsonLd } from '@/components/JsonLd';
 import { ProductCard } from '@/components/ProductCard';
 import { getCategories, searchProducts, type SortOption } from '@/data/catalog';
@@ -66,16 +67,38 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   const { slug } = await params;
   const { sirala } = await searchParams;
 
-  const categories = await getCategories();
-  const category = categories.find((candidate) => candidate.slug === slug);
-
-  if (!category) notFound();
+  let categories: Awaited<ReturnType<typeof getCategories>>;
+  let results: Awaited<ReturnType<typeof searchProducts>>;
 
   const sort = SORT_OPTIONS.some((option) => option.value === sirala)
     ? (sirala as SortOption)
     : 'offers';
 
-  const results = await searchProducts({ categoryId: category.id, sort, limit: 48 });
+  // Kesintide 404 vermek YANLIŞ olurdu: kategori duruyor, biz ulaşamıyoruz.
+  // 404, arama motoruna sayfanın kalıcı olarak silindiğini bildirir.
+  let category: (typeof categories)[number] | undefined;
+
+  try {
+    categories = await getCategories();
+    category = categories.find((candidate) => candidate.slug === slug);
+
+    if (!category) notFound();
+
+    results = await searchProducts({ categoryId: category.id, sort, limit: 48 });
+  } catch (error) {
+    // notFound() bir hata fırlatarak çalışır; onu yutmamalıyız.
+    if (isNotFoundError(error)) throw error;
+
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        msg: 'Kategori sayfası veri kaynağına ulaşamadı',
+        slug,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+    return <DataUnavailable />;
+  }
 
   const cheapest = results
     .map((result) => result.minPriceCents)
@@ -183,5 +206,20 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
         </div>
       </nav>
     </div>
+  );
+}
+
+/**
+ * `notFound()` bir hata fırlatarak çalışır (NEXT_HTTP_ERROR_FALLBACK).
+ * Genel bir catch bloğu onu yutarsa 404 yerine "veri yok" sayfası gösterilir
+ * ve gerçekten silinmiş bir kategori kalıcı olarak 200 dönmeye başlar.
+ */
+function isNotFoundError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'digest' in error &&
+    typeof (error as { digest?: unknown }).digest === 'string' &&
+    (error as { digest: string }).digest.startsWith('NEXT_HTTP_ERROR_FALLBACK')
   );
 }

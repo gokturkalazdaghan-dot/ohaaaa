@@ -3,17 +3,31 @@ import type { Metadata } from 'next';
 import { formatMoney } from '@ohaaaa/shared';
 
 import { BoxIcon, TruckIcon, CheckIcon, AlertIcon } from '@/components/Icons';
+import { DataSourceNotice } from '@/components/DataSourceNotice';
 import { RevenueChart } from '@/components/RevenueChart';
-import { buildDemoStats } from '@/data/vendorDemo';
+import { getOwnedVendor, getSessionUser } from '@/lib/auth';
+import { getVendorStats } from '@/data/vendorStats';
+
+/*
+ * Oturuma bağlı sayfalar ASLA önbelleğe alınmamalıdır. Next, `cookies()`
+ * çağrısını görürse rotayı kendiliğinden dinamik yapar — ama demo modunda
+ * Supabase istemcisi çerezlere hiç dokunmadan null döndüğü için bu sinyal
+ * oluşmuyor ve sayfa statik üretiliyordu. Bir yöneticinin verisinin
+ * önbellekten başkasına servis edilmesi ihtimali, açık bir bildirimle
+ * kapatılacak kadar ciddidir.
+ */
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Satıcı paneli',
   robots: { index: false, follow: false },
 };
 
-export default function VendorDashboardPage() {
-  // Canlı kurulumda: supabase.rpc('vendor_dashboard_stats', { p_vendor_id })
-  const stats = buildDemoStats(30);
+export default async function VendorDashboardPage() {
+  const user = await getSessionUser();
+  const vendor = user ? await getOwnedVendor(user.id) : null;
+
+  const { stats, isLive } = await getVendorStats(vendor?.id ?? null, 30);
 
   const lastWeek = stats.dailyRevenue.slice(-7);
   const previousWeek = stats.dailyRevenue.slice(-14, -7);
@@ -28,6 +42,8 @@ export default function VendorDashboardPage() {
 
   return (
     <div className="space-y-6">
+      <DataSourceNotice isLive={isLive} vendorStatus={vendor?.status ?? null} />
+
       {/* Ana metrik: tek bir kahraman sayı, grafikten önce gelir. */}
       <section className="card-glow p-6">
         <div className="flex flex-wrap items-start justify-between gap-6">

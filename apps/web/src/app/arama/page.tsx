@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
+import { DataUnavailable } from '@/components/DataUnavailable';
 import { SearchIcon } from '@/components/Icons';
 import { ProductCard } from '@/components/ProductCard';
 import { getCategories, searchProducts, type SortOption } from '@/data/catalog';
@@ -35,19 +36,36 @@ export async function generateMetadata({ searchParams }: SearchPageProps): Promi
 export default async function SearchPage({ searchParams }: SearchPageProps) {
   const { q, kategori, sirala } = await searchParams;
 
-  const categories = await getCategories();
+  // Kategoriler filtre şeridi içindir; alınamazsa arama yine de çalışmalı.
+  // Bu çağrı da veri kaynağına gider ve aramadan ÖNCE patlarsa sayfayı
+  // bütünüyle düşürürdü.
+  const categories = await getCategories().catch(() => []);
   const activeCategory = kategori ? categories.find((c) => c.slug === kategori) : undefined;
 
   const sort = SORT_OPTIONS.some((option) => option.value === sirala)
     ? (sirala as SortOption)
     : 'relevance';
 
-  const results = await searchProducts({
-    query: q,
-    categoryId: activeCategory?.id,
-    sort,
-    limit: 48,
-  });
+  let results: Awaited<ReturnType<typeof searchProducts>>;
+
+  try {
+    results = await searchProducts({
+      query: q,
+      categoryId: activeCategory?.id,
+      sort,
+      limit: 48,
+    });
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        msg: 'Arama veri kaynağına ulaşamadı',
+        query: q,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+    return <DataUnavailable title="Arama şu an çalışmıyor" />;
+  }
 
   /** Mevcut filtreleri koruyarak tek parametreyi değiştiren bağlantı üretir. */
   function buildHref(changes: Record<string, string | undefined>): string {

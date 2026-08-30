@@ -3,13 +3,20 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
 
-import { CartIcon, StoreIcon } from './Icons';
+import { CartIcon } from './Icons';
 import { Logo } from './Logo';
 import { SearchBar } from './SearchBar';
 import { ThemeToggle } from './ThemeToggle';
 import { useCart, useCartSummary } from '@/store/cart';
 
-export function Header() {
+/**
+ * Üst bar.
+ *
+ * `userMenu` bir prop olarak alınır çünkü Header istemci bileşenidir
+ * (sepet durumunu dinler) ve istemci bileşeni içinden sunucu bileşeni
+ * ÇAĞRILAMAZ — ama children/prop olarak GEÇİRİLEBİLİR.
+ */
+export function Header({ userMenu }: { userMenu?: React.ReactNode }) {
   return (
     <header className="sticky top-0 z-50 border-b border-line glass">
       <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
@@ -23,13 +30,7 @@ export function Header() {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <Link
-            href="/tasoron"
-            className="hidden items-center gap-2 rounded-xl border border-line bg-surface px-3.5 py-2 text-sm font-medium text-muted transition-colors hover:border-brand/40 hover:text-fg sm:flex"
-          >
-            <StoreIcon className="h-4 w-4" />
-            Satıcı Ol
-          </Link>
+          {userMenu}
 
           <ThemeToggle />
           <CartButton />

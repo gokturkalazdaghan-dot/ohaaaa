@@ -4,6 +4,7 @@ import { Analytics } from '@/components/Analytics';
 import { ConsentBanner } from '@/components/ConsentBanner';
 import { Footer } from '@/components/Footer';
 import { Header } from '@/components/Header';
+import { UserMenu } from '@/components/UserMenu';
 import { CartDrawer } from '@/components/CartDrawer';
 import { DemoBanner } from '@/components/DemoBanner';
 import { PrelaunchBanner } from '@/components/PrelaunchBanner';
@@ -139,7 +140,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {isPrelaunch && <PrelaunchBanner />}
         {isDemoMode() && <DemoBanner />}
-        <Header />
+        <Header userMenu={<UserMenu />} />
         <main id="icerik">{children}</main>
         <Footer />
         <CartDrawer />

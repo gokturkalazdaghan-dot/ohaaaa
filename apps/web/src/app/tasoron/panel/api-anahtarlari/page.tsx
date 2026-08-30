@@ -2,6 +2,16 @@ import type { Metadata } from 'next';
 
 import { ApiKeyManager } from '@/components/ApiKeyManager';
 
+/*
+ * Oturuma bağlı sayfalar ASLA önbelleğe alınmamalıdır. Next, `cookies()`
+ * çağrısını görürse rotayı kendiliğinden dinamik yapar — ama demo modunda
+ * Supabase istemcisi çerezlere hiç dokunmadan null döndüğü için bu sinyal
+ * oluşmuyor ve sayfa statik üretiliyordu. Bir yöneticinin verisinin
+ * önbellekten başkasına servis edilmesi ihtimali, açık bir bildirimle
+ * kapatılacak kadar ciddidir.
+ */
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'API anahtarları',
   robots: { index: false, follow: false },
