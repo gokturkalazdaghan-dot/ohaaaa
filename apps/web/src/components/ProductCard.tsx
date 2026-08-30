@@ -1,3 +1,4 @@
+import { ProductPlaceholder } from './ProductPlaceholder';
 import Link from 'next/link';
 
 import { formatMoney, type SearchResult } from '@ohaaaa/shared';
@@ -10,7 +11,13 @@ import { localPhotoFor } from '@/data/productPhotos';
  * Demo katalogu images.ohaaaa.com'a isaret eder; o alan adi yok. Kirik
  * gorsel ikonu, yer tutucudan cok daha kotu gorunur - siteyi bozuk gosterir.
  */
-function usableImage(url: string | null, slug?: string | null): string | null {
+/**
+ * Bir görselin gerçekten gösterilebilir olup olmadığını çözer.
+ *
+ * `node:fs` kullandığı için YALNIZCA SUNUCUDA çalışır. İstemci bileşenleri
+ * bunu çağıramaz; onlara çözülmüş adres geçilir.
+ */
+export function resolveProductImage(url: string | null, slug?: string | null): string | null {
   // Uzak adres kullanilabilir mi? Demo katalogu images.ohaaaa.com'a isaret
   // eder ve o alan adi yok; kirik gorsel ikonu yer tutucudan cok daha kotu.
   if (url && /^https?:\/\//i.test(url) && !url.includes('images.ohaaaa.com')) {
@@ -22,46 +29,6 @@ function usableImage(url: string | null, slug?: string | null): string | null {
   return localPhotoFor(slug);
 }
 
-/**
- * Gorseli olmayan urun icin yer tutucu.
- *
- * Bos bej bir dikdortgen "eksik" gorunur. Bunun yerine urunun kendi
- * kimliginden (slug) tureyen sabit bir renk ve yumusak bir desen cizilir:
- * her kart farkli ama tumu ayni paletten, yani izgara kasitli durur.
- *
- * Uydurma bir urun gorseli CIZILMEZ. Yer tutucu, urunu temsil ettigini
- * iddia etmez; yalnizca bosluğu tasarlanmis bicimde doldurur.
- */
-function Placeholder({ seed }: { seed: string }) {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i += 1) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-
-  // Sicak paletin icinde kal: 18-42 derece (turuncu-amber) arasi.
-  // Yer tutucu, gorsel alaninin ACIK zeminiyle uyumlu kalir: kart koyu diye
-  // yer tutucuyu da koyu yapmak, fotografi olan ve olmayan kartlari
-  // birbirinden kopuk gosterirdi.
-  const hue = 18 + (hash % 24);
-  const from = `hsl(${hue} 30% 93%)`;
-  const to = `hsl(${hue + 10} 26% 86%)`;
-
-  return (
-    <div
-      className="relative flex h-full w-full items-center justify-center overflow-hidden"
-      style={{ background: `linear-gradient(140deg, ${from}, ${to})` }}
-      aria-hidden="true"
-    >
-      <svg viewBox="0 0 64 64" className="h-1/3 w-1/3 opacity-25" fill="none" stroke="currentColor">
-        <path
-          d="M32 6 58 19v26L32 58 6 45V19L32 6Z M6 19l26 13 26-13 M32 32v26"
-          strokeWidth="2.4"
-          strokeLinejoin="round"
-          className="text-[#7a4b2a]"
-        />
-      </svg>
-    </div>
-  );
-}
-
 export function ProductCard({ result }: { result: SearchResult }) {
   const vendor =
     result.bestVendorName &&
@@ -70,7 +37,7 @@ export function ProductCard({ result }: { result: SearchResult }) {
       ? result.bestVendorName
       : null;
 
-  const image = usableImage(result.imageUrl, result.slug);
+  const image = resolveProductImage(result.imageUrl, result.slug);
 
   return (
     <Link href={`/urun/${result.slug}`} className="card-link group flex h-full flex-col overflow-hidden">
@@ -90,7 +57,7 @@ export function ProductCard({ result }: { result: SearchResult }) {
             className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
-          <Placeholder seed={result.slug} />
+          <ProductPlaceholder seed={result.slug} />
         )}
       </div>
 
@@ -134,8 +101,8 @@ export function ProductImage({
   slug?: string | null;
   priority?: boolean;
 }) {
-  const image = usableImage(src, slug);
-  if (!image) return <Placeholder seed={title} />;
+  const image = resolveProductImage(src, slug);
+  if (!image) return <ProductPlaceholder seed={title} />;
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
@@ -147,5 +114,5 @@ export function ProductImage({
 }
 
 export function ProductThumb({ title }: { title: string }) {
-  return <Placeholder seed={title} />;
+  return <ProductPlaceholder seed={title} />;
 }

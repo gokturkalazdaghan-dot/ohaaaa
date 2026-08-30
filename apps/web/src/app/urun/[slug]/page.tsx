@@ -8,8 +8,9 @@ import { DataUnavailable } from '@/components/DataUnavailable';
 import { ShieldIcon, TruckIcon } from '@/components/Icons';
 import { JsonLd } from '@/components/JsonLd';
 import { OfferRow } from '@/components/OfferRow';
+import { ProductGallery } from '@/components/ProductGallery';
 import { PriceHistory } from '@/components/PriceHistory';
-import { ProductCard, ProductImage } from '@/components/ProductCard';
+import { ProductCard, resolveProductImage } from '@/components/ProductCard';
 import { getPriceHistory, getProductGroup, getRelatedGroups } from '@/data/catalog';
 import { siteUrl } from '@/lib/env';
 
@@ -174,6 +175,28 @@ export default async function ProductPage({ params }: ProductPageProps) {
     ],
   };
 
+  /*
+   * Galeri görselleri.
+   *
+   * Kanonik ürünün kendi görseli ÖNCE gelir: satıcı fotoğrafları arasında
+   * kalite farkı olabilir ve kanonik görsel bilinçli seçilmiş olandır.
+   * Arkasına her teklifin kendi fotoğrafları eklenir — aynı ürünü farklı
+   * açılardan çeken satıcılar sayfayı zenginleştirir.
+   *
+   * Tekrarlar ayıklanır: iki satıcı aynı üretici fotoğrafını gönderdiğinde
+   * aynı görsel iki kez görünmemeli.
+   */
+  const galleryImages = [
+    ...new Set(
+      [group.imageUrl, ...group.offers.flatMap((offer) => offer.imageUrls)]
+        // Adresler BURADA çözülür: kırık uzak adresler elenir, deponun kendi
+        // fotoğrafı varsa o kullanılır. Çözümleme `node:fs` gerektirdiği için
+        // istemci tarafında yapılamaz.
+        .map((url) => resolveProductImage(url ?? null, group.slug))
+        .filter((url): url is string => Boolean(url)),
+    ),
+  ].slice(0, 8);
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <JsonLd data={[productJsonLd, breadcrumbJsonLd]} />
@@ -188,18 +211,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
       <div className="grid gap-8 lg:grid-cols-[minmax(0,420px)_1fr]">
         {/* Görsel ve özellikler */}
         <div className="space-y-5">
-          {/*
-            Görsel zemini AÇIK: ürün fotoğrafları beyaz fonda çekilir, koyu bir
-            kutunun içinde ada gibi durur. Kart ızgarasındaki çözümün aynısı.
-          */}
-          <div className="group relative aspect-square overflow-hidden rounded-2xl border border-line bg-surface-photo">
-            <ProductImage
-              src={group.imageUrl}
-              slug={group.slug}
-              title={group.title}
-              brand={group.brand}
-            />
-          </div>
+          <ProductGallery
+            images={galleryImages}
+            title={group.title}
+            brand={group.brand}
+            slug={group.slug}
+          />
 
           {bestOffer && (
             <PriceHistory
