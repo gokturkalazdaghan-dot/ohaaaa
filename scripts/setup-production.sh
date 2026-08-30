@@ -171,6 +171,40 @@ create table if not exists supabase_migrations.schema_migrations (
 );
 SQL
 
+# --- Zaten kurulmuş bir şemayı devral (baseline) ----------------------------
+# Şema başka bir yolla uygulanmış olabilir: `supabase db push`, SQL editörü ya
+# da daha önceki bir dağıtım. O durumda defter boştur ama tablolar durur; hiçbir
+# şey yapmadan devam etmek "type already exists" hatasıyla biter.
+#
+# Devralmadan önce ŞEMANIN GÜNCEL OLDUĞU doğrulanır: en son migration'ın
+# getirdiği nesne aranır. Yoksa şema yarım demektir ve sessizce "uygulandı"
+# işaretlemek, eksik tabloyla çalışan bir siteden daha kötüdür — bu yüzden
+# durulur.
+ledger_rows=$(psql "$SUPABASE_DB_URL" -tAc \
+  "select count(*) from supabase_migrations.schema_migrations;")
+schema_exists=$(psql "$SUPABASE_DB_URL" -tAc \
+  "select case when to_regclass('public.products') is null then 0 else 1 end;")
+
+if [ "${ledger_rows// /}" = "0" ] && [ "${schema_exists// /}" = "1" ]; then
+  warn "Şema zaten kurulmuş ama migration defteri boş."
+  newest=$(psql "$SUPABASE_DB_URL" -tAc \
+    "select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.proname = 'tg_vendors_promote_owner';")
+  if [ "${newest// /}" = "0" ]; then
+    die "Şema YARIM görünüyor: en son migration'ın nesnesi yok.
+       Devralmak, eksik bir şemayı 'tamam' diye işaretlemek olurdu.
+       Önce şemayı hizalayın (supabase db push) ve betiği tekrar çalıştırın."
+  fi
+  for f in "$ROOT"/supabase/migrations/*.sql; do
+    b=$(basename "$f"); v="${b%%_*}"; nm="${b#*_}"; nm="${nm%.sql}"
+    psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -q -c \
+      "insert into supabase_migrations.schema_migrations (version, name)
+       values ('$v', '$nm') on conflict (version) do nothing;" \
+      || die "Defter yazılamadı."
+  done
+  ok "Mevcut şema devralındı — migration'lar 'uygulanmış' işaretlendi"
+fi
+
 applied=0; skipped=0
 for f in "$ROOT"/supabase/migrations/*.sql; do
   base=$(basename "$f")
@@ -235,6 +269,43 @@ if [ "${products// /}" = "0" ]; then
   warn "Katalog boş (0 teklif) — gerçek ortaklık beslemesi bağlanana kadar normaldir"
 else
   ok "Katalogda ${products// /} teklif var"
+fi
+
+# --- 3.5 Seed verisi denetimi ----------------------------------------------
+# Geliştirme seed'i üretime bir kez girerse site, uydurma fiyatları gerçek gibi
+# gösterir. Arayüzde satıcı adını gizlemek bunu çözmez: adsız bir kart da
+# "bu ürün şu fiyata" iddiasını sürdürür. Veriyi kaldırmak gerekir.
+step "3.5/6 · Seed (örnek) verisi denetimi"
+
+# Tespit, silme betiğinin KURU ÇALIŞTIRMASIYLA yapılır: böylece "seed nedir"
+# sorusunun tek bir yanıtı olur ve tespit ile silme zamanla ayrışamaz.
+seed_count=$(psql "$SUPABASE_DB_URL" -tA -v dry_run=1 \
+               -f "$ROOT/scripts/purge-seed-data.sql" 2>/dev/null \
+             | sed -n 's/^ *SEED_ROWS=\([0-9]*\).*/\1/p' | sed -n '1p')
+seed_count="${seed_count:-0}"
+
+if [ "${seed_count// /}" != "0" ]; then
+  warn "Üretim veritabanında seed (uydurma) teklif bulundu."
+  echo "     Bu satırlar gerçek olmayan fiyatları gerçekmiş gibi gösterir."
+  if [ "${PURGE_SEED:-}" = "1" ]; then
+    reply="e"
+  elif [ -t 0 ]; then
+    read -r -p "     Şimdi kaldırılsın mı? [e/H] " reply
+  else
+    reply="h"
+  fi
+  case "$reply" in
+    e|E|y|Y)
+      psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f "$ROOT/scripts/purge-seed-data.sql" \
+        || die "Seed temizliği başarısız."
+      ok "Seed verisi kaldırıldı"
+      ;;
+    *)
+      warn "Kaldırılmadı. Elle: psql \"\$SUPABASE_DB_URL\" -f scripts/purge-seed-data.sql"
+      ;;
+  esac
+else
+  ok "Seed verisi yok"
 fi
 
 # --- 4. Ortam değişkenleri -------------------------------------------------

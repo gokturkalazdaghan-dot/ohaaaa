@@ -2,6 +2,8 @@ import type { NextConfig } from 'next';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { siteUrl } from './src/lib/env';
+
 const projectRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
 /**
@@ -18,10 +20,15 @@ const projectRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '../
  * www'suz) diğeri ona yönlendirilir.
  */
 function canonicalHost(): string | null {
-  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (!raw) return null;
+  /*
+   * Adres, uygulamanın kullandığı ÇÖZÜMLEMENİN AYNISINDAN okunur
+   * (src/lib/env.ts). Buradaki zinciri elle kopyalamak, iki yerin zamanla
+   * ayrışmasına ve şu sessiz hataya yol açardı: canonical etiketi çıplak
+   * alan adını gösterirken www hâlâ 200 döner — yani tam da önlemek
+   * istediğimiz bölünme.
+   */
   try {
-    const host = new URL(raw).host;
+    const host = new URL(siteUrl).host;
     // Yerel geliştirmede yönlendirme istemeyiz.
     if (host.startsWith('localhost') || host.startsWith('127.0.0.1')) return null;
     return host;
