@@ -170,12 +170,12 @@ export async function getProductGroup(slug: string): Promise<ProductGroupWithOff
       .select(
         `id, slug, title, brand, image_url, description, category_id, attributes,
          offer_count, min_price_cents, max_price_cents,
-         offers:products (
+         offers:products!group_id (
            id, fulfillment, vendor_id, merchant_id, product_url,
            title, sku, image_urls, price_cents, compare_at_price_cents,
            currency, stock, condition, shipping_fee_cents, free_shipping_threshold_cents,
            estimated_delivery_days, status,
-           vendor:vendors ( id, slug, display_name, logo_url, rating ),
+           vendor:vendors!vendor_id ( id, slug, display_name, logo_url, rating ),
            merchant:merchants ( id, slug, display_name, logo_url, homepage_url )
          )`,
       )
@@ -281,8 +281,8 @@ export async function getFlashDeals(limit = 3): Promise<FlashDeal[]> {
         `id, product_id, headline, deal_price_cents, stock_limit, sold_count, ends_at,
          product:products (
            title, price_cents, image_urls, group_id,
-           vendor:vendors ( display_name ),
-           group:product_groups ( slug )
+           vendor:vendors!vendor_id ( display_name ),
+           group:product_groups!group_id ( slug )
          )`,
       )
       .lte('starts_at', new Date().toISOString())
@@ -290,7 +290,10 @@ export async function getFlashDeals(limit = 3): Promise<FlashDeal[]> {
       .order('priority', { ascending: false })
       .limit(limit);
 
-    if (error) throw new Error(`Kampanyalar okunamadı: ${error.message}`);
+    if (error) {
+      console.error("Kampanyalar okunamadı:", error.message);
+      return demoFlashDeals.slice(0, limit);
+    }
 
     return (data ?? []).map((row: Record<string, unknown>): FlashDeal => {
       const rawProduct = row.product;
