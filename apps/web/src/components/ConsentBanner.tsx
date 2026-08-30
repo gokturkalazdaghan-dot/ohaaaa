@@ -20,6 +20,23 @@ export function ConsentBanner() {
     setVisible(readConsent() === 'unset');
   }, []);
 
+  /*
+   * Şerit `fixed` konumlandığı için sayfa akışından çıkar ve alt bilginin
+   * son satırını örter. Sabit bir dolgu (padding) eklemek, şerit kapandıktan
+   * sonra boşluk bırakırdı; bu yüzden dolgu yalnızca şerit GÖRÜNÜRKEN
+   * uygulanır ve temizlik fonksiyonunda geri alınır.
+   */
+  useEffect(() => {
+    if (!visible) return;
+
+    const previous = document.body.style.paddingBottom;
+    document.body.style.paddingBottom = '7.5rem';
+
+    return () => {
+      document.body.style.paddingBottom = previous;
+    };
+  }, [visible]);
+
   if (!visible) return null;
 
   function decide(state: 'granted' | 'denied') {

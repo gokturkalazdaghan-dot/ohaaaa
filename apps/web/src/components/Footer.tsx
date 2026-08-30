@@ -72,7 +72,18 @@ export function Footer() {
         </div>
 
         <div className="mt-12 flex flex-col gap-3 border-t border-line pt-6 text-xs text-subtle sm:flex-row sm:items-center sm:justify-between">
-          <p>© {new Date().getFullYear()} Ohaaaa. Tüm hakları saklıdır.</p>
+          {/*
+            Telif Armanalabs'a aittir; "Ohaaaa" işletilen markanın adıdır.
+            Yıl elle yazılmaz: her 1 Ocak'ta eskiyen bir telif satırı,
+            sitenin bakımsız olduğunun ilk işaretidir.
+          */}
+          <p className="flex flex-col gap-1 sm:gap-0.5">
+            <span>© {new Date().getFullYear()} Armanalabs. Tüm hakları saklıdır.</span>
+            <span className="text-subtle/80">
+              Powered by{' '}
+              <span className="font-medium text-muted">Armanalabs</span>
+            </span>
+          </p>
           <p className="max-w-xl sm:text-right">
             Fiyatlar satıcılar tarafından belirlenir ve anlık değişebilir. Bazı
             bağlantılarımız ortaklık bağlantısıdır; bu size ek maliyet getirmez ve
