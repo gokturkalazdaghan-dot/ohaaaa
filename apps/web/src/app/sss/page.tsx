@@ -119,24 +119,14 @@ export default function FaqPage() {
         description="Karşılaştırmanın nasıl çalıştığı, komisyon modeli ve iade süreçleri."
         breadcrumb="SSS"
       >
-        <div className="space-y-3">
+        <dl className="space-y-8">
           {FAQS.map((faq) => (
-            <details key={faq.q} className="card group p-5">
-              <summary className="cursor-pointer list-none font-semibold text-fg marker:hidden">
-                <span className="flex items-start justify-between gap-4">
-                  {faq.q}
-                  <span
-                    aria-hidden="true"
-                    className="mt-1 shrink-0 text-muted transition-transform group-open:rotate-45"
-                  >
-                    +
-                  </span>
-                </span>
-              </summary>
-              <p className="mt-3 text-sm leading-relaxed text-muted">{faq.a}</p>
-            </details>
+            <div key={faq.q}>
+              <dt className="font-semibold text-fg">{faq.q}</dt>
+              <dd className="mt-2 text-sm leading-relaxed text-muted">{faq.a}</dd>
+            </div>
           ))}
-        </div>
+        </dl>
 
         <h2>Sorunuz burada yok mu?</h2>
         <p>
