@@ -174,11 +174,19 @@ function Tooltip({
 
   return (
     <div
-      className="pointer-events-none absolute -top-2 z-10 -translate-y-full rounded-xl border border-line bg-bg-elevated px-3 py-2 shadow-xl"
+      /*
+       * Kutu çizim alanının İÇİNDE, üst kenara yakın durur.
+       * Önceki hali `-top-2` + `-translate-y-full` ile grafiğin tamamen
+       * ÜSTÜNE çıkıyordu; panelde grafiğin hemen üstünde ciro ve komisyon
+       * rakamları olduğu için ipucu onların üzerine biniyor ve okunmalarını
+       * engelliyordu. Çubuklar tabandan yükseldiği için üst şerit genelde
+       * boştur; kutunun asıl yeri orası.
+       */
+      className="pointer-events-none absolute top-2 z-10 rounded-xl border border-line bg-bg-elevated px-3 py-2 shadow-xl"
       style={{
         left: `${ratio * 100}%`,
         // Kenarlarda kutunun taşmasını önlemek için hizalama kaydırılır.
-        transform: `translate(${ratio < 0.15 ? '0' : ratio > 0.85 ? '-100%' : '-50%'}, -100%)`,
+        transform: `translateX(${ratio < 0.15 ? '0' : ratio > 0.85 ? '-100%' : '-50%'})`,
       }}
       role="status"
     >
