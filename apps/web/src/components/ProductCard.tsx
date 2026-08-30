@@ -60,7 +60,7 @@ export function ProductCard({ result }: { result: SearchResult }) {
             </p>
           )}
 
-          {result.bestVendorName && (
+          {result.bestVendorName && !/^örnek\b/i.test(result.bestVendorName) && (
             <p className="mt-2 flex items-center gap-1.5 text-[11px] text-muted">
               <StoreIcon className="h-3.5 w-3.5" />
               {result.bestVendorName}
