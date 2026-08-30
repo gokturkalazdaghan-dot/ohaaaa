@@ -31,6 +31,9 @@ function canonicalHost(): string | null {
     const host = new URL(siteUrl).host;
     // Yerel geliştirmede yönlendirme istemeyiz.
     if (host.startsWith('localhost') || host.startsWith('127.0.0.1')) return null;
+    // Public canonical is www. Vercel already 308s apex → www; returning the
+    // apex here made Next 308 www → apex and created a redirect loop.
+    if (host === 'ohaaaa.com' || host === 'www.ohaaaa.com') return 'www.ohaaaa.com';
     return host;
   } catch {
     return null;
