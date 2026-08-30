@@ -5,6 +5,23 @@ Alan adı alındıktan sonra sırayla yapılacaklar. Tahmini süre: **2–3 saat
 
 ---
 
+## Hızlı yol — tek komut
+
+Supabase projesini tarayıcıda açtıktan sonra aşağıdaki komut; migration'ları
+uygular, anahtarların doğru yuvaya girdiğini doğrular, her tabloda RLS'in açık
+olduğunu kontrol eder, Vercel ortam değişkenlerini yazar, üretime dağıtır ve
+canlı siteyi denetler:
+
+```bash
+./scripts/setup-production.sh
+```
+
+Betik `supabase/seed.sql`'i **üretime uygulamaz** — o dosya uydurma satıcı ve
+uydurma fiyat içerir. Aşağıdaki bölümler aynı işi elle yapmak isteyenler ve
+betiğin ne yaptığını anlamak isteyenler içindir.
+
+---
+
 ## 0. Yayın öncesi kilidi
 
 Site, `NEXT_PUBLIC_LAUNCH_STATE` ayarlanmadığı sürece **arama motorlarına
@@ -141,8 +158,14 @@ Vercel → Project → Settings → **Domains** → `ohaaaa.com` ekleyin. Panel 
 girmeniz gereken **tam değerleri** gösterir; buradaki isimler değişebileceği
 için **panelin verdiği değeri esas alın**.
 
-Aynı ekranda `www.ohaaaa.com`'u da ekleyip **Redirect to ohaaaa.com (308)**
-seçeneğini işaretleyin.
+Aynı ekranda `www.ohaaaa.com`'u da **ekleyin** (yönlendirme seçeneğini
+işaretlemeniz şart değil).
+
+`www` → çıplak yönlendirmesi artık `apps/web/next.config.ts` içinde tanımlı ve
+`NEXT_PUBLIC_SITE_URL`'den türetiliyor: kanonik adres www'suzsa www'lu istekler
+308 ile çıplak alan adına gider, kanonik adres www'luysa yön tersine döner.
+Panel ayarına güvenmiyoruz çünkü panel ayarı depoda görünmez, gözden kaçar ve
+başka bir ortama taşınınca gelmez.
 
 ### 3.2 E-posta
 
