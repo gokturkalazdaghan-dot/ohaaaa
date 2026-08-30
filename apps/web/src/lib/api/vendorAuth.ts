@@ -21,12 +21,29 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { ApiScope } from '@ohaaaa/shared';
-import { extractPrefix, hashApiKey, safeCompareHash } from '@ohaaaa/shared/api-key';
+import { decideApiKeyAccess, extractPrefix } from '@ohaaaa/shared/api-key';
 
 import { getServiceClient } from '@/lib/supabase/service';
 
-/** Var olmayan anahtarlarda karşılaştırma yapmak için kullanılan kukla özet. */
-const DUMMY_HASH = hashApiKey('ohaaaa-nonexistent-key-placeholder');
+/**
+ * Reddedilme sebebine karşılık gelen kullanıcı mesajı.
+ *
+ * Kararın KENDİSİ `decideApiKeyAccess` içinde, saf ve testli. Burada yalnızca
+ * insana ne söyleyeceğimiz var. İkisinin ayrı olması, mesaj değiştirmenin
+ * yanlışlıkla güvenlik kuralını değiştirmesini imkânsız kılar.
+ */
+const DENIAL_MESSAGE: Record<string, string> = {
+  malformed: 'API anahtarının biçimi geçersiz.',
+  not_found: 'API anahtarı geçersiz.',
+  // Bilinçli olarak not_found ile AYNI mesaj: hangi öneklerin var olduğunu
+  // sızdırmamak için "yok" ile "yanlış" dışarıdan ayırt edilemez.
+  mismatch: 'API anahtarı geçersiz.',
+  revoked: 'Bu API anahtarı iptal edilmiş.',
+  expired: 'Bu API anahtarının süresi dolmuş.',
+  vendor_pending: 'Mağaza başvurunuz henüz onaylanmadı.',
+  vendor_not_approved: 'Mağaza hesabınız aktif değil.',
+  missing_scope: 'Bu işlem için gereken yetki anahtarınızda yok.',
+};
 
 export interface AuthenticatedVendor {
   apiKeyId: string;
@@ -161,7 +178,7 @@ export async function authenticate(
   const prefix = extractPrefix(presented);
   if (!prefix) {
     // Biçim bozuksa veritabanına gitmeye gerek yok — ucuz erken çıkış.
-    throw new ApiError('unauthorized', 'API anahtarının biçimi geçersiz.');
+    throw new ApiError('unauthorized', DENIAL_MESSAGE.malformed!);
   }
 
   const supabase = getServiceClient();
@@ -183,37 +200,47 @@ export async function authenticate(
     ? ({ ...raw, vendor: (vendorRow as ApiKeyRow['vendor']) ?? null } as ApiKeyRow)
     : null;
 
-  // Kayıt yoksa bile karşılaştırma yapılır: "anahtar yok" ile "anahtar yanlış"
-  // yanıt süreleri ayrışmasın, aksi hâlde geçerli önekler zamanlamayla bulunur.
-  const expectedHash = record?.key_hash ?? DUMMY_HASH;
-  const matches = safeCompareHash(hashApiKey(presented), expectedHash);
+  /*
+   * Tüm güvenlik kararları TEK yerde: `decideApiKeyAccess`. Saf bir fonksiyon
+   * olduğu için tamamı testlenmiş durumda (sabit zamanlı karşılaştırma, iptal,
+   * süre, mağaza onayı, yetki ve bunların SIRASI).
+   *
+   * Kuralları burada tekrar yazmak, iki kopyanın zamanla ayrışması demekti;
+   * kimlik doğrulamada ayrışan bir kopya sessiz bir açık olur.
+   */
+  const decision = decideApiKeyAccess({
+    presented,
+    record: record
+      ? {
+          keyHash: record.key_hash,
+          scopes: record.scopes ?? [],
+          revokedAt: record.revoked_at,
+          expiresAt: record.expires_at,
+          vendorStatus: record.vendor?.status ?? null,
+        }
+      : null,
+    requiredScope,
+  });
 
-  if (!record || !matches) {
-    throw new ApiError('unauthorized', 'API anahtarı geçersiz.');
-  }
+  if (!decision.ok) {
+    const details =
+      decision.reason === 'missing_scope'
+        ? { required: requiredScope, granted: record?.scopes ?? [] }
+        : undefined;
 
-  if (record.revoked_at !== null) {
-    throw new ApiError('unauthorized', 'Bu API anahtarı iptal edilmiş.');
-  }
-
-  if (record.expires_at !== null && new Date(record.expires_at).getTime() <= Date.now()) {
-    throw new ApiError('unauthorized', 'Bu API anahtarının süresi dolmuş.');
-  }
-
-  if (!record.vendor || record.vendor.status !== 'approved') {
     throw new ApiError(
-      'forbidden',
-      'Mağaza hesabınız henüz onaylanmamış ya da askıya alınmış.',
+      decision.code,
+      DENIAL_MESSAGE[decision.reason] ?? 'API anahtarı geçersiz.',
+      details,
     );
   }
 
-  const scopes = (record.scopes ?? []) as ApiScope[];
-  if (!scopes.includes(requiredScope)) {
-    throw new ApiError('forbidden', `Bu işlem için '${requiredScope}' yetkisi gerekiyor.`, {
-      required: requiredScope,
-      granted: scopes,
-    });
+  // decision.ok true ise kayıt ve mağaza kesin doludur; tip daraltması için.
+  if (!record?.vendor) {
+    throw new ApiError('unauthorized', DENIAL_MESSAGE.not_found!);
   }
+
+  const scopes = decision.scopes as ApiScope[];
 
   const rateHeaders = await enforceRateLimit(supabase, record.id, record.rate_limit_per_minute);
 

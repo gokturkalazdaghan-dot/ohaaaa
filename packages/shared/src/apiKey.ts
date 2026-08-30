@@ -87,3 +87,118 @@ export function safeCompareHash(a: string, b: string): boolean {
 
   return timingSafeEqual(bufferA, bufferB);
 }
+
+// ---------------------------------------------------------------------------
+// Yetkilendirme kararı
+// ---------------------------------------------------------------------------
+/**
+ * Bir anahtar kaydının doğrulama için gereken alanları.
+ *
+ * Veritabanı satırının tamamı değil, KARARI ETKİLEYEN alanlar. Böylece karar
+ * mantığı depodan bağımsız kalır ve gerçek bir veritabanı olmadan sınanabilir.
+ */
+export interface ApiKeyDecisionInput {
+  /** İstemcinin sunduğu ham anahtar. */
+  presented: string;
+  /** Önekle bulunan kayıt; bulunamadıysa null. */
+  record: {
+    keyHash: string;
+    scopes: string[];
+    revokedAt: string | null;
+    expiresAt: string | null;
+    vendorStatus: string | null;
+  } | null;
+  /**
+   * İstenen yetki.
+   *
+   * İsteğe bağlı: Express katmanı kimlik doğrulamayı ve yetki kontrolünü iki
+   * ayrı middleware'de yapar (yetki route'a göre değişir). Verilmezse yetki
+   * adımı atlanır, geri kalan tüm kontroller aynen uygulanır.
+   */
+  requiredScope?: string;
+  /** Şimdi (test edilebilirlik için dışarıdan verilir). */
+  now?: Date;
+}
+
+export type ApiKeyDecision =
+  | { ok: true; scopes: string[] }
+  | { ok: false; code: 'unauthorized' | 'forbidden'; reason: ApiKeyDenialReason };
+
+export type ApiKeyDenialReason =
+  | 'malformed'
+  | 'not_found'
+  | 'mismatch'
+  | 'revoked'
+  | 'expired'
+  | 'vendor_pending'
+  | 'vendor_not_approved'
+  | 'missing_scope';
+
+/**
+ * Bir API isteğine izin verilip verilmeyeceğine karar verir.
+ *
+ * SAF FONKSİYON: ağ yok, saat okuması dışarıdan. Kimlik doğrulamanın tüm
+ * güvenlik kararları burada toplandığı için hepsi testlenebilir — bu kod
+ * yolu paranın geçtiği yol ve daha önce hiç testi yoktu.
+ *
+ * SIRA ÖNEMLİ: özet karşılaştırması, kayıt BULUNAMASA BİLE yapılır. Aksi
+ * hâlde "önek yok" hızlı, "önek var ama gizli kısım yanlış" yavaş dönerdi;
+ * saldırgan yanıt süresini ölçerek geçerli önekleri ayıklayabilirdi.
+ */
+export function decideApiKeyAccess(input: ApiKeyDecisionInput): ApiKeyDecision {
+  const now = input.now ?? new Date();
+
+  if (extractPrefix(input.presented) === null) {
+    return { ok: false, code: 'unauthorized', reason: 'malformed' };
+  }
+
+  // Kayıt yoksa kukla bir özetle karşılaştırılır: zamanlama farkı oluşmasın.
+  const expectedHash = input.record?.keyHash ?? DUMMY_HASH;
+  const matches = safeCompareHash(hashApiKey(input.presented), expectedHash);
+
+  if (!input.record) {
+    return { ok: false, code: 'unauthorized', reason: 'not_found' };
+  }
+
+  if (!matches) {
+    return { ok: false, code: 'unauthorized', reason: 'mismatch' };
+  }
+
+  if (input.record.revokedAt !== null) {
+    return { ok: false, code: 'unauthorized', reason: 'revoked' };
+  }
+
+  if (
+    input.record.expiresAt !== null &&
+    new Date(input.record.expiresAt).getTime() <= now.getTime()
+  ) {
+    return { ok: false, code: 'unauthorized', reason: 'expired' };
+  }
+
+  // Askıya alınmış ya da henüz onaylanmamış bir mağazanın anahtarı geçerli
+  // olsa bile iş göremez: onay durumu anahtardan bağımsız bir kapıdır.
+  //
+  // "Bekliyor" ile "aktif değil" AYRILIR. Anahtarın sahibi zaten o mağazadır,
+  // yani kendi durumunu bilmeye hakkı var; sızıntı değil. Ayrım pratik bir
+  // fark yaratır: başvurusu bekleyen satıcının yapacağı şey beklemek,
+  // askıya alınmışın yapacağı şey bize ulaşmaktır.
+  if (input.record.vendorStatus === 'pending') {
+    return { ok: false, code: 'forbidden', reason: 'vendor_pending' };
+  }
+
+  if (input.record.vendorStatus !== 'approved') {
+    return { ok: false, code: 'forbidden', reason: 'vendor_not_approved' };
+  }
+
+  if (input.requiredScope !== undefined && !input.record.scopes.includes(input.requiredScope)) {
+    return { ok: false, code: 'forbidden', reason: 'missing_scope' };
+  }
+
+  return { ok: true, scopes: input.record.scopes };
+}
+
+/**
+ * Var olmayan anahtarlarda karşılaştırma yapmak için kullanılan kukla özet.
+ * Değeri önemsiz; önemli olan HER YOLDA bir karşılaştırma yapılması.
+ */
+const DUMMY_HASH = hashApiKey('ohaaaa-nonexistent-key-placeholder');

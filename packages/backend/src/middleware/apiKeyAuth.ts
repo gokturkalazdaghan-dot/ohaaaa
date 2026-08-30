@@ -18,7 +18,7 @@ import type { NextFunction, Request, Response } from 'express';
 
 import type { ApiScope } from '@ohaaaa/shared';
 
-import { extractPrefix, hashApiKey, safeCompareHash } from '@ohaaaa/shared/api-key';
+import { decideApiKeyAccess, extractPrefix } from '@ohaaaa/shared/api-key';
 import { forbidden, unauthorized } from '../lib/errors.js';
 import type { AuthenticatedVendor } from './context.js';
 
@@ -50,8 +50,24 @@ export interface ApiKeyStore {
   touch(apiKeyId: string, ip: string | null): Promise<void>;
 }
 
-/** Var olmayan anahtarlarda karşılaştırma yapmak için kullanılan kukla özet. */
-const DUMMY_HASH = hashApiKey('ohaaaa-nonexistent-key-placeholder');
+/**
+ * Reddedilme sebebine karşılık gelen kullanıcı mesajı.
+ *
+ * Kararın kendisi `decideApiKeyAccess` içinde ve testli; burada yalnızca
+ * insana ne söyleneceği var.
+ */
+const DENIAL_MESSAGE: Record<string, string> = {
+  malformed: 'API anahtarının biçimi geçersiz.',
+  not_found: 'API anahtarı geçersiz.',
+  // "yok" ile "yanlış" bilinçli olarak aynı mesajı verir: hangi öneklerin
+  // var olduğunu sızdırmamak için.
+  mismatch: 'API anahtarı geçersiz.',
+  revoked: 'Bu API anahtarı iptal edilmiş.',
+  expired: 'Bu API anahtarının süresi dolmuş.',
+  vendor_pending: 'Taşeron başvurunuz henüz onaylanmadı.',
+  vendor_not_approved: 'Taşeron hesabınız aktif değil.',
+  missing_scope: 'Bu işlem için gereken yetki anahtarınızda yok.',
+};
 
 export function apiKeyAuth(store: ApiKeyStore) {
   return async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
@@ -73,32 +89,34 @@ export function apiKeyAuth(store: ApiKeyStore) {
 
       const record = await store.findByPrefix(prefix);
 
-      // Kayıt yoksa bile karşılaştırma yapılır: zamanlama farkı oluşmasın.
-      const expectedHash = record?.key_hash ?? DUMMY_HASH;
-      const matches = safeCompareHash(hashApiKey(presented), expectedHash);
+      /*
+       * Güvenlik kararlarının TAMAMI paylaşılan, saf ve testli fonksiyonda.
+       * Web uygulamasındaki route handler'ları da aynı fonksiyonu çağırır;
+       * iki kopya olsaydı zamanla ayrışır ve ayrışma sessiz bir açık olurdu.
+       *
+       * Yetki (scope) burada VERİLMEZ: bu katman yalnızca kimliği doğrular,
+       * yetki route'a göre `requireScope` ile ayrıca zorlanır.
+       */
+      const decision = decideApiKeyAccess({
+        presented,
+        record: record
+          ? {
+              keyHash: record.key_hash,
+              scopes: record.scopes ?? [],
+              revokedAt: record.revoked_at,
+              expiresAt: record.expires_at,
+              vendorStatus: record.vendor?.status ?? null,
+            }
+          : null,
+      });
 
-      if (!record || !matches) {
+      if (!decision.ok) {
+        const message = DENIAL_MESSAGE[decision.reason] ?? 'API anahtarı geçersiz.';
+        throw decision.code === 'forbidden' ? forbidden(message) : unauthorized(message);
+      }
+
+      if (!record?.vendor) {
         throw unauthorized('API anahtarı geçersiz.');
-      }
-
-      if (record.revoked_at !== null) {
-        throw unauthorized('Bu API anahtarı iptal edilmiş.');
-      }
-
-      if (record.expires_at !== null && new Date(record.expires_at).getTime() <= Date.now()) {
-        throw unauthorized('Bu API anahtarının süresi dolmuş.');
-      }
-
-      if (!record.vendor) {
-        throw unauthorized('Anahtara bağlı taşeron kaydı bulunamadı.');
-      }
-
-      if (record.vendor.status !== 'approved') {
-        throw forbidden(
-          record.vendor.status === 'pending'
-            ? 'Taşeron başvurunuz henüz onaylanmadı.'
-            : 'Taşeron hesabınız aktif değil.',
-        );
       }
 
       const vendor: AuthenticatedVendor = {

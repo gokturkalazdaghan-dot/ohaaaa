@@ -1,7 +1,13 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 
-import { extractPrefix, generateApiKey, hashApiKey, safeCompareHash } from './apiKey.js';
+import {
+  decideApiKeyAccess,
+  extractPrefix,
+  generateApiKey,
+  hashApiKey,
+  safeCompareHash,
+} from './apiKey.js';
 
 test('üretilen anahtar beklenen biçimdedir', () => {
   const key = generateApiKey('live');
@@ -55,3 +61,155 @@ test('safeCompareHash farklı uzunlukta hata fırlatmaz', () => {
   assert.equal(safeCompareHash('abc', 'abd'), false);
   assert.equal(safeCompareHash('', ''), true);
 });
+
+// ---------------------------------------------------------------------------
+// decideApiKeyAccess — kimlik doğrulama kararları
+// ---------------------------------------------------------------------------
+// decideApiKeyAccess testleri
+{
+  const key = generateApiKey('live');
+
+  /** Geçerli bir kayıt; testler tek alanı değiştirip sapmayı ölçer. */
+  function record(overrides: Partial<Parameters<typeof decideApiKeyAccess>[0]['record'] & object> = {}) {
+    return {
+      keyHash: key.hash,
+      scopes: ['products:read', 'products:write'],
+      revokedAt: null,
+      expiresAt: null,
+      vendorStatus: 'approved',
+      ...overrides,
+    };
+  }
+
+  test('decideApiKeyAccess: geçerli anahtara izin verir', () => {
+    const decision = decideApiKeyAccess({
+      presented: key.plaintext,
+      record: record(),
+      requiredScope: 'products:write',
+    });
+    assert.equal(decision.ok, true);
+  });
+
+  test('decideApiKeyAccess: biçimi bozuk anahtarda veritabanına hiç gitmeden reddeder', () => {
+    const decision = decideApiKeyAccess({
+      presented: 'bozuk-anahtar',
+      record: record(),
+      requiredScope: 'products:read',
+    });
+    assert.deepEqual(decision, { ok: false, code: 'unauthorized', reason: 'malformed' });
+  });
+
+  test('decideApiKeyAccess: kayıt bulunamazsa reddeder', () => {
+    const decision = decideApiKeyAccess({
+      presented: key.plaintext,
+      record: null,
+      requiredScope: 'products:read',
+    });
+    assert.deepEqual(decision, { ok: false, code: 'unauthorized', reason: 'not_found' });
+  });
+
+  test('decideApiKeyAccess: özet tutmuyorsa reddeder', () => {
+    const other = generateApiKey('live');
+    const decision = decideApiKeyAccess({
+      presented: key.plaintext,
+      record: record({ keyHash: other.hash }),
+      requiredScope: 'products:read',
+    });
+    assert.deepEqual(decision, { ok: false, code: 'unauthorized', reason: 'mismatch' });
+  });
+
+  test('decideApiKeyAccess: iptal edilmiş anahtarı reddeder', () => {
+    const decision = decideApiKeyAccess({
+      presented: key.plaintext,
+      record: record({ revokedAt: '2026-01-01T00:00:00Z' }),
+      requiredScope: 'products:read',
+    });
+    assert.deepEqual(decision, { ok: false, code: 'unauthorized', reason: 'revoked' });
+  });
+
+  test('decideApiKeyAccess: süresi dolmuş anahtarı reddeder', () => {
+    const decision = decideApiKeyAccess({
+      presented: key.plaintext,
+      record: record({ expiresAt: '2026-01-01T00:00:00Z' }),
+      requiredScope: 'products:read',
+      now: new Date('2026-06-01T00:00:00Z'),
+    });
+    assert.deepEqual(decision, { ok: false, code: 'unauthorized', reason: 'expired' });
+  });
+
+  test('decideApiKeyAccess: süresi HENÜZ dolmamış anahtarı kabul eder (sınır durumu)', () => {
+    const decision = decideApiKeyAccess({
+      presented: key.plaintext,
+      record: record({ expiresAt: '2026-06-01T00:00:01Z' }),
+      requiredScope: 'products:read',
+      now: new Date('2026-06-01T00:00:00Z'),
+    });
+    assert.equal(decision.ok, true);
+  });
+
+  test('decideApiKeyAccess: onaylanmamış mağazayı, anahtar geçerli olsa bile reddeder', () => {
+    for (const status of ['suspended', 'rejected', null]) {
+      const decision = decideApiKeyAccess({
+        presented: key.plaintext,
+        record: record({ vendorStatus: status }),
+        requiredScope: 'products:read',
+      });
+      assert.deepEqual(
+        decision,
+        { ok: false, code: 'forbidden', reason: 'vendor_not_approved' },
+        `durum: ${status}`,
+      );
+    }
+  });
+
+  /*
+   * Bekleyen başvuru ile askıya alınmış hesap AYRI sebep döner: ikisinde
+   * satıcının yapması gereken şey farklı (beklemek / bize ulaşmak).
+   */
+  test('decideApiKeyAccess: bekleyen başvuruyu askıya alınmıştan ayırır', () => {
+    const decision = decideApiKeyAccess({
+      presented: key.plaintext,
+      record: record({ vendorStatus: 'pending' }),
+      requiredScope: 'products:read',
+    });
+    assert.deepEqual(decision, { ok: false, code: 'forbidden', reason: 'vendor_pending' });
+  });
+
+  test('decideApiKeyAccess: yetki verilmezse yetki adımı atlanır, gerisi uygulanır', () => {
+    // Express katmanı kimliği ve yetkiyi ayrı adımlarda kontrol eder.
+    const allowed = decideApiKeyAccess({ presented: key.plaintext, record: record() });
+    assert.equal(allowed.ok, true);
+
+    const revoked = decideApiKeyAccess({
+      presented: key.plaintext,
+      record: record({ revokedAt: '2026-01-01T00:00:00Z' }),
+    });
+    assert.equal(revoked.ok, false);
+  });
+
+  test('decideApiKeyAccess: yetkisi olmayan işlemi reddeder', () => {
+    const decision = decideApiKeyAccess({
+      presented: key.plaintext,
+      record: record({ scopes: ['products:read'] }),
+      requiredScope: 'products:write',
+    });
+    assert.deepEqual(decision, { ok: false, code: 'forbidden', reason: 'missing_scope' });
+  });
+
+  /*
+   * İptal, süre ve mağaza durumu kontrolleri özet karşılaştırmasından SONRA
+   * gelmeli. Önce gelselerdi, yanlış bir anahtarla bile "bu anahtar iptal
+   * edilmiş" cevabı alınabilir; bu, o önekte bir anahtarın VAR OLDUĞUNU
+   * doğrulayan bir sızıntı olurdu.
+   */
+  test('decideApiKeyAccess: yanlış anahtarla iptal/süre durumunu sızdırmaz', () => {
+    const other = generateApiKey('live');
+    const decision = decideApiKeyAccess({
+      presented: key.plaintext,
+      record: record({ keyHash: other.hash, revokedAt: '2026-01-01T00:00:00Z' }),
+      requiredScope: 'products:read',
+    });
+    assert.equal(decision.ok, false);
+    assert.equal(decision.ok === false && decision.reason, 'mismatch');
+  });
+}
