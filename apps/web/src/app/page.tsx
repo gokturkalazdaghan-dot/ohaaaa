@@ -13,6 +13,11 @@ export default async function HomePage() {
     searchProducts({ sort: 'offers', limit: 8 }),
   ]);
 
+  /* Katalogda hicbir urun yoksa sayfa hero'dan sonra bosluga dusuyordu.
+     O durumda ziyaretciye ne oldugunu, saticiya ne yapmasi gerektigini
+     soyleyen bir lansman bolumu gosterilir. Uydurma urun konmaz. */
+  const catalogEmpty = trending.length === 0 && deals.length === 0;
+
   return (
     <div className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
       {/* --- Giris -----------------------------------------------------------
@@ -42,6 +47,8 @@ export default async function HomePage() {
           </nav>
         )}
       </section>
+
+      {catalogEmpty && <LaunchState />}
 
       {/* --- Firsatlar ----------------------------------------------------- */}
       {deals.length > 0 && (
@@ -141,3 +148,67 @@ function SectionHead({
     </div>
   );
 }
+
+/*
+ * Lansman durumu.
+ *
+ * Katalog bos oldugunda gorunur. Iki isi var: ziyaretciye durumu durustce
+ * soylemek (uydurma urun/fiyat koymadan) ve asil ihtiyac olan tarafi -
+ * saticiyi - basvuruya goturmek. Katalog magazalardan gelir; bu yuzden bos
+ * bir ana sayfanin en degerli kullanimi satici kazanmaktir.
+ */
+function LaunchState() {
+  return (
+    <section className="mt-2" aria-labelledby="lansman">
+      <div className="rounded-2xl border border-line bg-surface p-6 sm:p-8">
+        <p className="text-sm font-semibold uppercase tracking-wide text-brand">Yeni açıldı</p>
+        <h2 id="lansman" className="mt-3 text-2xl font-extrabold tracking-tight text-fg sm:text-3xl">
+          Katalog satıcılarla birlikte dolacak
+        </h2>
+        <p className="mt-4 max-w-2xl leading-relaxed text-muted">
+          Şu anda yayında ürün yok. Gerçek satıcıdan gelmeyen hiçbir fiyatı
+          göstermiyoruz — örnek ürün ya da temsili fiyat koymuyoruz. İlk
+          mağazalar bağlandıkça karşılaştırma burada başlayacak.
+        </p>
+        <div className="mt-7 flex flex-wrap items-center gap-3">
+          <Link
+            href="/tasoron"
+            className="rounded-full bg-brand px-6 py-3 text-sm font-bold text-[#fffaf5] transition-colors hover:bg-brand-strong"
+          >
+            Mağazanızı ücretsiz yayınlayın
+          </Link>
+          <Link
+            href="/tasoron/marka"
+            className="rounded-full border border-line px-6 py-3 text-sm font-semibold text-fg transition-colors hover:border-brand/45"
+          >
+            Marka kitini indir
+          </Link>
+        </div>
+      </div>
+
+      <ul className="mt-6 grid gap-4 sm:grid-cols-3">
+        {LAUNCH_POINTS.map((point) => (
+          <li key={point.title} className="rounded-2xl border border-line bg-surface p-5">
+            <p className="font-semibold text-fg">{point.title}</p>
+            <p className="mt-2 text-sm leading-relaxed text-muted">{point.body}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+const LAUNCH_POINTS = [
+  {
+    title: 'Listeleme ücretsiz',
+    body: 'Aylık ücret, kurulum bedeli ya da satış komisyonu yok.',
+  },
+  {
+    title: 'Karşılığı ambalajınız',
+    body: 'Gönderilerinizde Ohaaaa koli bandını ve armasını kullanırsınız. Baskı dosyaları bizden.',
+  },
+  {
+    title: 'Fiyat sizin',
+    body: 'Fiyat ve stok sizin sisteminizden gelir; biz yalnızca kargo dahil toplamı karşılaştırırız.',
+  },
+];
