@@ -15,9 +15,21 @@
  * bilinçli olarak muhafazakârdır — yalnızca tam imza eşleşmesi kabul edilir.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 import type { ProductFeedItem } from '@ohaaaa/shared';
 
-import type { ServiceClient } from '../lib/supabase.js';
+/*
+ * Bu dosya hem Express API'si hem de web uygulamasindaki route handler'lari
+ * tarafindan kullanilir. Bu yuzden pakete ozel HICBIR seye bagli degildir:
+ * yalnizca Supabase istemci tipine ve paylasilan sema tiplerine.
+ *
+ * Neden tek kopya? Kanonik urun eslestirmesi ("hangi iki teklif ayni
+ * urundur") sitenin en kritik kuralidir. Iki kopya zamanla ayrisir ve
+ * ayrisma sessizdir: bir yol iki farkli urunu birlestirir, kullanici
+ * yanlis urunu satin alir.
+ */
+type ServiceClient = SupabaseClient;
 
 export interface SyncResult {
   received: number;

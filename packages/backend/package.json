@@ -22,5 +22,15 @@
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.2",
     "typescript": "^5.9.2"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
+    "./product-sync": {
+      "types": "./dist/services/productSync.d.ts",
+      "default": "./dist/services/productSync.js"
+    }
   }
 }

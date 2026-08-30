@@ -89,6 +89,22 @@ function withNonce(request: NextRequest, nonce: string): Headers {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  /*
+   * Taşeron API'si (/api/v1/*) bu katmanı ATLAR.
+   *
+   * O uç noktalar çerezle değil `x-api-key` ile kimlik doğrular. Buradan
+   * geçirmek her istekte Supabase'e fazladan bir jeton doğrulama turu
+   * eklerdi — 500 ürünlük bir beslemede bu, saf gecikme ve boşa kota.
+   * CSP başlığı da JSON yanıtı için anlamsız.
+   *
+   * Atlamak güvenliği zayıflatmaz: bu yollarda oturum çerezi hiç
+   * okunmaz, yetkilendirmenin tamamı route handler'ın içindedir.
+   */
+  if (pathname.startsWith('/api/v1/')) {
+    return NextResponse.next();
+  }
+
   const nonce = makeNonce();
 
   // Supabase yapılandırılmamışsa (demo modu) auth akışı yoktur; panel

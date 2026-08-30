@@ -95,10 +95,22 @@ function resolveSiteUrl(): string {
 
 export const siteUrl = resolveSiteUrl();
 
-/** Taşeron API'sinin adresi (panelde örnek kod bloklarında gösterilir). */
+/**
+ * Taşeron API'sinin adresi (dokümantasyondaki örnek kod bloklarında geçer).
+ *
+ * API artık SİTENİN KENDİSİNDE sunuluyor (/api/v1/*), ayrı bir serviste
+ * değil. Bu yüzden varsayılan sitenin kendi adresidir.
+ *
+ * Eski varsayılan 'http://localhost:4000' idi ve ortam değişkeni üretimde
+ * hiç ayarlanmamıştı: canlı dokümantasyon sayfası satıcılara kendi
+ * bilgisayarlarındaki bir adresi gösteriyordu. Yani hiçbir satıcı ürün
+ * gönderemezdi — iş modelinin tamamı bu uca bağlı olduğu hâlde.
+ *
+ * Değişken yine de destekleniyor: API bir gün ayrı bir alan adına
+ * taşınırsa dokümantasyon tek ayarla takip eder.
+ */
 export const apiBaseUrl =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.trim().replace(/\/+$/, '') ??
-  'http://localhost:4000';
+  process.env.NEXT_PUBLIC_API_BASE_URL?.trim().replace(/\/+$/, '') || siteUrl;
 
 // --- SEO ve ölçümleme ------------------------------------------------------
 /** Google Analytics ölçüm kimliği (G-XXXXXXX). Boşsa betik hiç yüklenmez. */
