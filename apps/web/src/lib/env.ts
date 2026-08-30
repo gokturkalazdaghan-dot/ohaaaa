@@ -88,3 +88,29 @@ export const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? '';
  */
 export const searchConsoleVerification =
   process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION ?? '';
+
+// --- Yayın durumu ----------------------------------------------------------
+/**
+ * Sitenin yayın aşaması.
+ *
+ *   prelaunch : Site erişilebilir ama arama motorlarına KAPALI.
+ *   live      : Tam yayın.
+ *
+ * NEDEN VAR?
+ * Yasal metinler henüz kurulmamış bir işletmeyi adres gösteriyorsa ve
+ * Google bu hâliyle indekslerse, sonradan düzeltilse bile o sürüm önbellekte
+ * ve arşivlerde kalır. Ayrıca 6563 sayılı Kanun, e-ticaret hizmet
+ * sağlayıcısının kimlik bilgilerini yayımlamasını zorunlu kılar — kayıtlı
+ * bir işletme yokken bu bilgi verilemez.
+ *
+ * VARSAYILAN 'prelaunch'tır — bilinçli olarak GÜVENLİ tarafta hata yapar.
+ * Değişkeni ayarlamayı unutursanız site indekslenmez; bunu her sayfadaki
+ * şeritten hemen görürsünüz. Tersi (unutunca canlıya çıkmak) sessizce
+ * gerçekleşir ve geri alınamaz.
+ */
+export type LaunchState = 'prelaunch' | 'live';
+
+export const launchState: LaunchState =
+  process.env.NEXT_PUBLIC_LAUNCH_STATE === 'live' ? 'live' : 'prelaunch';
+
+export const isPrelaunch = launchState === 'prelaunch';

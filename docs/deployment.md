@@ -5,7 +5,44 @@ Alan adı alındıktan sonra sırayla yapılacaklar. Tahmini süre: **2–3 saat
 
 ---
 
-## 0. Önce bu: kanonik adres kararı
+## 0. Yayın öncesi kilidi
+
+Site, `NEXT_PUBLIC_LAUNCH_STATE` ayarlanmadığı sürece **arama motorlarına
+kapalıdır** (`robots.txt` + `noindex` meta etiketi). Varsayılan bilinçli
+olarak `prelaunch`tır.
+
+**Neden:** Yasal metinler henüz kurulmamış bir işletmeyi adres gösteriyorsa ve
+Google bu hâliyle indekslerse, sonradan düzeltilse bile o sürüm önbellekte ve
+üçüncü taraf arşivlerde kalır. Ayrıca 6563 sayılı Kanun, e-ticaret hizmet
+sağlayıcısının kimlik bilgilerini yayımlamasını zorunlu kılar — kayıtlı bir
+işletme yokken bu bilgi verilemez.
+
+Bu aşamada site **erişilebilir**: bağlantıyı bilen herkes girebilir, test
+edebilirsiniz. Yalnızca indekslenmez.
+
+### `live`'a geçmeden önce tamamlanması gerekenler
+
+- [ ] İşletme kaydı yapıldı (vergi levhası alındı)
+- [ ] ETBİS kaydı tamamlandı, numara alındı
+- [ ] `/iletisim`, `/gizlilik`, `/kosullar` sayfalarındaki köşeli parantezli
+      alanlar dolduruldu
+- [ ] Yasal metinler bir hukukçu tarafından gözden geçirildi
+- [ ] Çalışan e-posta adresleri kuruldu (`destek@`, `kvkk@`, …)
+
+Hepsi tamamlandığında:
+
+```sh
+NEXT_PUBLIC_LAUNCH_STATE=live
+```
+
+ve **yeniden dağıtım** yapın (bu değer de derleme zamanında gömülür).
+
+> Şerit her sayfada görünür ve kapatılamaz. Bu bilinçlidir: şeridin varlığı,
+> hâlâ `prelaunch` modunda olduğunuzun tek görünür işaretidir.
+
+---
+
+## 0.5. Kanonik adres kararı
 
 `www.ohaaaa.com` mi, `ohaaaa.com` mı? **Birini seçin ve diğerini
 yönlendirin.** İkisi de yanıt verirse Google iki ayrı site görür, otoriteniz
@@ -57,6 +94,10 @@ Vercel → Project → Settings → **Environment Variables**. Üçü de
 ```sh
 # ZORUNLU — eksikse derleme kırılır (bilinçli)
 NEXT_PUBLIC_SITE_URL=https://ohaaaa.com
+
+# Yayın durumu. Ayarlanmazsa 'prelaunch' kabul edilir (arama motorlarına kapalı).
+# İşletme kaydı ve yasal metinler tamamlanana kadar böyle kalmalı.
+NEXT_PUBLIC_LAUNCH_STATE=prelaunch
 
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxx.supabase.co

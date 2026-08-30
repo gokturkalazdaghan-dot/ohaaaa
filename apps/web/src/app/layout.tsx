@@ -6,9 +6,10 @@ import { Footer } from '@/components/Footer';
 import { Header } from '@/components/Header';
 import { CartDrawer } from '@/components/CartDrawer';
 import { DemoBanner } from '@/components/DemoBanner';
+import { PrelaunchBanner } from '@/components/PrelaunchBanner';
 import { JsonLd } from '@/components/JsonLd';
 import { isDemoMode } from '@/data/catalog';
-import { gaMeasurementId, searchConsoleVerification, siteUrl } from '@/lib/env';
+import { gaMeasurementId, isPrelaunch, searchConsoleVerification, siteUrl } from '@/lib/env';
 
 import './globals.css';
 
@@ -29,12 +30,16 @@ export const metadata: Metadata = {
     title: 'Ohaaaa — Tüm mağazalar tek aramada',
     description: 'Kargo dahil en iyi toplam fiyatı gör, tek sepetten satın al.',
   },
+  // Yayın öncesinde robots.txt'ye ek olarak meta etiketiyle de kapatılır:
+  // robots.txt taramayı engeller, İNDEKSLEMEYİ değil. Bir sayfaya dışarıdan
+  // link verilmişse Google onu taramadan da indeksleyebilir; `noindex` bunu
+  // kesin olarak durdurur.
   robots: {
-    index: true,
-    follow: true,
+    index: !isPrelaunch,
+    follow: !isPrelaunch,
     googleBot: {
-      index: true,
-      follow: true,
+      index: !isPrelaunch,
+      follow: !isPrelaunch,
       // Arama sonucunda ürün görselinin ve daha uzun özetin çıkmasına izin ver.
       'max-image-preview': 'large',
       'max-snippet': -1,
@@ -132,6 +137,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           İçeriğe atla
         </a>
 
+        {isPrelaunch && <PrelaunchBanner />}
         {isDemoMode() && <DemoBanner />}
         <Header />
         <main id="icerik">{children}</main>

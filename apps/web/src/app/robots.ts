@@ -18,13 +18,16 @@
 
 import type { MetadataRoute } from 'next';
 
-import { siteUrl } from '@/lib/env';
+import { isPrelaunch, siteUrl } from '@/lib/env';
 
 export default function robots(): MetadataRoute.Robots {
   // Üretim dışı ortamların indekslenmesi, asıl siteyle mükerrer içerik üretir.
-  const isProduction = process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
+  const isProduction =
+    process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
 
-  if (!isProduction) {
+  // Yayın öncesi aşamada hiçbir sayfa taranmaz: yasal metinler henüz
+  // kurulmamış bir işletmeyi adres gösteriyor olabilir.
+  if (!isProduction || isPrelaunch) {
     return { rules: [{ userAgent: '*', disallow: '/' }] };
   }
 
