@@ -2,7 +2,6 @@ import Link from 'next/link';
 
 import { formatMoney } from '@ohaaaa/shared';
 
-import { ProductCard } from '@/components/ProductCard';
 import { getCategories, getFlashDeals, getVendors, searchProducts } from '@/data/catalog';
 
 export default async function HomePage() {
@@ -57,17 +56,29 @@ export default async function HomePage() {
 
       {trending.length > 0 && (
         <section className="mt-10 text-left">
-          <div className="flex items-baseline justify-between gap-4">
-            <h2 className="text-lg font-semibold">Ürünler</h2>
-            <Link href="/arama" className="text-sm text-brand hover:underline">
-              Tümü
+          <h2 className="text-lg font-semibold">
+            Ürünler{' '}
+            <Link href="/arama" className="text-sm font-normal text-brand hover:underline">
+              tümü
             </Link>
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          </h2>
+          <ul className="mt-3 divide-y divide-line border-y border-line">
             {trending.map((result) => (
-              <ProductCard key={result.groupId} result={result} />
+              <li key={result.groupId} className="py-3">
+                <Link href={`/urun/${result.slug}`} className="text-fg hover:underline">
+                  {result.title}
+                </Link>
+                {result.minPriceCents !== null && (
+                  <p className="mt-1 tabular text-sm font-semibold text-brand">
+                    {formatMoney(result.minPriceCents)}
+                    {result.offerCount > 1 ? (
+                      <span className="ml-2 font-normal text-muted">{result.offerCount} mağaza</span>
+                    ) : null}
+                  </p>
+                )}
+              </li>
             ))}
-          </div>
+          </ul>
         </section>
       )}
 
