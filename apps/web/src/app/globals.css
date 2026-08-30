@@ -215,6 +215,44 @@
     border-color: var(--brand-strong);
   }
 
+  /* Sayfalama dugmesi.
+     En kucuk kenari 44px: parmakla dokunulacak bir hedefin altina
+     inilmemesi gereken sinir (WCAG 2.5.5). Sayfa numaralari kucuk
+     oldugu icin bu, gorsel boyuttan bagimsiz olarak zorlanir. */
+  .page-btn {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    border: 1px solid var(--line);
+    border-radius: 0.75rem;
+    background-color: var(--surface);
+    padding: 0 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    transition: background-color 140ms ease, border-color 140ms ease;
+  }
+
+  .page-btn:hover {
+    background-color: var(--surface-hover);
+    border-color: var(--line-strong);
+  }
+
+  .page-btn-active {
+    background-color: var(--brand);
+    border-color: var(--brand);
+    color: #fffaf5;
+  }
+
+  .page-btn-active:hover {
+    background-color: var(--brand-strong);
+    border-color: var(--brand-strong);
+  }
+
   .skeleton {
     background-color: var(--surface-2);
   }

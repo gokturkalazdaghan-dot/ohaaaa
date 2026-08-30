@@ -7,8 +7,12 @@ import { formatMoney } from '@ohaaaa/shared';
 
 import { DataUnavailable } from '@/components/DataUnavailable';
 import { JsonLd } from '@/components/JsonLd';
+import { Pagination } from '@/components/Pagination';
 import { getCategories, searchProducts, type SortOption } from '@/data/catalog';
 import { siteUrl } from '@/lib/env';
+
+/** Sayfa basina urun. SQL tarafi 100'de sinirlar. */
+const PAGE_SIZE = 24;
 
 /**
  * Kategori sayfası (madde 5 — "servis sayfaları"nın pazar yeri karşılığı).
@@ -32,22 +36,44 @@ const SORT_OPTIONS: Array<{ value: SortOption; label: string }> = [
 
 type CategoryPageProps = {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ sirala?: string }>;
+  searchParams: Promise<{ sirala?: string; sayfa?: string }>;
 };
 
-export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
+/**
+ * URL'den sayfa numarasi okur.
+ *
+ * URL'e herkes her seyi yazabilir. Gecersiz deger sessizce 1'e duser;
+ * "?sayfa=abc" bir hata sayfasi degil, ilk sayfa gostermeli.
+ */
+function readPage(raw: string | undefined): number {
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1 || value > 10_000) return 1;
+  return value;
+}
+
+export async function generateMetadata({
+  params,
+  searchParams,
+}: CategoryPageProps): Promise<Metadata> {
   const { slug } = await params;
+  const page = readPage((await searchParams).sayfa);
   const categories = await getCategories();
   const category = categories.find((candidate) => candidate.slug === slug);
 
   if (!category) return { title: 'Kategori bulunamadı' };
 
+  // Sayfa 2+ KENDINI kanonik gosterir. Hepsini 1. sayfaya kanonikleseydik
+  // 2. sayfadaki urunler hicbir kanonik sayfada gecmez, yani dizinde
+  // gorunmez olurdu.
+  const canonical =
+    page > 1 ? `/kategori/${category.slug}?sayfa=${page}` : `/kategori/${category.slug}`;
+
   return {
-    title: `${category.name} Fiyatları`,
+    title: page > 1 ? `${category.name} Fiyatları — sayfa ${page}` : `${category.name} Fiyatları`,
     description:
       `${category.name} kategorisindeki ürünleri onlarca mağazada karşılaştırın. ` +
       `Kargo dahil en iyi toplam fiyatı görün, en ucuz satıcıyı tek bakışta bulun.`,
-    alternates: { canonical: `/kategori/${category.slug}` },
+    alternates: { canonical },
     openGraph: {
       title: `${category.name} Fiyatları · Ohaaaa`,
       description: `${category.name} kategorisinde mağaza fiyatlarını karşılaştırın.`,
@@ -57,7 +83,8 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
 
 export default async function CategoryPage({ params, searchParams }: CategoryPageProps) {
   const { slug } = await params;
-  const { sirala } = await searchParams;
+  const { sirala, sayfa } = await searchParams;
+  const page = readPage(sayfa);
 
   let categories: Awaited<ReturnType<typeof getCategories>>;
   let results: Awaited<ReturnType<typeof searchProducts>>;
@@ -76,7 +103,12 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
 
     if (!category) notFound();
 
-    results = await searchProducts({ categoryId: category.id, sort, limit: 48 });
+    results = await searchProducts({
+      categoryId: category.id,
+      sort,
+      limit: PAGE_SIZE,
+      offset: (page - 1) * PAGE_SIZE,
+    });
   } catch (error) {
     // notFound() bir hata fırlatarak çalışır; onu yutmamalıyız.
     if (isNotFoundError(error)) throw error;
@@ -92,12 +124,23 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     return <DataUnavailable />;
   }
 
-  const cheapest = results
+  const cheapest = results.results
     .map((result) => result.minPriceCents)
     .filter((price): price is number => price !== null)
     .sort((a, b) => a - b)[0];
 
-  const totalOffers = results.reduce((sum, result) => sum + result.offerCount, 0);
+  const totalOffers = results.results.reduce((sum, result) => sum + result.offerCount, 0);
+  const totalPages = Math.max(1, Math.ceil(results.totalCount / PAGE_SIZE));
+
+  /** Siralamayi koruyarak sayfa degistiren bag uretir. */
+  function categoryHref(changes: { sirala?: string; sayfa?: string }): string {
+    const merged = { sirala: sort, sayfa: String(page), ...changes };
+    const urlParams = new URLSearchParams();
+    if (merged.sirala && merged.sirala !== 'offers') urlParams.set('sirala', merged.sirala);
+    if (merged.sayfa && merged.sayfa !== '1') urlParams.set('sayfa', merged.sayfa);
+    const qs = urlParams.toString();
+    return qs ? `/kategori/${slug}?${qs}` : `/kategori/${slug}`;
+  }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
@@ -133,10 +176,12 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
         </h1>
 
         <p className="mt-3 max-w-2xl leading-relaxed text-muted">
-          {results.length > 0 ? (
+          {results.results.length > 0 ? (
             <>
-              {category.name} kategorisinde <strong className="text-fg">{results.length} ürünü</strong>{' '}
-              <strong className="text-fg">{totalOffers} mağaza teklifiyle</strong> karşılaştırıyoruz.
+              {category.name} kategorisinde{' '}
+              <strong className="text-fg">{results.totalCount} ürünü</strong> karşılaştırıyoruz
+              {totalPages > 1 && <> (sayfa {page}/{totalPages})</>}. Bu sayfada{' '}
+              <strong className="text-fg">{totalOffers} mağaza teklifi</strong> var.
               {cheapest !== undefined && (
                 <> Fiyatlar {formatMoney(cheapest)}’den başlıyor.</>
               )}{' '}
@@ -148,18 +193,14 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
         </p>
       </header>
 
-      {results.length > 0 && (
+      {results.results.length > 0 && (
         <>
           <nav aria-label="Sıralama" className="mt-6 flex flex-wrap items-center gap-2">
             <span className="mr-1 text-sm font-semibold text-muted">Sırala</span>
             {SORT_OPTIONS.map((option) => (
               <Link
                 key={option.value}
-                href={
-                  option.value === 'offers'
-                    ? `/kategori/${category.slug}`
-                    : `/kategori/${category.slug}?sirala=${option.value}`
-                }
+                href={categoryHref({ sirala: option.value, sayfa: '1' })}
                 aria-current={sort === option.value ? 'true' : undefined}
                 className={`chip ${sort === option.value ? 'chip-active' : ''}`}
               >
@@ -169,12 +210,18 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
           </nav>
 
           <ul className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-            {results.map((result) => (
+            {results.results.map((result) => (
               <li key={result.groupId}>
                 <ProductCard result={result} />
               </li>
             ))}
           </ul>
+
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            buildHref={(changes) => categoryHref({ sayfa: changes.sayfa })}
+          />
         </>
       )}
 

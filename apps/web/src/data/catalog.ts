@@ -30,6 +30,26 @@ import { demoCategories, demoFlashDeals, demoProductGroups, demoVendors } from '
 
 export type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'offers';
 
+/**
+ * Bir arama sayfasi: sonuclar VE filtreye uyan toplam.
+ *
+ * Toplam olmadan sayfalama yapilamaz - "sonraki sayfa var mi" sorusunun
+ * cevabi bilinmez. SQL bunu ayni sorgunun icinde pencere fonksiyonuyla
+ * dondurur; ikinci bir sayim sorgusu yazmiyoruz, cunku iki kopya filtre
+ * zamanla ayrisir ve sayfa sayisi sessizce yanlis cikar.
+ */
+export interface SearchPage {
+  results: SearchResult[];
+  totalCount: number;
+}
+
+/** Filtre seridinin gercek sinirlari (uydurma aralik gostermemek icin). */
+export interface SearchFacets {
+  minPriceCents: number | null;
+  maxPriceCents: number | null;
+  categories: Array<{ id: string; slug: string; name: string; count: number }>;
+}
+
 export interface SearchParams {
   query?: string;
   categoryId?: string;
@@ -73,7 +93,7 @@ function normalize(value: string): string {
 // ---------------------------------------------------------------------------
 // Arama
 // ---------------------------------------------------------------------------
-export async function searchProducts(params: SearchParams): Promise<SearchResult[]> {
+export async function searchProducts(params: SearchParams): Promise<SearchPage> {
   const supabase = createAnonClient();
 
   if (supabase) {
@@ -89,7 +109,13 @@ export async function searchProducts(params: SearchParams): Promise<SearchResult
 
     if (error) throw new Error(`Arama başarısız: ${error.message}`);
 
-    return (data ?? []).map(
+    const rows = (data ?? []) as Record<string, unknown>[];
+
+    // Toplam her satirda ayni; ilk satirdan okunur. Hic satir yoksa toplam
+    // sifirdir - bos sayfa ile "sonuc yok" ayni sey.
+    const totalCount = Number(rows[0]?.total_count ?? rows.length);
+
+    const results = rows.map(
       (row: Record<string, unknown>): SearchResult => ({
         groupId: String(row.group_id),
         slug: String(row.slug),
@@ -104,13 +130,58 @@ export async function searchProducts(params: SearchParams): Promise<SearchResult
         bestVendorName: row.best_vendor_name ? String(row.best_vendor_name) : null,
       }),
     );
+
+    return { results, totalCount };
   }
 
   return searchDemo(params);
 }
 
+/**
+ * Filtre seridi verisi.
+ *
+ * Alinamazsa sayfa yine acilmali: filtreler ikincil bir kolayliktir, arama
+ * sonucunun kendisi degil. Bu yuzden hata firlatmaz, bos facet doner.
+ */
+export async function getSearchFacets(params: {
+  query?: string;
+  categoryId?: string;
+}): Promise<SearchFacets> {
+  const empty: SearchFacets = { minPriceCents: null, maxPriceCents: null, categories: [] };
+  const supabase = createAnonClient();
+  if (!supabase) return empty;
+
+  const { data, error } = await supabase.rpc('search_facets', {
+    p_query: params.query ?? null,
+    p_category_id: params.categoryId ?? null,
+  });
+
+  if (error) {
+    console.error(
+      JSON.stringify({ level: 'error', msg: 'Filtre verisi alınamadı', error: error.message }),
+    );
+    return empty;
+  }
+
+  const row = (data ?? {}) as Record<string, unknown>;
+  return {
+    minPriceCents: row.min_price_cents === null || row.min_price_cents === undefined
+      ? null
+      : Number(row.min_price_cents),
+    maxPriceCents: row.max_price_cents === null || row.max_price_cents === undefined
+      ? null
+      : Number(row.max_price_cents),
+    categories: ((row.categories as Record<string, unknown>[] | null) ?? []).map((c) => ({
+      id: String(c.id),
+      slug: String(c.slug),
+      name: String(c.name),
+      count: Number(c.count),
+    })),
+  };
+}
+
 /** Demo modu araması — SQL'deki kelime bazlı AND eşleştirmesini taklit eder. */
-function searchDemo(params: SearchParams): SearchResult[] {
+function searchDemo(params: SearchParams): SearchPage {
   const tokens = params.query ? normalize(params.query).split(/\s+/).filter(Boolean) : [];
 
   let results = demoProductGroups.filter((group) => {
@@ -135,7 +206,12 @@ function searchDemo(params: SearchParams): SearchResult[] {
   });
 
   const offset = params.offset ?? 0;
-  return results.slice(offset, offset + (params.limit ?? 24)).map(toSearchResult);
+
+  // Toplam dilimlemeden ONCE alinir; canli moddaki total_count ile ayni anlam.
+  return {
+    results: results.slice(offset, offset + (params.limit ?? 24)).map(toSearchResult),
+    totalCount: results.length,
+  };
 }
 
 function toSearchResult(group: ProductGroupWithOffers): SearchResult {
@@ -392,7 +468,7 @@ export async function getVendors(): Promise<Vendor[]> {
 
 /** Ürün sayfasındaki "Bunlara da bakın" bloğu. */
 export async function getRelatedGroups(slug: string, limit = 4): Promise<SearchResult[]> {
-  const results = await searchProducts({ sort: 'offers', limit: limit + 1 });
+  const { results } = await searchProducts({ sort: 'offers', limit: limit + 1 });
   return results.filter((result) => result.slug !== slug).slice(0, limit);
 }
 

@@ -6,12 +6,13 @@ import { ProductCard } from '@/components/ProductCard';
 import { getCategories, getFlashDeals, getVendors, searchProducts } from '@/data/catalog';
 
 export default async function HomePage() {
-  const [deals, categories, vendors, trending] = await Promise.all([
+  const [deals, categories, vendors, trendingPage] = await Promise.all([
     getFlashDeals(3),
     getCategories(),
     getVendors(),
     searchProducts({ sort: 'offers', limit: 8 }),
   ]);
+  const trending = trendingPage.results;
 
   /* Katalogda hicbir urun yoksa sayfa hero'dan sonra bosluga dusuyordu.
      O durumda ziyaretciye ne oldugunu, saticiya ne yapmasi gerektigini

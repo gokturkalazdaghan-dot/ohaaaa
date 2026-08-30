@@ -68,7 +68,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }));
 
     // --- Ürün sayfaları ------------------------------------------------------
-    const products = await searchProducts({ limit: MAX_PRODUCTS, sort: 'offers' });
+    const { results: products } = await searchProducts({ limit: MAX_PRODUCTS, sort: 'offers' });
 
     const productPages: MetadataRoute.Sitemap = products.map((product) => ({
       url: `${siteUrl}/urun/${product.slug}`,
