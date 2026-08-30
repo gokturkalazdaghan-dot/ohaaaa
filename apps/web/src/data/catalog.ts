@@ -22,7 +22,7 @@ import type {
 } from '@ohaaaa/shared';
 
 import { isSupabaseConfigured } from '@/lib/env';
-import { createClient } from '@/lib/supabase/server';
+import { createAnonClient } from '@/lib/supabase/anon';
 
 import { demoCategories, demoFlashDeals, demoProductGroups, demoVendors } from './demo';
 
@@ -72,7 +72,7 @@ function normalize(value: string): string {
 // Arama
 // ---------------------------------------------------------------------------
 export async function searchProducts(params: SearchParams): Promise<SearchResult[]> {
-  const supabase = await createClient();
+  const supabase = createAnonClient();
 
   if (supabase) {
     const { data, error } = await supabase.rpc('search_products', {
@@ -162,7 +162,7 @@ function toSearchResult(group: ProductGroupWithOffers): SearchResult {
 // Ürün detayı
 // ---------------------------------------------------------------------------
 export async function getProductGroup(slug: string): Promise<ProductGroupWithOffers | null> {
-  const supabase = await createClient();
+  const supabase = createAnonClient();
 
   if (supabase) {
     const { data, error } = await supabase
@@ -272,7 +272,7 @@ export async function getProductGroup(slug: string): Promise<ProductGroupWithOff
 // Kampanyalar, kategoriler, taşeronlar
 // ---------------------------------------------------------------------------
 export async function getFlashDeals(limit = 3): Promise<FlashDeal[]> {
-  const supabase = await createClient();
+  const supabase = createAnonClient();
 
   if (supabase) {
     const { data, error } = await supabase
@@ -329,7 +329,7 @@ export async function getFlashDeals(limit = 3): Promise<FlashDeal[]> {
 }
 
 export async function getCategories(): Promise<Category[]> {
-  const supabase = await createClient();
+  const supabase = createAnonClient();
 
   if (supabase) {
     const { data, error } = await supabase
@@ -354,7 +354,7 @@ export async function getCategories(): Promise<Category[]> {
 }
 
 export async function getVendors(): Promise<Vendor[]> {
-  const supabase = await createClient();
+  const supabase = createAnonClient();
 
   if (supabase) {
     const { data, error } = await supabase
