@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { Plus_Jakarta_Sans } from 'next/font/google';
 
 import { Analytics } from '@/components/Analytics';
 import { ConsentBanner } from '@/components/ConsentBanner';
@@ -12,6 +13,22 @@ import { isDemoMode } from '@/data/catalog';
 import { gaMeasurementId, isPrelaunch, searchConsoleVerification, siteUrl } from '@/lib/env';
 
 import './globals.css';
+
+/*
+ * Tipografi markanin yarisidir. Sistem yazi tipi yiginiyla site her isletim
+ * sisteminde baska turlu ve hicbirinde kasitli gorunuyordu. Plus Jakarta Sans
+ * geometrik ve yuvarlak - armadaki harflerle ayni ailedeki his.
+ *
+ * next/font derleme aninda indirip kendi kendine barindirir: calisma aninda
+ * Google'a istek gitmez, bu yuzden hem gizlilik hem de yukleme suresi acisindan
+ * <link> etiketinden iyidir.
+ */
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ['latin', 'latin-ext'],     // latin-ext: Turkce ğ ş ı İ ç ö ü
+  weight: ['400', '500', '600', '700', '800'],
+  display: 'swap',
+  variable: '--font-jakarta',
+});
 
 export const dynamic = 'force-dynamic';
 
@@ -79,7 +96,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="tr">
+    <html lang="tr" className={jakarta.variable}>
       <head>
         <JsonLd data={siteJsonLd} />
       </head>

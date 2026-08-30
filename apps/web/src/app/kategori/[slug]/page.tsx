@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
+import { ProductCard } from '@/components/ProductCard';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { formatMoney } from '@ohaaaa/shared';
 
 import { DataUnavailable } from '@/components/DataUnavailable';
-import { ProductCard } from '@/components/ProductCard';
 import { JsonLd } from '@/components/JsonLd';
 import { getCategories, searchProducts, type SortOption } from '@/data/catalog';
 import { siteUrl } from '@/lib/env';
@@ -100,7 +100,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   const totalOffers = results.reduce((sum, result) => sum + result.offerCount, 0);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       {/* Kırıntı yolu şeması — kategori hiyerarşisini arama motoruna bildirir. */}
       <JsonLd
         data={{
@@ -151,7 +151,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
       {results.length > 0 && (
         <>
           <nav aria-label="Sıralama" className="mt-6 flex flex-wrap items-center gap-2">
-            <span className="text-xs text-subtle">Sırala:</span>
+            <span className="mr-1 text-sm font-semibold text-muted">Sırala</span>
             {SORT_OPTIONS.map((option) => (
               <Link
                 key={option.value}
@@ -161,22 +161,20 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
                     : `/kategori/${category.slug}?sirala=${option.value}`
                 }
                 aria-current={sort === option.value ? 'true' : undefined}
-                className={`text-sm ${
-                  sort === option.value
-                    ? 'font-semibold text-fg'
-                    : 'text-muted hover:underline'
-                }`}
+                className={`chip ${sort === option.value ? 'chip-active' : ''}`}
               >
                 {option.label}
               </Link>
             ))}
           </nav>
 
-          <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <ul className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
             {results.map((result) => (
-              <ProductCard key={result.groupId} result={result} />
+              <li key={result.groupId}>
+                <ProductCard result={result} />
+              </li>
             ))}
-          </div>
+          </ul>
         </>
       )}
 

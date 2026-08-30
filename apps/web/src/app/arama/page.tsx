@@ -1,8 +1,10 @@
 import Link from 'next/link';
+import { ProductCard } from '@/components/ProductCard';
 import type { Metadata } from 'next';
 
+import { formatMoney } from '@ohaaaa/shared';
+
 import { DataUnavailable } from '@/components/DataUnavailable';
-import { ProductCard } from '@/components/ProductCard';
 import { getCategories, searchProducts, type SortOption } from '@/data/catalog';
 
 export const revalidate = 120;
@@ -82,7 +84,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <header>
         <h1 className="text-2xl font-bold tracking-tight text-fg">
           {q ? (
@@ -138,11 +140,13 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       {results.length === 0 ? (
         <EmptyState query={q} />
       ) : (
-        <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {results.map((result) => (
-            <ProductCard key={result.groupId} result={result} />
-          ))}
-        </div>
+        <ul className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {results.map((result) => (
+              <li key={result.groupId}>
+                <ProductCard result={result} />
+              </li>
+            ))}
+          </ul>
       )}
     </div>
   );
