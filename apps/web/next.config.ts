@@ -6,6 +6,15 @@ const projectRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '../
 
 const config: NextConfig = {
   reactStrictMode: true,
+
+  /*
+   * "X-Powered-By: Next.js" başlığını kapatır.
+   *
+   * Tek başına bir açık değil, ama saldırgana hangi yığını kullandığımızı
+   * söyler. Bilinen bir Next.js açığı çıktığında taramalar önce bu başlığa
+   * bakarak hedef listesi çıkarır. Söylememek bedava.
+   */
+  poweredByHeader: false,
   outputFileTracingRoot: projectRoot,
 
   // Monorepo'daki paylaşılan paket TypeScript kaynağından derlenir.

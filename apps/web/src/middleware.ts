@@ -14,6 +14,63 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+/**
+ * İçerik Güvenlik Politikası (CSP).
+ *
+ * XSS'e karşı SON savunma hattı. React zaten kaçırma yapar, ama bir açık
+ * bulunursa CSP saldırganın script çalıştırmasını engeller.
+ *
+ * NONCE KULLANIYORUZ, 'unsafe-inline' DEĞİL.
+ * 'unsafe-inline' yazmak CSP'yi script açısından işlevsiz kılar — saldırgan
+ * enjekte ettiği script'i de çalıştırır. Her istekte üretilen rastgele bir
+ * nonce, yalnızca BİZİM koyduğumuz script'lerin çalışmasına izin verir.
+ * Next.js, istekte CSP başlığını görürse kendi script'lerine bu nonce'u
+ * kendiliğinden ekler.
+ *
+ * style-src'de 'unsafe-inline' KALIYOR: Next/font ve Tailwind çalışma anında
+ * satır içi stil üretir. Stil enjeksiyonu script enjeksiyonu kadar tehlikeli
+ * değildir (kod çalıştırmaz); yine de ideal değil, biliniyor.
+ */
+function buildCsp(nonce: string, supabaseUrl: string): string {
+  const directives = [
+    "default-src 'self'",
+    // strict-dynamic: nonce'lu script'in yüklediği script'ler de güvenilir
+    // sayılır. Next'in parça yükleyicisi böyle çalışır.
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https: 'unsafe-inline'`,
+    "style-src 'self' 'unsafe-inline'",
+    // Ürün görselleri satıcıların kendi CDN'lerinden gelir; hangi alan adı
+    // olacağı önceden bilinmez.
+    "img-src 'self' data: blob: https:",
+    "font-src 'self' data:",
+    `connect-src 'self'${supabaseUrl ? ` ${supabaseUrl} ${supabaseUrl.replace('https://', 'wss://')}` : ''}`,
+    // Siteyi iframe'e alarak tıklama hırsızlığı (clickjacking) yapılmasını
+    // engeller. X-Frame-Options'ın modern karşılığı.
+    "frame-ancestors 'none'",
+    "frame-src 'none'",
+    "object-src 'none'",
+    // <base> etiketi enjekte edilip tüm göreli adresler saldırgana
+    // yönlendirilemesin.
+    "base-uri 'self'",
+    // Form verisi yalnızca kendi sunucumuza gidebilir.
+    "form-action 'self'",
+    'upgrade-insecure-requests',
+  ];
+  return directives.join('; ');
+}
+
+/** Her istek için rastgele nonce. */
+function makeNonce(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes));
+}
+
+/** CSP ve nonce'u isteğe/yanıta işler. */
+function applyCsp(request: NextRequest, response: NextResponse, nonce: string): void {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? '';
+  response.headers.set('content-security-policy', buildCsp(nonce, supabaseUrl));
+}
+
 /** Oturum gerektiren yollar. Alt yolları da kapsar. */
 const PROTECTED_PREFIXES = ['/tasoron/panel', '/yonetim', '/hesap'];
 
@@ -23,8 +80,16 @@ const ADMIN_PREFIXES = ['/yonetim'];
 /** Oturum açıkken anlamsız olan yollar. */
 const GUEST_ONLY = ['/giris', '/kayit'];
 
+/** Nonce'u istek başlığına koyar; Next kendi script'lerine bunu uygular. */
+function withNonce(request: NextRequest, nonce: string): Headers {
+  const headers = new Headers(request.headers);
+  headers.set('x-nonce', nonce);
+  return headers;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const nonce = makeNonce();
 
   // Supabase yapılandırılmamışsa (demo modu) auth akışı yoktur; panel
   // örnek verilerle gezilebilir kalmalı.
@@ -32,11 +97,15 @@ export async function middleware(request: NextRequest) {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !key || url.includes('xxxxxxxxxxxx')) {
-    return NextResponse.next();
+    const passthrough = NextResponse.next({
+      request: { headers: withNonce(request, nonce) },
+    });
+    applyCsp(request, passthrough, nonce);
+    return passthrough;
   }
 
   // Yanıt nesnesi ÖNCE oluşturulur: Supabase yenilenmiş çerezleri buraya yazar.
-  let response = NextResponse.next({ request });
+  let response = NextResponse.next({ request: { headers: withNonce(request, nonce) } });
 
   const supabase = createServerClient(url, key, {
     cookies: {
@@ -50,7 +119,7 @@ export async function middleware(request: NextRequest) {
           request.cookies.set(name, value);
         }
 
-        response = NextResponse.next({ request });
+        response = NextResponse.next({ request: { headers: withNonce(request, nonce) } });
 
         for (const { name, value, options } of cookiesToSet) {
           response.cookies.set(name, value, options);
@@ -133,6 +202,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
+  applyCsp(request, response, nonce);
   return response;
 }
 

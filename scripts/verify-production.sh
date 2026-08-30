@@ -211,6 +211,25 @@ headers=$(curl -sSI --max-time 20 "$SITE/" 2>/dev/null)
 contains "strict-transport-security" "$headers" && ok "HSTS aktif" || warn "HSTS başlığı yok"
 contains "x-content-type-options" "$headers" && ok "nosniff aktif" || warn "x-content-type-options yok"
 
+# CSP, XSS'e karsi SON savunma hattidir. Varligi yetmez: 'unsafe-inline'
+# iceren bir CSP, saldirganin enjekte ettigi script'i de calistirir. Nonce
+# aranir.
+if contains "content-security-policy" "$headers"; then
+  if contains "nonce-" "$headers"; then
+    ok "CSP aktif (nonce tabanlı)"
+  else
+    warn "CSP var ama nonce yok — XSS'i durdurmayabilir"
+  fi
+else
+  bad "CSP başlığı yok"
+fi
+
+if contains "x-powered-by" "$headers"; then
+  warn "x-powered-by yığını açık ediyor"
+else
+  ok "yığın bilgisi sızmıyor"
+fi
+
 # --- 8. Korumalı alanlar ----------------------------------------------------
 echo
 echo "8. Erişim denetimi"
