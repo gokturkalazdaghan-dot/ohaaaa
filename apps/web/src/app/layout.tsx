@@ -13,55 +13,38 @@ import { gaMeasurementId, isPrelaunch, searchConsoleVerification, siteUrl } from
 
 import './globals.css';
 
-/** Header oturum için cookies() kullanır; derlemede statik sayfa üretme. */
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: 'Ohaaaa — Tüm mağazalar tek aramada, en iyi fiyat önde',
+    default: 'Ohaaaa — kargo dahil fiyat karşılaştırması',
     template: '%s · Ohaaaa',
   },
-  description:
-    'Ohaaaa, Türkiye’nin çok satıcılı süper-agregatörü. Aynı ürünü onlarca ' +
-    'mağazadan karşılaştır, kargo dahil en iyi toplam fiyatı gör, tek sepetten satın al.',
-  keywords: ['fiyat karşılaştırma', 'pazar yeri', 'online alışveriş', 'ohaaaa', 'e-ticaret'],
+  description: 'Aynı ürünü mağazalarda karşılaştır. Kargo dahil tutarı gör.',
   openGraph: {
     type: 'website',
     locale: 'tr_TR',
     siteName: 'Ohaaaa',
-    title: 'Ohaaaa — Tüm mağazalar tek aramada',
-    description: 'Kargo dahil en iyi toplam fiyatı gör, tek sepetten satın al.',
+    title: 'Ohaaaa — kargo dahil fiyat karşılaştırması',
+    description: 'Aynı ürünü mağazalarda karşılaştır.',
   },
-  // Yayın öncesinde robots.txt'ye ek olarak meta etiketiyle de kapatılır:
-  // robots.txt taramayı engeller, İNDEKSLEMEYİ değil. Bir sayfaya dışarıdan
-  // link verilmişse Google onu taramadan da indeksleyebilir; `noindex` bunu
-  // kesin olarak durdurur.
   robots: {
     index: !isPrelaunch,
     follow: !isPrelaunch,
     googleBot: {
       index: !isPrelaunch,
       follow: !isPrelaunch,
-      // Arama sonucunda ürün görselinin ve daha uzun özetin çıkmasına izin ver.
       'max-image-preview': 'large',
       'max-snippet': -1,
       'max-video-preview': -1,
     },
   },
-  // Search Console doğrulaması (madde 19). Ortam değişkeni boşsa etiket basılmaz.
   ...(searchConsoleVerification
     ? { verification: { google: searchConsoleVerification } }
     : {}),
 };
 
-/**
- * Site geneli yapılandırılmış veri.
- *
- * `SearchAction`, Google'ın arama sonucunda doğrudan site içi arama kutusu
- * göstermesini sağlar. `Organization` ise marka bilgisinin bilgi panelinde
- * doğru görünmesi içindir.
- */
 const siteJsonLd = [
   {
     '@context': 'https://schema.org',
@@ -69,15 +52,7 @@ const siteJsonLd = [
     '@id': `${siteUrl}/#organization`,
     name: 'Ohaaaa',
     url: siteUrl,
-    description:
-      'Aynı ürünü onlarca mağazadan karşılaştıran, kargo dahil toplam maliyete göre ' +
-      'sıralayan fiyat karşılaştırma platformu.',
-    contactPoint: {
-      '@type': 'ContactPoint',
-      contactType: 'customer support',
-      email: 'destek@ohaaaa.com',
-      availableLanguage: ['Turkish'],
-    },
+    description: 'Kargo dahil fiyat karşılaştırma.',
   },
   {
     '@context': 'https://schema.org',
@@ -99,47 +74,22 @@ const siteJsonLd = [
 ];
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: '(prefers-color-scheme: dark)', color: '#0a0a0c' },
-    { media: '(prefers-color-scheme: light)', color: '#fbfbfd' },
-  ],
+  themeColor: '#F3EEE6',
 };
-
-/**
- * Tema, React yüklenmeden ÖNCE uygulanmalıdır; aksi halde koyu tema
- * kullanıcısı ilk boyamada beyaz ekran görür (flash of wrong theme).
- * Bu betik senkron çalışır ve <html> sınıfını render'dan önce ayarlar.
- */
-const themeScript = `
-(function () {
-  try {
-    var stored = localStorage.getItem('ohaaaa-theme');
-    var prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
-    var theme = stored || (prefersLight ? 'light' : 'dark');
-    document.documentElement.classList.toggle('light', theme === 'light');
-    document.documentElement.classList.toggle('dark', theme !== 'light');
-  } catch (e) {
-    document.documentElement.classList.add('dark');
-  }
-})();
-`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="tr" suppressHydrationWarning>
+    <html lang="tr">
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <JsonLd data={siteJsonLd} />
       </head>
-      <body className="min-h-screen bg-bg text-fg antialiased">
-        {/* Klavye kullanıcıları için içeriğe atlama bağlantısı. */}
+      <body className="min-h-screen bg-bg text-fg">
         <a
           href="#icerik"
-          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-brand focus:px-4 focus:py-2 focus:text-white"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:bg-brand focus:px-4 focus:py-2 focus:text-white"
         >
           İçeriğe atla
         </a>
-
         {isDemoMode() && <DemoBanner />}
         <Header userMenu={<UserMenu />} />
         <main id="icerik">{children}</main>
