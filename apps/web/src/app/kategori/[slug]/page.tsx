@@ -6,7 +6,6 @@ import { formatMoney } from '@ohaaaa/shared';
 
 import { DataUnavailable } from '@/components/DataUnavailable';
 import { JsonLd } from '@/components/JsonLd';
-import { ProductCard } from '@/components/ProductCard';
 import { getCategories, searchProducts, type SortOption } from '@/data/catalog';
 import { siteUrl } from '@/lib/env';
 
@@ -128,7 +127,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
 
       <header>
         {/* Anlamlı H1 (madde 1): kategori adı + niyeti karşılayan sözcük. */}
-        <h1 className="text-3xl font-black tracking-tight sm:text-4xl">
+        <h1 className="text-3xl font-bold tracking-tight text-fg">
           {category.name} Fiyatları
         </h1>
 
@@ -161,10 +160,10 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
                     : `/kategori/${category.slug}?sirala=${option.value}`
                 }
                 aria-current={sort === option.value ? 'true' : undefined}
-                className={`rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors ${
+                className={`text-sm ${
                   sort === option.value
-                    ? 'border-brand bg-brand/15 text-brand-soft'
-                    : 'border-line bg-surface text-muted hover:border-brand/40 hover:text-fg'
+                    ? 'font-semibold text-fg'
+                    : 'text-muted hover:underline'
                 }`}
               >
                 {option.label}
@@ -172,11 +171,23 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
             ))}
           </nav>
 
-          <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+          <ul className="mt-8 divide-y divide-line border-y border-line">
             {results.map((result) => (
-              <ProductCard key={result.groupId} result={result} />
+              <li key={result.groupId} className="py-3">
+                <Link href={`/urun/${result.slug}`} className="text-fg hover:underline">
+                  {result.title}
+                </Link>
+                {result.minPriceCents !== null && (
+                  <p className="mt-1 tabular text-sm font-semibold text-brand">
+                    {formatMoney(result.minPriceCents)}
+                    {result.offerCount > 1 ? (
+                      <span className="ml-2 font-normal text-muted">{result.offerCount} mağaza</span>
+                    ) : null}
+                  </p>
+                )}
+              </li>
             ))}
-          </div>
+          </ul>
         </>
       )}
 
@@ -190,7 +201,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
               <Link
                 key={candidate.id}
                 href={`/kategori/${candidate.slug}`}
-                className="rounded-full border border-line bg-surface px-3.5 py-1.5 text-xs text-muted transition-colors hover:border-brand/40 hover:text-fg"
+                className="text-sm text-brand underline-offset-2 hover:underline"
               >
                 {candidate.name}
               </Link>
