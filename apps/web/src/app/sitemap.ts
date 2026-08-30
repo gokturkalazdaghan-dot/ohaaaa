@@ -46,6 +46,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.4,
     },
     { url: `${siteUrl}/tasoron`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
+    { url: `${siteUrl}/bot`, lastModified: now, changeFrequency: 'yearly', priority: 0.2 },
     { url: `${siteUrl}/tasoron/api`, lastModified: now, changeFrequency: 'monthly', priority: 0.4 },
     {
       url: `${siteUrl}/tasoron/basvuru`,
