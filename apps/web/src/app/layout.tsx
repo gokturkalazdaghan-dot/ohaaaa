@@ -7,7 +7,6 @@ import { Header } from '@/components/Header';
 import { UserMenu } from '@/components/UserMenu';
 import { CartDrawer } from '@/components/CartDrawer';
 import { DemoBanner } from '@/components/DemoBanner';
-import { PrelaunchBanner } from '@/components/PrelaunchBanner';
 import { JsonLd } from '@/components/JsonLd';
 import { isDemoMode } from '@/data/catalog';
 import { gaMeasurementId, isPrelaunch, searchConsoleVerification, siteUrl } from '@/lib/env';
@@ -141,7 +140,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           İçeriğe atla
         </a>
 
-        {isPrelaunch && <PrelaunchBanner />}
         {isDemoMode() && <DemoBanner />}
         <Header userMenu={<UserMenu />} />
         <main id="icerik">{children}</main>
