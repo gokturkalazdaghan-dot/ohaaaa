@@ -56,7 +56,7 @@ export function SearchBar({
               onChange={(event) => setValue(event.target.value)}
               autoFocus={autoFocus}
               placeholder={
-                isHero ? 'Ne arıyorsun? 12 milyon üründe fiyat karşılaştır…' : 'Ürün ara…'
+                'Ürün, marka veya model'
               }
               aria-label="Ürün ara"
               className={`w-full bg-transparent text-fg outline-none placeholder:text-subtle ${
