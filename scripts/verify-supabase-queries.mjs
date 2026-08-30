@@ -28,7 +28,20 @@ if (!DB) {
 }
 
 const ROOT = path.join(path.dirname(new URL(import.meta.url).pathname), '..');
-const SCAN = ['apps/web/src', 'packages/backend/src'];
+/*
+ * Taranan kaynaklar.
+ *
+ * `packages/shared/src` ve `packages/ingest/src` sonradan eklendi: kanonik
+ * eşleştirme (productSync) ile besleme deposu oradan veritabanına sorgu atıyor
+ * ama taramanın dışındaydı. Yani o dosyalardaki bir tablo/sütun adı hatası
+ * ancak canlıda, ilk beslemede ortaya çıkardı.
+ */
+const SCAN = [
+  'apps/web/src',
+  'packages/backend/src',
+  'packages/shared/src',
+  'packages/ingest/src',
+];
 
 function psql(sql) {
   return execFileSync('psql', [DB, '-tAc', sql], { encoding: 'utf8' })

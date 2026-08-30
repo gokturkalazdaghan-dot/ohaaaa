@@ -43,32 +43,30 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
       if (signatures.length === 0) return result;
 
       /*
-       * İmza veritabanında saklanmaz — başlık ve markadan TÜREYİP bellekte
-       * karşılaştırılır. Sebep: imza algoritması değiştiğinde saklanan
-       * değerlerin tamamı bayatlar ve yeniden hesaplanması gerekir.
+       * İmza artık veritabanında ÜRETİLEN bir sütunda duruyor
+       * (`product_groups.match_signature`) ve eşleştirme doğrudan onun
+       * üzerinden yapılıyor.
        *
-       * Aday havuzunu daraltmak için markaya göre ön filtre uygulanır;
-       * marka bilgisi yoksa bu adım atlanır (o zaman yeni grup açılır).
+       * Önceden markaya göre aday çekilip imza bellekte karşılaştırılıyordu.
+       * O yaklaşım markası boş ya da farklı yazılmış kayıtları hiç bulamıyor,
+       * bulduklarında da gereksiz büyük bir küme getiriyordu. İmza sütunu
+       * indeksli olduğu için bu sorgu hem doğru hem ucuz.
+       *
+       * Sütun üretilen olduğu için algoritma değişirse ALTER TABLE ile
+       * yeniden hesaplanır; bayat değer kalmaz.
        */
-      const brands = [...new Set(signatures.map((s) => s.split('|')[0]).filter(Boolean))];
-      if (brands.length === 0) return result;
-
-      for (const batch of chunk(brands, 100)) {
+      for (const batch of chunk(signatures, 200)) {
         const { data, error } = await supabase
           .from('product_groups')
-          .select('id, title, brand')
-          .in('brand', batch)
-          .limit(5000);
+          .select('id, match_signature')
+          .in('match_signature', batch);
 
         if (error) throw new Error(`Kanonik ürün adayları alınamadı: ${error.message}`);
 
         const wanted = new Set(signatures);
 
         for (const row of data ?? []) {
-          const signature = canonicalSignature(
-            String(row.title),
-            row.brand ? String(row.brand) : null,
-          );
+          const signature = String(row.match_signature ?? '');
           if (wanted.has(signature)) result.set(signature, String(row.id));
         }
       }

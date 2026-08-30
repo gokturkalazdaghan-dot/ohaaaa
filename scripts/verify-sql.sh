@@ -27,6 +27,13 @@ for f in "$ROOT"/supabase/tests/[1-9]*.sql; do
   psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$f"
 done
 
+# İmza hesabı iki yerde yapılır (JS ve SQL); ayrışırlarsa fiyat karşılaştırması
+# sessizce çalışmaz olur. Eşitliği makineye doğrulat.
+if command -v node >/dev/null 2>&1; then
+  echo "▸ İmza eşitliği (JavaScript = SQL)"
+  DATABASE_URL="$DB_URL" node "$ROOT/scripts/verify-signature-parity.mjs"
+fi
+
 # Şema hazırken, uygulamanın attığı sorguların ona uyduğunu da doğrula.
 # Supabase kod yolu demo modunda hiç çalışmaz; bir tablo/sütun/fonksiyon adı
 # tutmuyorsa bu ancak canlıda, ilk ziyaretçide ortaya çıkardı.

@@ -58,8 +58,17 @@ function normalize(value: string): string {
     .toLowerCase();
 }
 
-/** Kanonik eşleştirme imzası: marka + sadeleştirilmiş başlık. */
-function signature(title: string, brand: string | null | undefined): string {
+/**
+ * Kanonik eşleştirme imzası: marka + sadeleştirilmiş, SIRALANMIŞ başlık.
+ *
+ * Aynı hesap veritabanında da `public.product_signature()` olarak vardır ve
+ * `product_groups.match_signature` üretilen sütununu doldurur. İkisinin
+ * BİREBİR aynı değeri üretmesi zorunludur; ayrışırlarsa arama hiçbir aday
+ * bulamaz ve her teklif kendi kanonik ürününü açar — yani karşılaştırma
+ * sessizce çalışmaz olur. Kelime sıralaması bu yüzden iki tarafta da bayt
+ * sırasıdır (SQL tarafında `collate "C"`).
+ */
+export function productSignature(title: string, brand: string | null | undefined): string {
   const normalizedTitle = normalize(title)
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
@@ -70,6 +79,9 @@ function signature(title: string, brand: string | null | undefined): string {
 
   return `${normalize(brand ?? '')}|${normalizedTitle}`;
 }
+
+/** Dosya içi kısa ad. */
+const signature = productSignature;
 
 function slugify(value: string): string {
   return normalize(value)
@@ -218,27 +230,36 @@ async function resolveProductGroups(
   }
 
   // --- Adım 2: barkodsuz kalemler için imza ile eşleştir --------------------
-  const unmatchedTitles = items
-    .filter((item) => !item.gtin || !groupIdByGtin.has(item.gtin))
-    .map((item) => item.title);
+  /*
+   * Ön filtre İMZA sütunu üzerinden yapılır, başlık eşitliği üzerinden değil.
+   *
+   * Önceden `.in('title', başlıklar)` kullanılıyordu; bu, imzayı işlevsiz
+   * bırakıyordu: imza yalnızca başlık zaten harfi harfine aynıysa
+   * karşılaştırılıyordu, o durumda da hiçbir şey katmıyordu. Sonuçta iki
+   * satıcı "Kablosuz Kulaklık" ve "Kulaklık Kablosuz" yazdığında iki ayrı
+   * kanonik ürün oluşuyor ve fiyatları hiç karşılaştırılmıyordu — sitenin
+   * var olma sebebi olan işlev sessizce çalışmıyordu.
+   */
+  const unmatchedSignatures = [
+    ...new Set(
+      items
+        .filter((item) => !item.gtin || !groupIdByGtin.has(item.gtin))
+        .map((item) => signature(item.title, item.brand)),
+    ),
+  ];
 
   const groupIdBySignature = new Map<string, string>();
 
-  if (unmatchedTitles.length > 0) {
-    // Aday havuzunu daraltmak için başlıklara göre ön filtre; imza
-    // karşılaştırması bellekte yapılır.
+  if (unmatchedSignatures.length > 0) {
     const { data, error } = await supabase
       .from('product_groups')
-      .select('id, title, brand')
-      .in('title', unmatchedTitles);
+      .select('id, match_signature')
+      .in('match_signature', unmatchedSignatures);
 
     if (error) throw new Error(`Kanonik ürün adayları okunamadı: ${error.message}`);
 
     for (const row of data ?? []) {
-      groupIdBySignature.set(
-        signature(String(row.title), row.brand ? String(row.brand) : null),
-        String(row.id),
-      );
+      if (row.match_signature) groupIdBySignature.set(String(row.match_signature), String(row.id));
     }
   }
 
@@ -279,22 +300,22 @@ async function resolveProductGroups(
   }
 
   if (toCreate.length > 0) {
+    // match_signature ÜRETİLEN bir sütun: yazılmaz, veritabanı hesaplar.
+    // Geri okunması, JS ile SQL'in aynı değeri ürettiğini de doğrular.
     const { data, error } = await supabase
       .from('product_groups')
       .insert(toCreate)
-      .select('id, title, brand, gtin');
+      .select('id, title, brand, gtin, match_signature');
 
     if (error) throw new Error(`Kanonik ürün oluşturulamadı: ${error.message}`);
 
     for (const row of data ?? []) {
-      const key = row.gtin
-        ? String(row.gtin)
+      const rowSignature = row.match_signature
+        ? String(row.match_signature)
         : signature(String(row.title), row.brand ? String(row.brand) : null);
-      groupIdByGtin.set(key, String(row.id));
-      groupIdBySignature.set(
-        signature(String(row.title), row.brand ? String(row.brand) : null),
-        String(row.id),
-      );
+
+      if (row.gtin) groupIdByGtin.set(String(row.gtin), String(row.id));
+      groupIdBySignature.set(rowSignature, String(row.id));
     }
   }
 

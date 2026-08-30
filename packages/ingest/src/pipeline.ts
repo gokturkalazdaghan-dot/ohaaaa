@@ -21,6 +21,7 @@
  * Stoksuz işaretlemek geri alınabilir bir karardır.
  */
 
+import { productSignature as canonicalSignature } from '@ohaaaa/shared/product-sync';
 import type {
   IngestSummary,
   NormalizedOffer,
@@ -287,24 +288,15 @@ export async function matchCanonicalGroups(
  * Not: SQL tarafındaki productSync.ts ile AYNI algoritma. İkisi ayrışırsa
  * aynı ürün iki farklı kanonik kayda düşer ve karşılaştırma bozulur.
  */
-export function canonicalSignature(title: string, brand: string | null): string {
-  const normalizedTitle = normalizeForSignature(title)
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
-    .split(' ')
-    .filter((word) => word.length > 0)
-    .sort()
-    .join(' ');
-
-  return `${normalizeForSignature(brand ?? '')}|${normalizedTitle}`;
-}
-
-function normalizeForSignature(value: string): string {
-  const map: Record<string, string> = {
-    Ğ: 'g', Ü: 'u', Ş: 's', İ: 'i', Ö: 'o', Ç: 'c', I: 'i',
-    ğ: 'g', ü: 'u', ş: 's', ı: 'i', ö: 'o', ç: 'c',
-    Â: 'a', Î: 'i', Û: 'u', â: 'a', î: 'i', û: 'u',
-  };
-
-  return value.replace(/[ĞÜŞİÖÇIğüşıöçÂÎÛâîû]/g, (c) => map[c] ?? c).toLowerCase();
-}
+/**
+ * Kanonik eşleştirme imzası.
+ *
+ * Burada AYRI bir kopyası vardı; taşeron beslemesindeki ve veritabanındaki
+ * hesapla birebir aynıydı ama bağımsızdı. Üç kopyanın zamanla ayrışması
+ * kaçınılmazdı ve ayrışma sessiz olurdu: aynı ürün iki farklı imza alır,
+ * iki ayrı kanonik ürün açılır, fiyatlar karşılaştırılmaz.
+ *
+ * Tek kaynak artık `@ohaaaa/shared`; veritabanındaki
+ * `public.product_signature()` de aynı değeri üretir.
+ */
+export { canonicalSignature };
