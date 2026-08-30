@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { LegalIncompleteNotice } from '@/components/LegalIncompleteNotice';
+import { business, processors } from '@/lib/legal';
 import Link from 'next/link';
 
 import { ContentPage } from '@/components/ContentPage';
@@ -55,6 +57,8 @@ export default function ContactPage() {
       description="Talebinizi doğru kişiye ulaştırmak için konuya göre ayrı kanallarımız var."
       breadcrumb="İletişim"
     >
+      <LegalIncompleteNotice />
+
       <ul className="divide-y divide-line border-y border-line">
         {CHANNELS.map((channel) => (
           <li key={channel.email} className="py-5">
@@ -82,7 +86,7 @@ export default function ContactPage() {
           <tr>
             <td style={{ width: '38%' }}>Ticari unvan</td>
             <td>
-              [Ad Soyad]
+              {business.legalName.value}
               <br />
               <span className="text-xs text-subtle">
                 Şahıs firmalarında ticari unvan, işletme sahibinin adı ve soyadıdır.
@@ -95,25 +99,25 @@ export default function ContactPage() {
           </tr>
           <tr>
             <td>Adres</td>
-            <td>[Açık adres]</td>
+            <td>{business.address.value}</td>
           </tr>
           <tr>
             <td>Vergi dairesi</td>
-            <td>[Vergi dairesi]</td>
+            <td>{business.taxOffice.value}</td>
           </tr>
           <tr>
             <td>Vergi / TC kimlik no</td>
-            <td>[TC kimlik no veya vergi no]</td>
+            <td>{business.taxNumber.value}</td>
           </tr>
           <tr>
             <td>Ticaret sicil no</td>
             <td>
-              [Sicil no] <span className="text-xs text-subtle">— kayıtlıysa</span>
+              {business.registryNumber.value} <span className="text-xs text-subtle">— kayıtlıysa</span>
             </td>
           </tr>
           <tr>
             <td>ETBİS kayıt no</td>
-            <td>[ETBİS numarası]</td>
+            <td>{business.etbisNumber.value}</td>
           </tr>
           <tr>
             <td>E-posta</td>
@@ -123,7 +127,7 @@ export default function ContactPage() {
           </tr>
           <tr>
             <td>Telefon</td>
-            <td>[Telefon]</td>
+            <td>{business.phone.value}</td>
           </tr>
         </tbody>
       </table>

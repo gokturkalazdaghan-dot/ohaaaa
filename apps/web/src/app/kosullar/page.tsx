@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { LegalIncompleteNotice } from '@/components/LegalIncompleteNotice';
+import { business, processors } from '@/lib/legal';
 import Link from 'next/link';
 
 import { ContentPage, Notice } from '@/components/ContentPage';
@@ -19,6 +21,8 @@ export default function TermsPage() {
       updatedAt="2026-08-30"
       breadcrumb="Şartlar"
     >
+      <LegalIncompleteNotice />
+
       <Notice tone="warning">
         <strong>Yayına almadan önce:</strong> Bu metin sistemin gerçek işleyişini doğru
         anlatır ancak <strong>hukuki incelemeden geçmemiştir</strong>. Köşeli parantezli
@@ -33,7 +37,7 @@ export default function TermsPage() {
       <h2>1. Taraflar</h2>
       <p>
         Bu şartlar, <strong>Armanalabs</strong> işletme adıyla faaliyet gösteren{' '}
-        <strong>[Ad Soyad]</strong> (“Ohaaaa”, “biz”) tarafından işletilen ohaaaa.com
+        <strong>{business.legalName.value}</strong> (“Ohaaaa”, “biz”) tarafından işletilen ohaaaa.com
         sitesinin kullanımını düzenler. Siteyi kullanarak bu şartları kabul etmiş
         sayılırsınız.
       </p>

@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { LegalIncompleteNotice } from '@/components/LegalIncompleteNotice';
+import { business, processors } from '@/lib/legal';
 import Link from 'next/link';
 
 import { ContentPage, Notice } from '@/components/ContentPage';
@@ -19,6 +21,8 @@ export default function PrivacyPage() {
       updatedAt="2026-08-30"
       breadcrumb="Gizlilik"
     >
+      <LegalIncompleteNotice />
+
       <Notice tone="warning">
         <strong>Yayına almadan önce:</strong> Bu metin teknik olarak sistemin gerçekte ne
         yaptığını doğru anlatır, ancak <strong>hukuki incelemeden geçmemiştir</strong>.
@@ -37,7 +41,7 @@ export default function PrivacyPage() {
       <p>
         6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) uyarınca veri sorumlusu,{' '}
         <strong>Armanalabs</strong> işletme adıyla faaliyet gösteren{' '}
-        <strong>[Ad Soyad]</strong>’dır. Adres: [açık adres]. Başvurularınız için:{' '}
+        <strong>{business.legalName.value}</strong>’dır. Adres: [açık adres]. Başvurularınız için:{' '}
         <a href="mailto:kvkk@ohaaaa.com">kvkk@ohaaaa.com</a>
       </p>
       <p>
@@ -180,7 +184,7 @@ export default function PrivacyPage() {
         Barındırma ve ölçümleme hizmetleri yurt dışında sunuculara sahip olabilir. Bu
         durumda aktarım KVKK m.9 kapsamında, açık rızanız veya kanunda öngörülen diğer
         şartlar çerçevesinde yapılır. Kullandığımız sağlayıcılar:{' '}
-        [barındırma sağlayıcısı], [ölçümleme sağlayıcısı].
+        {processors.hosting.value}, {processors.analytics.value}.
       </p>
 
       <h2>6. Çerezler</h2>

@@ -112,6 +112,18 @@ Vercel → Project → Settings → **Environment Variables**. Üçü de
 # ZORUNLU — eksikse derleme kırılır (bilinçli)
 NEXT_PUBLIC_SITE_URL=https://ohaaaa.com
 
+# İşletme künyesi — yasal sayfalarda görünür (src/lib/legal.ts).
+# Boş bırakılanlar sayfada "—" görünür ve sayfanın başında görünür bir
+# "İşletme kaydı tamamlanmadı" uyarısı çıkar. Şirket kurulunca doldurun.
+NEXT_PUBLIC_BUSINESS_NAME="Ad Soyad"
+NEXT_PUBLIC_BUSINESS_ADDRESS="Mahalle, cadde, no, ilçe/il"
+NEXT_PUBLIC_BUSINESS_TAX_OFFICE="Vergi dairesi"
+NEXT_PUBLIC_BUSINESS_TAX_NUMBER="TC kimlik no veya vergi no"
+NEXT_PUBLIC_BUSINESS_REGISTRY_NUMBER="Esnaf/ticaret sicil no"
+NEXT_PUBLIC_BUSINESS_ETBIS="ETBİS numarası"
+NEXT_PUBLIC_BUSINESS_PHONE="0XXX XXX XX XX"
+NEXT_PUBLIC_BUSINESS_KEP=""            # isteğe bağlı
+
 # Yayın durumu. Ayarlanmazsa 'prelaunch' kabul edilir (arama motorlarına kapalı).
 # İşletme kaydı ve yasal metinler tamamlanana kadar böyle kalmalı.
 NEXT_PUBLIC_LAUNCH_STATE=prelaunch

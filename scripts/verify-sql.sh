@@ -27,4 +27,14 @@ for f in "$ROOT"/supabase/tests/[1-9]*.sql; do
   psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$f"
 done
 
+# Şema hazırken, uygulamanın attığı sorguların ona uyduğunu da doğrula.
+# Supabase kod yolu demo modunda hiç çalışmaz; bir tablo/sütun/fonksiyon adı
+# tutmuyorsa bu ancak canlıda, ilk ziyaretçide ortaya çıkardı.
+if command -v node >/dev/null 2>&1; then
+  echo "▸ Supabase sorguları şemayla karşılaştırılıyor"
+  DATABASE_URL="$DB_URL" node "$ROOT/scripts/verify-supabase-queries.mjs"
+else
+  echo "! node bulunamadı — sorgu/şema karşılaştırması atlandı"
+fi
+
 echo "✓ Tüm SQL doğrulamaları geçti"

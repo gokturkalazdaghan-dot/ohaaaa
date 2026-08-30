@@ -79,16 +79,57 @@ done
 [ "$FAIL" -eq 0 ] && ok "Yasal ve bilgi sayfalarının tümü açılıyor"
 
 # --- 2. HTTPS ve yönlendirme -----------------------------------------------
+# Bu bölümün önceki hali iki ayrı şekilde yanlıştı:
+#
+#   1. `${SITE#https://}` yalnızca https şemasını soyuyordu. Yerel sunucu
+#      (http://...) verildiğinde "https://www.http://127.0.0.1:3137" gibi
+#      anlamsız bir adres kuruyor ve her seferinde "DNS eksik" uyarısı
+#      basıyordu.
+#
+#   2. Yön ELLE sabitlenmişti: her zaman "www çıplak adrese yönlensin"
+#      bekleniyordu. Oysa bu projenin kanonik adresi www'lu. Yani kontrol,
+#      site doğru davransa bile yanlış rapor verirdi.
+#
+# Artık kanonik ana ad sitenin KENDİ beyanından (sitemap'teki mutlak
+# adresler) okunur ve karşıt biçimin ona yönlendiği doğrulanır.
 echo
 echo "2. HTTPS ve alan adı"
-apex="${SITE#https://}"
-www_redirect=$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 20 "https://www.$apex" 2>/dev/null)
-case "$www_redirect" in
-  30*"$SITE"*) ok "www → çıplak alan adına yönlendiriyor" ;;
-  000*)        warn "www.$apex yanıt vermiyor (DNS eksik olabilir)" ;;
-  200*)        bad "www ayrı bir site olarak yanıt veriyor — mükerrer içerik" ;;
-  *)           warn "www yanıtı beklenmedik: $www_redirect" ;;
-esac
+
+sitemap_early=$(fetch "$SITE/sitemap.xml")
+canonical_host=$(printf '%s\n' "$sitemap_early" \
+  | grep -oE '<loc>https?://[^/<]+' | sed -n '1s|.*://||p')
+
+if [ -z "$canonical_host" ]; then
+  warn "Kanonik ana ad belirlenemedi (sitemap okunamadı)"
+elif printf '%s' "$canonical_host" | grep -qE '^(localhost|127\.|0\.|\[?::1)|^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'; then
+  # Yerel sunucuda DNS yok; bu kontrol yalnızca gerçek alan adında anlamlıdır.
+  ok "Yerel adres — alan adı yönlendirmesi bu ortamda sınanmaz ($canonical_host)"
+else
+  # Yerel bir sunucu sınanıyor ama site gerçek bir alan adını kanonik ilan
+  # ediyor. Yönlendirme DNS ve barındırma katmanında olur; buradan sınanamaz.
+  # "DNS eksik" demek yanıltıcı olurdu - sorun DNS'te değil, test yerinde.
+  site_host="${SITE#*://}"; site_host="${site_host%%/*}"; site_host="${site_host%%:*}"
+  case "$site_host" in
+    localhost|127.*|0.0.0.0|::1|[0-9]*.[0-9]*.[0-9]*.[0-9]*)
+      ok "Kanonik adres $canonical_host — yönlendirme yalnızca canlı ortamda sınanabilir"
+      SKIP_REDIRECT=1 ;;
+  esac
+
+  case "$canonical_host" in
+    www.*) other="${canonical_host#www.}" ;;
+    *)     other="www.$canonical_host" ;;
+  esac
+  redirect=""
+  [ "${SKIP_REDIRECT:-}" = "1" ] || redirect=$(curl -sS -o /dev/null \
+      -w '%{http_code} %{redirect_url}' --max-time 20 "https://$other" 2>/dev/null)
+  case "${SKIP_REDIRECT:-}${redirect}" in
+    1) : ;;
+    30*"$canonical_host"*) ok "$other → $canonical_host yönlendiriyor" ;;
+    000*)                  warn "$other yanıt vermiyor (DNS kaydı eksik olabilir)" ;;
+    200*)                  bad "$other ayrı bir site olarak yanıt veriyor — mükerrer içerik" ;;
+    *)                     warn "$other yanıtı beklenmedik: $redirect" ;;
+  esac
+fi
 
 # --- 3. Demo modu -----------------------------------------------------------
 echo
@@ -203,17 +244,22 @@ fi
 # --- 10. Yasal metin eksikleri ----------------------------------------------
 echo
 echo "10. Yasal metinler"
-placeholders=0
+# Künye artık sayfalara gömülü değil; NEXT_PUBLIC_BUSINESS_* ortam
+# değişkenlerinden gelir (src/lib/legal.ts). Eksik olduğunda sayfa bunu
+# görünür bir uyarıyla söyler. Bu yüzden kontrol köşeli parantezli yer
+# tutucu değil, O UYARIYI arar.
+legal_incomplete=0
 for path in /iletisim /gizlilik /kosullar; do
   page=$(fetch "$SITE$path")
-  n=$(printf '%s' "$page" | grep -oE '\[(Ad Soyad|Açık adres|açık adres|Vergi dairesi|TC kimlik no[^]]*|Sicil no|ETBİS numarası|Telefon)\]' | wc -l)
-  placeholders=$((placeholders + n))
+  if contains "İşletme kaydı tamamlanmadı" "$page"; then
+    legal_incomplete=$((legal_incomplete + 1))
+  fi
 done
 
-if [ "$placeholders" -eq 0 ]; then
-  ok "Yasal metinlerde doldurulmamış alan yok"
+if [ "$legal_incomplete" -eq 0 ]; then
+  ok "İşletme künyesi tamamlanmış"
 else
-  warn "$placeholders doldurulmamış alan var — işletme kaydı sonrası tamamlanmalı"
+  warn "Künye eksik ($legal_incomplete sayfada uyarı görünüyor) — NEXT_PUBLIC_BUSINESS_* değişkenlerini doldurun"
 fi
 
 # --- Özet -------------------------------------------------------------------

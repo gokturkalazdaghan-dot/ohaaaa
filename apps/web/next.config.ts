@@ -25,6 +25,26 @@ const config: NextConfig = {
           { key: 'x-content-type-options', value: 'nosniff' },
           { key: 'referrer-policy', value: 'strict-origin-when-cross-origin' },
           { key: 'x-frame-options', value: 'SAMEORIGIN' },
+          /*
+           * HSTS burada da tanımlı, yalnızca vercel.json'da değil.
+           *
+           * Panelde ya da platform yapılandırmasında duran bir güvenlik
+           * başlığı, dağıtım başka bir yere taşındığında sessizce kaybolur.
+           * Uygulamanın kendisi göndermeli ki nerede çalışırsa çalışsın
+           * korunsun. Aynı başlığın iki yerden gelmesi sorun değildir;
+           * eksik olması sorundur.
+           *
+           * Tarayıcılar HSTS'i yalnızca HTTPS yanıtlarında dikkate alır;
+           * yerel http sunucuda etkisizdir, zarar vermez.
+           *
+           * preload YOK: preload listesine girmek geri dönüşü çok zor bir
+           * taahhüttür (tüm alt alan adları kalıcı olarak HTTPS zorunlu).
+           * Buna site sahibi karar vermeli.
+           */
+          {
+            key: 'strict-transport-security',
+            value: 'max-age=31536000; includeSubDomains',
+          },
         ],
       },
     ];
