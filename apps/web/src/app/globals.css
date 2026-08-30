@@ -1,85 +1,39 @@
 @import 'tailwindcss';
 
 /*
- * OHAAAA TASARIM SİSTEMİ
- * ---------------------------------------------------------------------------
- * Renkler doğrudan sınıflara değil, anlamsal (semantic) tokenlara yazılır:
- * `bg-surface`, `text-muted`, `border-line`. Böylece açık/koyu tema tek
- * yerden çevrilir ve bileşenler tema bilmez.
- *
- * Koyu tema birincil kabul edilmiştir (ürünün karakteri odur); açık tema
- * ondan türetilir, tersi değil.
+ * Ohaaaa vitrin.
+ * Tuğla kırmızı + kağıt zemin. Koyu tema yok. Cam, glow, gradyan yazı yok.
  */
 
-@custom-variant dark (&:where(.dark, .dark *));
-
 :root {
-  /* Zeminler — derin uzay grisi */
-  --bg: #0a0a0c;
-  --bg-elevated: #101014;
-  --surface: #141419;
-  --surface-2: #1b1b22;
-  --surface-hover: #22222b;
-  --line: #2a2a35;
-  --line-strong: #3a3a48;
+  --bg: #f3eee6;
+  --bg-elevated: #fffaf5;
+  --surface: #fffaf5;
+  --surface-2: #ebe4da;
+  --surface-hover: #e4dcd0;
+  --line: #e2d6c9;
+  --line-strong: #cbbbaa;
 
-  /* Metin */
-  --text: #f4f4f7;
-  --text-muted: #9a9aab;
-  --text-subtle: #6b6b7c;
+  --text: #1a1512;
+  --text-muted: #5c4f46;
+  --text-subtle: #7a6b60;
 
-  /* Marka — neon mor + elektrik mavisi */
-  --brand: #a855f7;
-  --brand-strong: #9333ea;
-  --brand-soft: #c084fc;
-  --electric: #3b82f6;
-  --electric-soft: #60a5fa;
-  --cyan: #22d3ee;
+  --brand: #c13515;
+  --brand-strong: #9f2b12;
+  --brand-soft: #c13515;
+  --electric: #c13515;
+  --electric-soft: #c13515;
+  --cyan: #c13515;
+  --oha: #c13515;
+  --oha-soft: #c13515;
 
-  /* "Ohaaaa!" vurgusu — fırsat ve aciliyet rengi */
-  --oha: #ff2e93;
-  --oha-soft: #ff6bb0;
+  --success: #2f6b3a;
+  --warning: #9a6700;
+  --danger: #9b1c1c;
 
-  /* Durum renkleri */
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-
-  /* Efektler */
-  --glow-brand: 0 0 40px -8px rgb(168 85 247 / 0.55);
-  --glow-oha: 0 0 44px -8px rgb(255 46 147 / 0.6);
-  --ring: rgb(168 85 247 / 0.55);
-
-  color-scheme: dark;
-}
-
-.light {
-  --bg: #fbfbfd;
-  --bg-elevated: #ffffff;
-  --surface: #ffffff;
-  --surface-2: #f4f4f7;
-  --surface-hover: #ebebf0;
-  --line: #e3e3ea;
-  --line-strong: #cfcfda;
-
-  --text: #0a0a0c;
-  --text-muted: #5c5c6b;
-  --text-subtle: #8a8a99;
-
-  /* Beyaz zeminde kontrast için tonlar bir kademe koyulaşır. */
-  --brand: #8b2fe0;
-  --brand-strong: #7320c4;
-  --brand-soft: #a855f7;
-  --electric: #2563eb;
-  --electric-soft: #3b82f6;
-  --cyan: #0891b2;
-
-  --oha: #e0176f;
-  --oha-soft: #ff2e93;
-
-  --glow-brand: 0 0 32px -12px rgb(139 47 224 / 0.35);
-  --glow-oha: 0 0 32px -12px rgb(224 23 111 / 0.35);
-  --ring: rgb(139 47 224 / 0.45);
+  --glow-brand: none;
+  --glow-oha: none;
+  --ring: #c13515;
 
   color-scheme: light;
 }
@@ -92,11 +46,9 @@
   --color-surface-hover: var(--surface-hover);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
-
   --color-fg: var(--text);
   --color-muted: var(--text-muted);
   --color-subtle: var(--text-subtle);
-
   --color-brand: var(--brand);
   --color-brand-strong: var(--brand-strong);
   --color-brand-soft: var(--brand-soft);
@@ -105,42 +57,12 @@
   --color-cyan: var(--cyan);
   --color-oha: var(--oha);
   --color-oha-soft: var(--oha-soft);
-
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
-
-  --font-sans:
-    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    'Noto Sans', sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
-
-  --radius-card: 1rem;
-
-  --animate-shimmer: shimmer 2.4s linear infinite;
-  --animate-float: float 7s ease-in-out infinite;
-  --animate-rise: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
-  --animate-pulse-glow: pulse-glow 2.6s ease-in-out infinite;
-}
-
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-14px) scale(1.03); }
-}
-
-@keyframes rise {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes pulse-glow {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
+  --font-sans: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --radius-card: 4px;
 }
 
 @layer base {
@@ -149,111 +71,54 @@
   }
 
   html {
-    scroll-behavior: smooth;
+    background-color: var(--bg);
   }
 
   body {
     background-color: var(--bg);
     color: var(--text);
     font-family: var(--font-sans);
-    -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
   }
 
-  /* Klavye kullanıcıları için görünür odak halkası; fare ile tıklamada değil. */
   :focus-visible {
     outline: 2px solid var(--brand);
     outline-offset: 2px;
-    border-radius: 0.375rem;
   }
 
   ::selection {
     background: var(--brand);
-    color: #fff;
-  }
-
-  /* Hareket duyarlılığı olan kullanıcılar için tüm animasyonlar kapanır. */
-  @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-      scroll-behavior: auto !important;
-    }
+    color: #fffaf5;
   }
 }
 
 @layer components {
-  /* Marka gradyanı — başlıklarda ve logoda kullanılır. */
-  .text-gradient {
-    background-image: linear-gradient(
-      100deg,
-      var(--brand-soft) 0%,
-      var(--electric-soft) 45%,
-      var(--cyan) 100%
-    );
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-
+  .text-gradient,
   .text-gradient-oha {
-    background-image: linear-gradient(100deg, var(--oha) 0%, var(--brand) 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    background: none;
+    color: var(--brand);
+    -webkit-text-fill-color: var(--brand);
   }
 
-  /* Cam yüzey (glassmorphism) — üst bar ve kartlarda. */
   .glass {
-    background-color: color-mix(in oklab, var(--surface) 72%, transparent);
-    backdrop-filter: blur(16px) saturate(160%);
-    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    background-color: var(--surface);
+    backdrop-filter: none;
   }
 
-  .card {
+  .card,
+  .card-glow {
     background-color: var(--surface);
     border: 1px solid var(--line);
-    border-radius: var(--radius-card);
-  }
-
-  /* Kenarlığı gradyan olan kart — öne çıkan modüller için. */
-  .card-glow {
-    position: relative;
-    background-color: var(--surface);
-    border-radius: var(--radius-card);
+    border-radius: 4px;
   }
 
   .card-glow::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1px;
-    background: linear-gradient(135deg, var(--brand), var(--electric), transparent 65%);
-    -webkit-mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    pointer-events: none;
+    content: none;
   }
 
-  /* Yükleniyor iskeleti (skeleton). */
   .skeleton {
-    background-image: linear-gradient(
-      90deg,
-      var(--surface-2) 25%,
-      var(--surface-hover) 50%,
-      var(--surface-2) 75%
-    );
-    background-size: 200% 100%;
-    animation: var(--animate-shimmer);
+    background-color: var(--surface-2);
   }
 
-  /* Sayı sütunlarının hizalı görünmesi için tablo rakamları. */
   .tabular {
     font-variant-numeric: tabular-nums;
   }
