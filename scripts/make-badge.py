@@ -32,21 +32,29 @@ BRAND = 'O' + 'h' + 'a' * 4        # Ohaaaa
 WORD = BRAND
 
 # --- yaricaplar (S=1024 icin) ---
+#
+# ONCEKI GEOMETRI KUCUK BOYUTTA COKUYORDU
+# Kalin gumus cember + renkli segment halkasi, ikonun yaricapinin %25'ini
+# yiyordu; yaziya kalan disk 366 pikseldi ve yazi 17 derece egikti. 36
+# piksele indiginde harfler birkac piksele dusup bulaniyordu (olculdu:
+# 64 pikselden once okunmuyordu).
+#
+# Uc degisiklik adi kurtardi:
+#   1. Yazi YATAY. Egik kucuk yazi, piksel izgarasina oturmadigi icin
+#      kirilir; yatay yazi ayni boyutta belirgin sekilde net cikar.
+#   2. Segment halkasi KALKTI, cember INCELDI. Disk 366'dan 446'ya cikti;
+#      yazi ayni oranda buyudu.
+#   3. Harflerde 3B pah YOK. Pah ve yan yuz, 32 pikselde harfin kendisinden
+#      kalin kalir ve konturu yer. Duz beyaz + hafif golge daha okunakli.
+ANGLE = 0                     # yatay: kucuk boyutta en net okunan
 R_SHADOW = 496
-R_RIM_OUT = 486               # firca izli gumus cember disi
-R_RIM_IN = 438                # gumus cember ici
-R_SEG_OUT = 430               # renkli segment halkasi disi
-R_SEG_IN = 372                # segment halkasi ici
-R_DISC = 366                  # turuncu ic disk
+R_RIM_OUT = 486               # gumus cember disi
+R_RIM_IN = 452                # gumus cember ici (once 438 - cember inceldi)
+R_DISC = 446                  # turuncu disk (once 366)
 
 DISC_HI = (233, 105, 42)      # disk merkezi
 DISC_LO = (188, 62, 16)       # disk kenari
 
-SEGMENTS = [                  # halkadaki renk dizisi (saat yonunde)
-    (198, 74, 26), (214, 96, 30), (232, 132, 40), (243, 170, 74),
-    (248, 202, 130), (247, 226, 186), (243, 238, 220), (236, 226, 202),
-    (240, 210, 160), (238, 176, 100), (226, 130, 52), (208, 92, 32),
-]
 
 
 def radial(shape, cx, cy):
@@ -110,20 +118,6 @@ def build_rim(rad):
     return np.dstack([metal, metal, metal * 0.99])
 
 
-def build_segments(rad):
-    """Renkli segment halkasi."""
-    y, x = np.mgrid[0:S, 0:S]
-    ang = (np.arctan2(y - CY, x - CX) + np.pi) / (2 * np.pi)   # 0..1
-    idx = (ang * len(SEGMENTS)).astype(int) % len(SEGMENTS)
-    pal = np.array(SEGMENTS, dtype=float)
-    ring = pal[idx]
-
-    # Segmentler arasi ince koyu ayrac
-    frac = (ang * len(SEGMENTS)) % 1.0
-    seam = np.clip(np.minimum(frac, 1 - frac) / 0.012, 0, 1)[..., None]
-    return ring * (0.55 + 0.45 * seam)
-
-
 def build_disc(rad):
     """Turuncu ic disk: radyal gradyan + ince tane.
 
@@ -157,33 +151,22 @@ def render_word(size_px, angle_deg):
     m = depth * 4
     layer = Image.new('RGBA', (w + m * 2, h + m * 2), (0, 0, 0, 0))
 
-    # 1) Zemine dusen yumusak golge (isik ust-soldan)
+    # 1) Zemine dusen HAFIF golge.
+    #    Once kalin bir golge + kaydirilmis yan yuzler vardi (3B pah). O
+    #    katmanlar 32 pikselde harfin kendisinden kalin kalip konturu yiyor,
+    #    yaziyi bulaniklastiriyordu. Kucuk boyutta okunurluk, hacim
+    #    hissinden onemli.
+    shadow_offset = max(2, size_px // 40)
     sh = Image.new('L', layer.size, 0)
-    sh.paste(glyphs, (m + depth, m + depth + depth // 2))
-    sh = sh.filter(ImageFilter.GaussianBlur(depth * 1.6))
-    layer.paste(Image.new('RGBA', layer.size, (92, 34, 8, 255)),
-                (0, 0), Image.eval(sh, lambda v: int(v * 0.62)))
-
-    # 2) Yan yuz: harfin sag-alta dogru kaydirilmis kopyalari
-    for i in range(depth, 0, -1):
-        k = i / depth
-        side = Image.new('RGBA', layer.size, (int(196 - 70 * k), int(150 - 60 * k), int(128 - 55 * k), 255))
-        mask = Image.new('L', layer.size, 0)
-        mask.paste(glyphs, (m + i, m + i))
-        layer.paste(side, (0, 0), mask)
+    sh.paste(glyphs, (m, m + shadow_offset))
+    sh = sh.filter(ImageFilter.GaussianBlur(max(2, size_px // 30)))
+    layer.paste(Image.new('RGBA', layer.size, (110, 40, 10, 255)), (0, 0),
+                Image.eval(sh, lambda v: int(v * 0.35)))
 
     # 3) Ust yuz
     top = Image.new('L', layer.size, 0)
     top.paste(glyphs, (m, m))
     layer.paste(Image.new('RGBA', layer.size, (255, 253, 250, 255)), (0, 0), top)
-
-    # 4) Ust-sol kenarda ince parlak pah
-    bevel = Image.new('L', layer.size, 0)
-    bevel.paste(glyphs, (m - 1, m - 1))
-    bevel = Image.fromarray(
-        np.clip(np.asarray(bevel).astype(int) - np.asarray(top).astype(int), 0, 255).astype(np.uint8))
-    layer.paste(Image.new('RGBA', layer.size, (255, 255, 255, 255)), (0, 0),
-                Image.eval(bevel, lambda v: int(v * 0.9)))
 
     rotated = layer.rotate(angle_deg, resample=Image.BICUBIC, expand=True)
     # Dondurme sonrasi tuval kutusunun merkezi ile MUREKKEBIN merkezi ayrisir;
@@ -192,7 +175,7 @@ def render_word(size_px, angle_deg):
     return rotated.crop(box) if box else rotated
 
 
-def verify_letters(badge, angle_deg=17):
+def verify_letters(badge, angle_deg=0):
     """Cizilen goruntuyu OKUYARAK harfleri sayar.
 
     Dosyanin basindaki assert kaynak dizgeyi dogrular; bu ise CIKTIYI
@@ -250,7 +233,6 @@ def main() -> None:
     img = np.zeros((S, S, 3), dtype=float) + np.array([58.0, 52.0, 46.0])  # golge rengi
 
     for layer, r in ((build_rim(rad), R_RIM_OUT),
-                     (build_segments(rad), R_SEG_OUT),
                      (build_disc(rad), R_DISC)):
         m = smooth_disc(rad, r)[..., None]
         img = layer * m + img * (1 - m)
@@ -266,7 +248,7 @@ def main() -> None:
     # Burada hedef genislik acikca sinirlanir.
     target_w = 2 * R_DISC * 0.90
     size_px = 300
-    word = render_word(size_px, 17)
+    word = render_word(size_px, ANGLE)
     scale = target_w / word.width
     word = word.resize((max(1, int(word.width * scale)), max(1, int(word.height * scale))),
                        Image.LANCZOS)
@@ -274,7 +256,7 @@ def main() -> None:
     badge.paste(word, (int(CX - word.width / 2), int(CY - word.height / 2)), word)
     badge.save(out, 'PNG')
 
-    verify_letters(badge)
+    verify_letters(badge, ANGLE)
 
     # Kontrol: yazi ic diskin icinde mi?
     a = np.asarray(badge.convert('RGB')).astype(int)

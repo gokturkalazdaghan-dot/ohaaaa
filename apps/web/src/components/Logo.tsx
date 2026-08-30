@@ -3,16 +3,14 @@ import Link from 'next/link';
 /**
  * Başlık kilidi: arma + turuncu zemin üzerinde kelime işareti.
  *
- * ARMA BİR SİMGEDİR, OKUNACAK AD DEĞİL
- * Armanın İÇİNDEKİ "Ohaaaa" 36 pikselde okunmaz; o boyutta harfler birkaç
- * piksele düşer ve bulanık bir lekeye dönüşür. Bu yüzden arma tanınan bir
- * biçim ve renk olarak durur, adı yanındaki kelime işareti taşır.
+ * ADI ARMA TAŞIR, LEVHA VAADİ
+ * Arma yeniden çizildi: yazı yatay, çember inceldi, segment halkası kalktı,
+ * harflerdeki 3B pah gitti. Bu üç değişiklikle "Ohaaaa" 32 pikselde okunur
+ * hale geldi (önce 64 pikselden önce okunmuyordu).
  *
- * LEVHADA NE YAZAR
- * Marka adı + "kargo dahil fiyat". Arma 36 pikselde okunmadığı için (harfler
- * birkaç piksele düşer) adı yalnızca bu levha taşır; buradan da kaldırılırsa
- * marka adı başlıkta hiç görünmez. Alt satır ise siteyi ayıran tek şeyi
- * söyler: karşılaştırma kargo dahil toplam üzerinden yapılır.
+ * Ad artık armada okunduğu için levhada tekrar etmesi gereksiz. Levha
+ * müşteriye dönük olanı taşıyor: karşılaştırmanın kargo dahil toplam
+ * üzerinden yapılması — siteyi ayıran tek şey.
  *
  * "En ucuz" gibi bir üstünlük iddiası BİLEREK kullanılmadı. Ticari Reklam ve
  * Haksız Ticari Uygulamalar Yönetmeliği bu tür iddiaları ispat yükümlülüğüne
@@ -49,11 +47,8 @@ export function Logo({ className = '' }: { className?: string }) {
         className="relative z-10 h-9 w-9 shrink-0 transition-transform duration-200 group-hover:-rotate-6"
       />
 
-      <span className="-ml-4 flex flex-col justify-center rounded-r-full bg-gradient-to-r from-[#E9692A] via-[#D4501F] to-[#C13515] py-1 pl-5 pr-4 text-[#fffaf5] shadow-sm transition-transform duration-200 origin-left group-hover:scale-x-[1.02]">
-        <span className="text-xl font-extrabold leading-[1.05] tracking-tight">Ohaaaa</span>
-        <span className="text-[9.5px] font-semibold uppercase leading-[1.2] tracking-[0.04em] opacity-90">
-          kargo dahil fiyat
-        </span>
+      <span className="-ml-4 rounded-r-full bg-gradient-to-r from-[#E9692A] via-[#D4501F] to-[#C13515] py-[7px] pl-5 pr-4 text-[15px] font-extrabold leading-none tracking-tight text-[#fffaf5] shadow-sm transition-transform duration-200 origin-left group-hover:scale-x-[1.02]">
+        kargo dahil fiyat
       </span>
     </Link>
   );
