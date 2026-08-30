@@ -2,7 +2,7 @@
 """
 OHAAAA - tek master gorselden tum ikon setini uretir.
 
-    python3 scripts/make-icons.py <master.png>
+    python3 scripts/make-icons.py <master.png> [<disk.png> <yazi.png>]
 
 NEDEN BU BETIK VAR
 Rozet daha once elle olceklenirken 139x208'e ezilmisti: daire oval olmustu ve
@@ -13,7 +13,8 @@ OLCER ve bozuksa durur, sonra her cikti icin kareligi korur.
 URETILENLER
     apps/web/src/app/icon.png            256x256   tarayici sekmesi (Next otomatik bulur)
     apps/web/src/app/apple-icon.png      180x180   iOS ana ekran
-    apps/web/public/ohaaaa-badge.png     256x256   basliktaki logo
+    apps/web/public/ohaaaa-disc.png      108x108   baslik: disk katmani
+    apps/web/public/ohaaaa-word.png      108x108   baslik: yazi katmani
     apps/web/src/app/opengraph-image.png 1200x630  WhatsApp/X/Facebook onizlemesi
 
 GEREKSINIM
@@ -77,7 +78,7 @@ def square(im: Image.Image) -> Image.Image:
 
 
 def main() -> None:
-    if len(sys.argv) != 2:
+    if len(sys.argv) not in (2, 4):
         sys.exit(__doc__)
 
     src = Path(sys.argv[1])
@@ -109,12 +110,29 @@ def main() -> None:
     outputs = [
         (WEB / "src/app/icon.png", 256),
         (WEB / "src/app/apple-icon.png", 180),
-        (WEB / "public/ohaaaa-badge.png", 256),
     ]
     for path, size in outputs:
         path.parent.mkdir(parents=True, exist_ok=True)
         master.resize((size, size), Image.LANCZOS).save(path, "PNG", optimize=True)
         print(f"  {path.relative_to(ROOT)}  {size}x{size}")
+
+    # --- Baslik katmanlari ---------------------------------------------------
+    # Basliktaki arma iki parcadir: sabit disk + hareket eden yazi. Yazi ancak
+    # ayri bir katman oldugunda kendi basina donup ziplayabilir.
+    #
+    # 108 piksel: baslikta 36 piksel gosteriliyor, 3x yogunluktaki ekranlar
+    # icin bu yeter. 256 piksel indirmek bosuna bayt olurdu - disk katmani
+    # 78 KB'den 16 KB'ye dustu.
+    if len(sys.argv) == 4:
+        for arg, name in ((sys.argv[2], "ohaaaa-disc.png"), (sys.argv[3], "ohaaaa-word.png")):
+            layer_src = Path(arg)
+            if not layer_src.exists():
+                sys.exit(f"Bulunamadi: {layer_src}")
+            dst = WEB / "public" / name
+            (Image.open(layer_src).convert("RGBA")
+                .resize((108, 108), Image.LANCZOS)
+                .save(dst, "PNG", optimize=True))
+            print(f"  {dst.relative_to(ROOT)}  108x108")
 
     # --- Onizleme gorseli ---------------------------------------------------
     # 1200x630 baglanti onizlemesi. Rozet kagit zemine ORANTISI KORUNARAK

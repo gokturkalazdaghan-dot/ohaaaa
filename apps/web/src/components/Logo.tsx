@@ -38,14 +38,23 @@ export function Logo({ className = '' }: { className?: string }) {
       className={`group -my-2 flex items-center py-2 ${className}`}
       aria-label="Ohaaaa ana sayfa"
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/ohaaaa-badge.png"
-        alt=""
-        width={36}
-        height={36}
-        className="relative z-10 h-9 w-9 shrink-0 transition-transform duration-200 group-hover:-rotate-6"
-      />
+      {/*
+        Arma iki katman: disk (sabit) + yazi (hareket eden).
+        Tek parca PNG'de yazi diske gomulu oldugu icin ancak armanin tamami
+        birlikte donerdi; ayrilinca yazi kendi basina zipliyor.
+      */}
+      <span className="relative z-10 block h-9 w-9 shrink-0">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/ohaaaa-disc.png" alt="" width={36} height={36} className="h-9 w-9" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/ohaaaa-word.png"
+          alt=""
+          width={36}
+          height={36}
+          className="oha-word absolute inset-0 h-9 w-9"
+        />
+      </span>
 
       <span className="-ml-4 rounded-r-full bg-gradient-to-r from-[#E9692A] via-[#D4501F] to-[#C13515] py-[7px] pl-5 pr-4 text-[15px] font-extrabold leading-none tracking-tight text-[#fffaf5] shadow-sm transition-transform duration-200 origin-left group-hover:scale-x-[1.02]">
         kargo dahil fiyat

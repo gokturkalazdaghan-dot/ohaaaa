@@ -223,7 +223,21 @@ def verify_letters(badge, angle_deg=0):
 
 
 def main() -> None:
-    out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path('ohaaaa-master.png')
+    """
+    Bayraklar:
+      (yok)        arma + yazi, tek parca. Favicon, iOS ikonu, onizleme.
+      --no-word    yalnizca disk ve cember.
+      --word-only  yalnizca yazi, saydam zeminde.
+
+    Son ikisi basliktaki animasyon icindir: yazi diskten AYRI bir katman
+    olmadan kendi basina donup ziplayamaz. Tek parca PNG'de yazi diske
+    gomulu oldugu icin ancak armanin tamami birlikte hareket ederdi.
+    """
+    args = [a for a in sys.argv[1:] if not a.startswith('--')]
+    no_word = '--no-word' in sys.argv
+    word_only = '--word-only' in sys.argv
+
+    out = Path(args[0]) if args else Path('ohaaaa-master.png')
     if not FONT.exists():
         sys.exit(f'Yazi tipi yok: {FONT}')
 
@@ -253,10 +267,18 @@ def main() -> None:
     word = word.resize((max(1, int(word.width * scale)), max(1, int(word.height * scale))),
                        Image.LANCZOS)
 
-    badge.paste(word, (int(CX - word.width / 2), int(CY - word.height / 2)), word)
-    badge.save(out, 'PNG')
+    if word_only:
+        # Saydam tuval: yazi, tam armadaki yeriyle ayni konumda.
+        # Ayni konum sart, yoksa basliktaki iki katman ust uste oturmaz.
+        badge = Image.new('RGBA', (S, S), (0, 0, 0, 0))
 
-    verify_letters(badge, ANGLE)
+    if not no_word:
+        badge.paste(word, (int(CX - word.width / 2), int(CY - word.height / 2)), word)
+
+    if not no_word and not word_only:
+        verify_letters(badge, ANGLE)
+
+    badge.save(out, 'PNG')
 
     # Kontrol: yazi ic diskin icinde mi?
     a = np.asarray(badge.convert('RGB')).astype(int)
@@ -264,9 +286,13 @@ def main() -> None:
     inside = rad < R_DISC * 0.99
     white = inside & (R > 200) & (G > 190) & (B > 175)
     ys, xs = np.nonzero(white)
-    dmax = np.hypot(xs - CX, ys - CY).max()
     print(f'{out}  {S}x{S}')
-    print(f'  yazinin en dis noktasi {dmax:.0f} / disk {R_DISC}  -> bosluk {R_DISC - dmax:.0f} px')
+    if xs.size:
+        dmax = np.hypot(xs - CX, ys - CY).max()
+        print(f'  yazinin en dis noktasi {dmax:.0f} / disk {R_DISC}  -> bosluk {R_DISC - dmax:.0f} px')
+    else:
+        # --no-word ciktisinda yazi yoktur; olculecek bir sey de yok.
+        print('  (yazisiz katman)')
 
 
 if __name__ == '__main__':
