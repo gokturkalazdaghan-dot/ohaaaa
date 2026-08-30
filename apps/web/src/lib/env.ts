@@ -125,14 +125,12 @@ export const searchConsoleVerification =
  * sağlayıcısının kimlik bilgilerini yayımlamasını zorunlu kılar — kayıtlı
  * bir işletme yokken bu bilgi verilemez.
  *
- * VARSAYILAN 'prelaunch'tır — bilinçli olarak GÜVENLİ tarafta hata yapar.
- * Değişkeni ayarlamayı unutursanız site indekslenmez; bunu her sayfadaki
- * şeritten hemen görürsünüz. Tersi (unutunca canlıya çıkmak) sessizce
- * gerçekleşir ve geri alınamaz.
+ * VARSAYILAN 'live'dır — üretimde indekslenir.
+ * NEXT_PUBLIC_LAUNCH_STATE=prelaunch ayarlanırsa site noindex kalır.
  */
 export type LaunchState = 'prelaunch' | 'live';
 
 export const launchState: LaunchState =
-  process.env.NEXT_PUBLIC_LAUNCH_STATE === 'live' ? 'live' : 'prelaunch';
+  process.env.NEXT_PUBLIC_LAUNCH_STATE === 'prelaunch' ? 'prelaunch' : 'live';
 
 export const isPrelaunch = launchState === 'prelaunch';
