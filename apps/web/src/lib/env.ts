@@ -54,7 +54,8 @@ function resolveSiteUrl(): string {
 
   const configured =
     process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
-    (vercelProductionUrl ? `https://${vercelProductionUrl}` : undefined);
+    (vercelProductionUrl ? `https://${vercelProductionUrl}` : undefined) ||
+    (process.env.NODE_ENV === 'production' ? 'https://ohaaaa.com' : undefined);
 
   // Sondaki eğik çizgi, `${siteUrl}/urun/x` birleştirmelerinde çift eğik
   // çizgi üretir ve iki farklı URL gibi indekslenir.
