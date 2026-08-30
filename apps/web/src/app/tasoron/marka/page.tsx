@@ -22,8 +22,8 @@ const ASSETS = [
   {
     name: 'Koli bandı baskı dosyası',
     file: '/marka/ohaaaa-koli-bandi.png',
-    spec: '200 × 48 mm · 300 dpi · yatayda kusursuz tekrarlar',
-    note: 'Standart 48 mm koli bandı içindir. Matbaaya olduğu gibi verin; ölçeklemeyin.',
+    spec: '200 × 48 mm · 300 dpi · siyah zemin, beyaz baskı',
+    note: 'Standart 48 mm koli bandı içindir. Matbaaya olduğu gibi verin; ölçeklemeyin. Desen yatayda kusursuz tekrarlar.',
   },
   {
     name: 'Arma — baskı',
@@ -84,6 +84,21 @@ export default function BrandKitPage() {
           </li>
         ))}
       </ul>
+
+      <h2>Bant siparişi verirken</h2>
+      <p>
+        Bant <strong>siyah zemin üzerine beyaz baskı</strong>. Bu, matbaaya
+        özellikle söylemeniz gereken bir ayrıntı: beyaz mürekkep ayrı bir
+        baskı ünitesi ister ve her tesiste yoktur. Sipariş öncesi
+        &ldquo;siyah bant üzerine beyaz flekso baskı&rdquo; yapıp yapmadıklarını
+        sorun; yapmıyorlarsa beyaz bant üzerine siyah baskı alternatifini
+        konuşalım, dosyayı ona göre hazırlarız.
+      </p>
+      <p>
+        Zemin tek renk siyahtır, dört renkten oluşan &ldquo;zengin siyah&rdquo;
+        değil. Bant makinesinde dört rengin üst üste tam oturması zordur;
+        kayma olursa beyaz yazının kenarında renkli hayalet çıkar.
+      </p>
 
       <h2>Yapabilecekleriniz</h2>
       <ul>

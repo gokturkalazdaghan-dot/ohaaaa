@@ -30,11 +30,16 @@ FONT = Path('/mnt/skills/examples/canvas-design/canvas-fonts/Outfit-Bold.ttf')
 
 BRAND = 'O' + 'h' + 'a' * 4
 KERN_OH = 0.135                      # make-badge.py ile ayni
-DOMAIN = 'ohaaaa.com'
+WORDMARK = BRAND + '.com'      # Ohaaaa.com
 
-ORANGE_HI = (233, 105, 42)
-ORANGE_LO = (193, 53, 21)
-CREAM = (255, 250, 245)
+# Bant SIYAH zemin, BEYAZ yazi.
+#
+# Baskida "zengin siyah" (CMYK dort renk) yerine tek renk siyah tercih edilir:
+# bant makinesinde dort rengin ust uste tam oturmasi zordur ve kayma olursa
+# beyaz yazinin kenarinda renkli hayalet cikar. Bu yuzden zemin duz, notr ve
+# tam siyaha yakin.
+BLACK = (12, 12, 14)
+WHITE = (255, 255, 255)
 
 # Kesim ve sarim toleransi. Bu seride kritik hicbir sey durmamali.
 SAFE_MM = 4
@@ -72,67 +77,32 @@ def main() -> None:
     W = int(round(repeat_mm * MM))
     safe = int(round(SAFE_MM * MM))
 
-    # --- Zemin: yatayda DUZ, dikeyde hafif gradyan ---------------------------
-    # Yatay gradyan kullanilamaz: desen tekrarlarken birlesme yerinde koyu ile
-    # acik yan yana gelir ve bant boyunca cizgi cizgi gorunur.
-    y = np.linspace(0, 1, H)[:, None]
-    hi = np.array(ORANGE_HI, dtype=float)
-    lo = np.array(ORANGE_LO, dtype=float)
-    field = hi + (lo - hi) * (y ** 1.2)
-    bg = np.repeat(field[:, None, :], W, axis=1)
-    tape = Image.fromarray(np.clip(bg, 0, 255).astype(np.uint8), 'RGB')
+    # Tekrar sayisi 2. Uc tekrarda kelime, kendi yuvasina sigmak icin
+    # kuculuyordu: bagimsiz sinir YUKSEKLIK degil GENISLIK oluyor ve yazi
+    # bant yuksekliginin ancak dortte birini dolduruyordu. Iki tekrarla
+    # kelime her ~100 mm'de bir ve okunakli boyutta cikiyor.
+    repeats = int(opt('--repeats', 2))
+
+    # --- Zemin: duz siyah -----------------------------------------------------
+    # Gradyan YOK. Tek renk zemin hem baskida daha az sorun cikarir hem de
+    # tekrar sirasinda birlesme yerinde hicbir gecis olmaz.
+    tape = Image.new('RGB', (W, H), BLACK)
     d = ImageDraw.Draw(tape)
 
     usable = H - 2 * safe
+    step = W // repeats
+    max_w = int(step * 0.84)      # tekrarlar arasinda nefes payi
 
-    # --- Marka adi -----------------------------------------------------------
-    # Olcek HEM yukseklikten HEM genislikten sinirlanir. Yalnizca yukseklige
-    # gore olceklenseydi kelime kendi yuvasindan tasar, tekrar biriminin
-    # kenarindan disari sarkardi ve doseme bozulurdu.
-    slots = 2
-    step = W // slots
-    max_w = int(step * 0.72)
-
-    word = draw_word(int(usable * 1.05), BRAND, KERN_OH)
-    scale = min(int(usable * 0.62) / word.height, max_w / word.width)
+    # --- Kelime isareti -------------------------------------------------------
+    word = draw_word(int(usable * 1.05), WORDMARK, KERN_OH)
+    scale = min((usable * 0.58) / word.height, max_w / word.width)
     word = word.resize((max(1, int(word.width * scale)), max(1, int(word.height * scale))),
                        Image.LANCZOS)
 
-    # --- Alt satir: alan adi -------------------------------------------------
-    dom = draw_word(int(usable * 0.5), DOMAIN)
-    dom_scale = min((usable * 0.20) / dom.height, max_w / dom.width)
-    dom = dom.resize((max(1, int(dom.width * dom_scale)), max(1, int(dom.height * dom_scale))),
-                     Image.LANCZOS)
-
-    block_w = max(word.width, dom.width)
-    gap = int(usable * 0.10)
-    block_h = word.height + gap + dom.height
-    top = (H - block_h) // 2
-
-    # --- Yerlestirme: tekrar birimi icinde IKI kez ---------------------------
-    # Tek kez konsaydi metrelerce bantta marka seyrek kalirdi. Iki tekrar,
-    # 200 mm'lik birimde her ~100 mm'de bir marka demek.
-    for k in range(slots):
+    top = (H - word.height) // 2
+    for k in range(repeats):
         cx = k * step + step // 2
-        tape.paste(Image.new('RGB', word.size, CREAM), (cx - word.width // 2, top), word)
-        tape.paste(Image.new('RGB', dom.size, CREAM),
-                   (cx - dom.width // 2, top + word.height + gap), dom)
-
-
-
-    # --- Ayrac cizgileri -----------------------------------------------------
-    # Cizgiler bloklarin ARASINA gelir: bloklar step/2 ve 3*step/2'de, cizgiler
-    # 0, step ve W'de. Ilk denemede cizgi blogun tam ortasindan geciyordu -
-    # konumlari cakismisti; iki birim yan yana konup gozle bakilinca goruldu.
-    #
-    # Birlesme yerindeki cizgi YARIM-YARIM cizilir: yarisi sol kenarda,
-    # yarisi sag kenarda. Iki birim yan yana geldiginde tam kalinlikta bir
-    # cizgi olusur; tek birimde tam cizilseydi doseme sirasinda cift
-    # kalinlikta gorunurdu.
-    lw = max(2, int(0.6 * MM))
-    d.line([(step, safe), (step, H - safe)], fill=CREAM, width=lw)
-    d.rectangle([0, safe, lw // 2 - 1, H - safe], fill=CREAM)
-    d.rectangle([W - lw // 2, safe, W - 1, H - safe], fill=CREAM)
+        tape.paste(Image.new('RGB', word.size, WHITE), (cx - word.width // 2, top), word)
 
     tape.save(out, 'PNG', dpi=(DPI, DPI))
 
