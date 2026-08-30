@@ -11,7 +11,7 @@
  * yeniden okur; istemcinin gönderdiği tutara asla güvenilmez.
  */
 
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -103,9 +103,15 @@ export const useCart = create<CartState>()(
  * false'tur; ikisi de aynı çıktıyı üretir, hidrasyon uyuşmazlığı olmaz.
  */
 function useMounted(): boolean {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  return mounted;
+  // `useEffect` + `setState` yerine `useSyncExternalStore`: aynı sonucu
+  // fazladan bir render turu üretmeden verir. Abone olunacak bir kaynak yok
+  // (değer bir kez false'tan true'ya geçer), bu yüzden `subscribe` boştur.
+  return useSyncExternalStore(subscribeNothing, () => true, () => false);
+}
+
+/** Değişmeyen bir değerin aboneliği: hiçbir zaman haber vermez. */
+function subscribeNothing(): () => void {
+  return () => {};
 }
 
 /**

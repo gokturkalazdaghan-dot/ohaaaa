@@ -13,30 +13,14 @@
  */
 
 import Script from 'next/script';
-import { useEffect, useState } from 'react';
 
-import { CONSENT_STORAGE_KEY, readConsent } from '@/lib/consent';
+import { readConsent, useConsent } from '@/lib/consent';
 
 export function Analytics({ measurementId }: { measurementId: string }) {
-  const [allowed, setAllowed] = useState(false);
-
-  useEffect(() => {
-    setAllowed(readConsent() === 'granted');
-
-    // Onay kutusundan gelen değişikliği dinle: kullanıcı onay verdiğinde
-    // sayfa yenilenmeden ölçümleme başlasın.
-    function onConsentChange() {
-      setAllowed(readConsent() === 'granted');
-    }
-
-    window.addEventListener('ohaaaa:consent', onConsentChange);
-    // Başka bir sekmede geri alınan onay burada da geçerli olmalı.
-    window.addEventListener('storage', (event) => {
-      if (event.key === CONSENT_STORAGE_KEY) onConsentChange();
-    });
-
-    return () => window.removeEventListener('ohaaaa:consent', onConsentChange);
-  }, []);
+  // Abonelik `useConsent` içinde: bu sekmedeki karar da, başka sekmede geri
+  // alınan onay da anında geçerli olur. Önceki hali `storage` dinleyicisini
+  // temizlemiyordu; her yeniden bağlanışta bir dinleyici daha birikirdi.
+  const allowed = useConsent() === 'granted';
 
   if (!allowed || !measurementId) return null;
 

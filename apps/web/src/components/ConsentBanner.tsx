@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
-import { readConsent, writeConsent } from '@/lib/consent';
+import { useConsent, writeConsent } from '@/lib/consent';
 
 /**
  * Çerez onay şeridi.
@@ -13,12 +13,16 @@ import { readConsent, writeConsent } from '@/lib/consent';
  * onay ancak özgür iradeyle verilmişse geçerlidir.
  */
 export function ConsentBanner() {
-  const [visible, setVisible] = useState(false);
+  const consent = useConsent();
 
-  useEffect(() => {
-    // Yalnızca henüz karar verilmemişse göster.
-    setVisible(readConsent() === 'unset');
-  }, []);
+  // Karar bu sekmede verildikten sonra şerit kapanır. Onay durumu
+  // localStorage'a da yazılır; `dismissed` yalnızca kapanışı anında
+  // uygulamak içindir (aboneliğin dönmesini beklemeden).
+  const [dismissed, setDismissed] = useState(false);
+
+  // 'unknown' = henüz istemcide okunmadı. Şerit o anda GÖSTERİLMEZ: çoktan
+  // karar vermiş ziyaretçi ilk boyamada şeridi bir an görmemeli.
+  const visible = !dismissed && consent === 'unset';
 
   /*
    * Şerit `fixed` konumlandığı için sayfa akışından çıkar ve alt bilginin
@@ -41,7 +45,7 @@ export function ConsentBanner() {
 
   function decide(state: 'granted' | 'denied') {
     writeConsent(state);
-    setVisible(false);
+    setDismissed(true);
   }
 
   return (

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { LegalIncompleteNotice } from '@/components/LegalIncompleteNotice';
-import { business, processors } from '@/lib/legal';
+import { business } from '@/lib/legal';
 import Link from 'next/link';
 
 import { ContentPage } from '@/components/ContentPage';

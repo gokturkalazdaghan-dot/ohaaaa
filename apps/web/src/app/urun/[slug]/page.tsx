@@ -96,6 +96,11 @@ export default async function ProductPage({ params }: ProductPageProps) {
    */
   const sellableOffers = group.offers.filter((offer) => offer.stock > 0);
 
+  // Bu bir sunucu bileşeni ve sayfa her istekte yeniden render ediliyor
+  // (önbelleğe alınmıyor), dolayısıyla "şu andan 24 saat sonrası" her
+  // ziyaretçi için doğru hesaplanır. Lint kuralı render sırasında saat
+  // okumayı istemci bileşeni varsayımıyla uyarır; burada geçerli değil.
+  // eslint-disable-next-line react-hooks/purity
   const priceValidUntil = new Date(Date.now() + 24 * 60 * 60 * 1000)
     .toISOString()
     .slice(0, 10);
