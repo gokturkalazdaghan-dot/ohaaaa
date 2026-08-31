@@ -630,6 +630,76 @@ for (const width of [375, 768, 1024, 1440]) {
   await fp.close();
 }
 
+/*
+ * ARAMA FİLTRELERİ — marka ve ücretsiz kargo.
+ *
+ * Ölçülen dört kural:
+ *   1. Marka filtresi sonucu gerçekten daraltıyor mu?
+ *   2. İkinci marka EKLİYOR mu, birincinin yerine geçmiyor mu? (Kullanıcı
+ *      "Sony" üstüne "Apple" tıkladığında Sony'yi kaybetmemeli.)
+ *   3. Bir filtre seçiliyken diğer markalar listede KALIYOR mu? Kalmazsa
+ *      kullanıcı seçimini genişletemez, filtreyi kaldırıp baştan denemek
+ *      zorunda kalır.
+ *   4. Fiyat bir GET FORMUDUR ve gönderildiğinde adresi baştan yazar.
+ *      Marka/kargo gizli alanlarla taşınmazsa kullanıcı fiyatı değiştirdiği
+ *      anda o filtreleri kaybeder — hiçbir şey tıklamadığı hâlde sonuç
+ *      genişler.
+ *
+ * Panel mobil ve masaüstü için İKİ KEZ çizilir; `:visible` olmadan gizli
+ * kopya seçilir ve tıklama hiç gerçekleşmez.
+ */
+{
+  const sp = await browser.newPage({ viewport: { width: 1400, height: 1000 } });
+  const sayi = () => sp.locator('main a[href^="/urun/"]').count();
+
+  await sp.goto(`${BASE}/arama`, { waitUntil: 'networkidle' });
+  const hepsi = await sayi();
+  const markaRayi = 'nav[aria-label="Marka filtresi"]:visible a';
+  const markaSayisi = await sp.locator(markaRayi).count();
+
+  check(markaSayisi > 1, 'Marka filtresi listeleniyor', `${markaSayisi} marka`);
+
+  if (markaSayisi > 1) {
+    const ilkHref = await sp.locator(markaRayi).first().getAttribute('href');
+    await sp.goto(`${BASE}${ilkHref}`, { waitUntil: 'networkidle' });
+    const tekMarka = await sayi();
+    check(tekMarka > 0 && tekMarka < hepsi, 'Marka filtresi sonucu daraltıyor', `${tekMarka}/${hepsi}`);
+    check(
+      (await sp.locator(markaRayi).count()) === markaSayisi,
+      'Marka seçiliyken diğer markalar listede kalıyor',
+    );
+
+    /* İkinci marka: kendi bağlantısı önceki seçimi TAŞIMALI. */
+    const ikinciHref =
+      (await sp.locator(markaRayi).nth(1).getAttribute('href')) ?? '';
+    check(
+      ikinciHref.includes('%2C') || ikinciHref.includes(','),
+      'İkinci marka seçimi birinciyi koruyor (ekliyor, değiştirmiyor)',
+      ikinciHref,
+    );
+  }
+
+  /* Fiyat formu diğer filtreleri koruyor mu? */
+  await sp.goto(`${BASE}/arama?kargo=bedava`, { waitUntil: 'networkidle' });
+  const kargoRayi = await sp.locator('nav[aria-label="Kargo filtresi"]:visible a').count();
+  check(kargoRayi > 0, 'Ücretsiz kargo filtresi listeleniyor');
+
+  const fiyatFormu = sp
+    .locator('form:visible')
+    .filter({ has: sp.locator('input[name="min"]') })
+    .first();
+
+  if ((await fiyatFormu.count()) > 0) {
+    await fiyatFormu.locator('input[name="min"]').fill('1');
+    await fiyatFormu.locator('button[type="submit"]').click();
+    await sp.waitForURL(/min=1/, { timeout: 15000 }).catch(() => {});
+    const adres = new URL(sp.url()).search;
+    check(adres.includes('kargo=bedava'), 'Fiyat formu diğer filtreleri kaybetmiyor', adres);
+  }
+
+  await sp.close();
+}
+
 // --- Konsol hataları -------------------------------------------------------
 const realErrors = consoleErrors.filter(
   (text) => !/favicon|Failed to load resource.*40[34]/i.test(text),

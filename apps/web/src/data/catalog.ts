@@ -48,6 +48,8 @@ export interface SearchFacets {
   minPriceCents: number | null;
   maxPriceCents: number | null;
   categories: Array<{ id: string; slug: string; name: string; count: number }>;
+  brands: Array<{ name: string; count: number }>;
+  freeShippingCount: number;
 }
 
 export interface SearchParams {
@@ -58,6 +60,37 @@ export interface SearchParams {
   sort?: SortOption;
   limit?: number;
   offset?: number;
+  /** Seçili markalar. Boş dizi "filtre yok" demektir, "hiçbiri" değil. */
+  brands?: string[];
+  /** Yalnızca ücretsiz kargolu teklifi olan ürünler. */
+  freeShipping?: boolean;
+}
+
+/*
+ * GÖÇ İLE DAĞITIM ARASINDAKİ PENCERE.
+ *
+ * `search_products` ve `search_facets` yeni parametreler aldı. Web tarafı
+ * Vercel'e göçten ÖNCE çıkarsa, PostgREST o imzayı bulamaz ve arama tamamen
+ * kırılır — filtreler değil, ARAMANIN KENDİSİ.
+ *
+ * Bu yüzden yeni imza bir kez denenir; PostgREST "böyle bir fonksiyon yok"
+ * derse (PGRST202) eski imzayla tekrar denenir ve sonuç modül ömrü boyunca
+ * hatırlanır. Yani her istekte iki tur atılmaz, yalnızca ilkinde.
+ *
+ * Geri düşüşte filtreler UYGULANAMAZ; kullanıcıya sessizce yanlış sonuç
+ * göstermektense filtre şeridi gizlenir (bkz. searchFacets: eski imzada
+ * marka listesi boş döner ve arayüz o bölümü çizmez).
+ */
+type RpcSignature = 'yeni' | 'eski';
+let searchSignature: RpcSignature | null = null;
+
+/** PostgREST'in "bu imzada fonksiyon yok" hatası. */
+function isMissingSignature(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return (
+    error.code === 'PGRST202' ||
+    /function .* does not exist|Could not find the function/i.test(error.message ?? '')
+  );
 }
 
 /**
@@ -97,7 +130,7 @@ export async function searchProducts(params: SearchParams): Promise<SearchPage> 
   const supabase = createAnonClient();
 
   if (supabase) {
-    const { data, error } = await supabase.rpc('search_products', {
+    const base = {
       p_query: params.query ?? null,
       p_category_id: params.categoryId ?? null,
       p_min_price: params.minPriceCents ?? null,
@@ -105,8 +138,33 @@ export async function searchProducts(params: SearchParams): Promise<SearchPage> 
       p_sort: params.sort ?? 'relevance',
       p_limit: params.limit ?? 24,
       p_offset: params.offset ?? 0,
-    });
+    };
+    const withFilters = {
+      ...base,
+      p_brands: params.brands?.length ? params.brands : null,
+      p_free_shipping: params.freeShipping ?? false,
+    };
 
+    let response =
+      searchSignature === 'eski'
+        ? await supabase.rpc('search_products', base)
+        : await supabase.rpc('search_products', withFilters);
+
+    if (searchSignature === null && isMissingSignature(response.error)) {
+      // Göç henüz uygulanmamış. Aramayı kırmak yerine eski imzaya düşülür.
+      console.warn(
+        JSON.stringify({
+          level: 'warn',
+          msg: 'search_products eski imzayla çağrılıyor — filtre göçü uygulanmamış',
+        }),
+      );
+      searchSignature = 'eski';
+      response = await supabase.rpc('search_products', base);
+    } else if (searchSignature === null && !response.error) {
+      searchSignature = 'yeni';
+    }
+
+    const { data, error } = response;
     if (error) throw new Error(`Arama başarısız: ${error.message}`);
 
     const rows = (data ?? []) as Record<string, unknown>[];
@@ -143,11 +201,14 @@ export async function searchProducts(params: SearchParams): Promise<SearchPage> 
  * Alinamazsa sayfa yine acilmali: filtreler ikincil bir kolayliktir, arama
  * sonucunun kendisi degil. Bu yuzden hata firlatmaz, bos facet doner.
  */
-export async function getSearchFacets(params: {
-  query?: string;
-  categoryId?: string;
-}): Promise<SearchFacets> {
-  const empty: SearchFacets = { minPriceCents: null, maxPriceCents: null, categories: [] };
+export async function getSearchFacets(params: SearchParams): Promise<SearchFacets> {
+  const empty: SearchFacets = {
+    minPriceCents: null,
+    maxPriceCents: null,
+    categories: [],
+    brands: [],
+    freeShippingCount: 0,
+  };
   const supabase = createAnonClient();
 
   // Demo modunda facet'ler yerleşik veri kümesinden hesaplanır. Boş dönseydi
@@ -156,10 +217,27 @@ export async function getSearchFacets(params: {
   // pazar yeri görmek.
   if (!supabase) return demoFacets(params);
 
-  const { data, error } = await supabase.rpc('search_facets', {
+  const baseArgs = {
     p_query: params.query ?? null,
     p_category_id: params.categoryId ?? null,
-  });
+  };
+  const filterArgs = {
+    ...baseArgs,
+    p_brands: params.brands?.length ? params.brands : null,
+    p_free_shipping: params.freeShipping ?? false,
+  };
+
+  let facetResponse =
+    searchSignature === 'eski'
+      ? await supabase.rpc('search_facets', baseArgs)
+      : await supabase.rpc('search_facets', filterArgs);
+
+  if (isMissingSignature(facetResponse.error)) {
+    searchSignature = 'eski';
+    facetResponse = await supabase.rpc('search_facets', baseArgs);
+  }
+
+  const { data, error } = facetResponse;
 
   if (error) {
     console.error(
@@ -182,6 +260,14 @@ export async function getSearchFacets(params: {
       name: String(c.name),
       count: Number(c.count),
     })),
+    /* Eski imzada bu alanlar hiç dönmez; boş kalır ve arayüz marka
+       bölümünü çizmez. Filtre şeridinin yarısını "0 sonuç" diye göstermek,
+       göç uygulanmadığını kullanıcıya bir arıza gibi yansıtırdı. */
+    brands: ((row.brands as Record<string, unknown>[] | null) ?? []).map((b) => ({
+      name: String(b.name),
+      count: Number(b.count),
+    })),
+    freeShippingCount: Number(row.free_shipping_count ?? 0),
   };
 }
 
@@ -194,18 +280,37 @@ export async function getSearchFacets(params: {
  *   • Kategori sayaçları KATEGORİ FİLTRESİ UYGULANMADAN hesaplanır; kullanıcı
  *     başka bir kategoride kaç sonuç olduğunu seçmeden önce görebilmeli.
  */
-function demoFacets(params: { query?: string; categoryId?: string }): SearchFacets {
+function demoFacets(params: SearchParams): SearchFacets {
   const matched = searchDemo({ query: params.query, limit: demoProductGroups.length }).results;
+  const groupOf = (id: string) => demoProductGroups.find((candidate) => candidate.id === id);
 
-  const inScope = matched.filter((result) => {
-    if (!params.categoryId) return true;
-    const group = demoProductGroups.find((candidate) => candidate.id === result.groupId);
-    return group?.categoryId === params.categoryId;
-  });
+  const secili = (params.brands ?? []).map((b) => b.toLocaleLowerCase('tr'));
+  const markaUyar = (id: string) => {
+    if (secili.length === 0) return true;
+    const brand = groupOf(id)?.brand;
+    return Boolean(brand && secili.includes(brand.toLocaleLowerCase('tr')));
+  };
+  const kargoUyar = (id: string) => !params.freeShipping || hasFreeShipping(id);
+  const kategoriUyar = (id: string) =>
+    !params.categoryId || groupOf(id)?.categoryId === params.categoryId;
+
+  const inScope = matched.filter((r) => kategoriUyar(r.groupId));
 
   const prices = inScope
+    .filter((r) => markaUyar(r.groupId) && kargoUyar(r.groupId))
     .map((result) => result.minPriceCents)
     .filter((price): price is number => price !== null);
+
+  /* Marka sayacı: MARKA dışındaki filtreler uygulanır — kullanıcı "Sony"
+     seçtiğinde diğer markaların sayıları görünür kalmalı, yoksa seçimini
+     genişletemez. */
+  const brandCounts = new Map<string, number>();
+  for (const result of inScope) {
+    if (!kargoUyar(result.groupId)) continue;
+    const brand = groupOf(result.groupId)?.brand;
+    if (!brand?.trim()) continue;
+    brandCounts.set(brand, (brandCounts.get(brand) ?? 0) + 1);
+  }
 
   return {
     minPriceCents: prices.length > 0 ? Math.min(...prices) : null,
@@ -214,12 +319,29 @@ function demoFacets(params: { query?: string; categoryId?: string }): SearchFace
       id: category.id,
       slug: category.slug,
       name: category.name,
-      count: matched.filter((result) => {
-        const group = demoProductGroups.find((candidate) => candidate.id === result.groupId);
-        return group?.categoryId === category.id;
-      }).length,
+      count: matched.filter(
+        (result) =>
+          groupOf(result.groupId)?.categoryId === category.id &&
+          markaUyar(result.groupId) &&
+          kargoUyar(result.groupId),
+      ).length,
     })),
+    brands: [...brandCounts.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'tr')),
+    /* Kargo sayacı: KARGO dışındaki filtreler uygulanır. */
+    freeShippingCount: inScope.filter(
+      (r) => hasFreeShipping(r.groupId) && markaUyar(r.groupId),
+    ).length,
   };
+}
+
+/** Bir kanonik ürünün ücretsiz kargolu aktif teklifi var mı? */
+function hasFreeShipping(groupId: string): boolean {
+  const group = demoProductGroups.find((candidate) => candidate.id === groupId);
+  return (group?.offers ?? []).some(
+    (offer) => offer.stock > 0 && offer.shippingFeeCents === 0,
+  );
 }
 
 /** Demo modu araması — SQL'deki kelime bazlı AND eşleştirmesini taklit eder. */
@@ -235,6 +357,16 @@ function searchDemo(params: SearchParams): SearchPage {
     if (params.categoryId && group.categoryId !== params.categoryId) return false;
     if (params.minPriceCents && (group.minPriceCents ?? 0) < params.minPriceCents) return false;
     if (params.maxPriceCents && (group.minPriceCents ?? 0) > params.maxPriceCents) return false;
+
+    /* SQL ile aynı kurallar: marka karşılaştırması büyük/küçük harften
+       bağımsız, boş dizi filtre sayılmaz, ücretsiz kargo en az bir aktif
+       kargosuz TEKLİF ister (grup bazında değil, teklif bazında). */
+    if (params.brands?.length) {
+      const secili = params.brands.map((b) => b.toLocaleLowerCase('tr'));
+      if (!group.brand || !secili.includes(group.brand.toLocaleLowerCase('tr'))) return false;
+    }
+
+    if (params.freeShipping && !hasFreeShipping(group.id)) return false;
 
     return true;
   });

@@ -36,6 +36,10 @@ type SearchPageProps = {
     max?: string;
     sayfa?: string;
     barkod?: string;
+    /** Virgülle ayrılmış marka listesi (?marka=Sony,Apple). */
+    marka?: string;
+    /** 'bedava' ise yalnızca ücretsiz kargolu teklifler. */
+    kargo?: string;
   }>;
 };
 
@@ -120,11 +124,37 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
   const page = Math.max(1, readPositiveInt(params.sayfa, 10_000) ?? 1);
 
+  /*
+   * Marka çoklu seçimdir; adresde virgülle taşınır (?marka=Sony,Apple).
+   * Tekrar edenler ve boşlar atılır — aynı markayı iki kez göndermek
+   * SQL'de zararsız ama adres çirkinleşir ve "temizle" bağlantıları
+   * yanlış görünür.
+   */
+  const selectedBrands = [
+    ...new Set(
+      String(params.marka ?? '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  ];
+
+  const freeShipping = params.kargo === 'bedava';
+
   // Filtre seridi ikincildir: alinamazsa arama yine calismali. Bu yuzden
   // aramadan ayri ve hata firlatmayan bir cagri.
-  const facets: SearchFacets = await getSearchFacets({ query: q, categoryId: undefined }).catch(
-    () => ({ minPriceCents: null, maxPriceCents: null, categories: [] }),
-  );
+  const facets: SearchFacets = await getSearchFacets({
+    query: q,
+    categoryId: undefined,
+    brands: selectedBrands,
+    freeShipping,
+  }).catch(() => ({
+    minPriceCents: null,
+    maxPriceCents: null,
+    categories: [],
+    brands: [],
+    freeShippingCount: 0,
+  }));
 
   const activeCategory = kategori ? facets.categories.find((c) => c.slug === kategori) : undefined;
 
@@ -139,6 +169,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       sort,
       limit: PAGE_SIZE,
       offset: (page - 1) * PAGE_SIZE,
+      brands: selectedBrands,
+      freeShipping,
     });
   } catch (error) {
     console.error(
@@ -163,6 +195,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       sirala: sort,
       min: lowTl === undefined ? undefined : String(lowTl),
       max: highTl === undefined ? undefined : String(highTl),
+      marka: selectedBrands.length > 0 ? selectedBrands.join(',') : undefined,
+      kargo: freeShipping ? 'bedava' : undefined,
       // Filtre degisince ilk sayfaya donulur: 7. sayfada duran biri filtreyi
       // daraltinca bos ekranla karsilasmamali.
       sayfa: undefined,
@@ -183,7 +217,11 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
   // Kapalı panelin üstünde kaç filtre uygulandığı yazar: kullanıcı paneli
   // açmadan da sonuçların daraltılmış olduğunu bilmeli.
-  const activeFilterCount = (activeCategory ? 1 : 0) + (hasPriceFilter ? 1 : 0);
+  const activeFilterCount =
+    (activeCategory ? 1 : 0) +
+    (hasPriceFilter ? 1 : 0) +
+    selectedBrands.length +
+    (freeShipping ? 1 : 0);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
@@ -263,6 +301,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
                 maxTl={highTl}
                 buildHref={buildHref}
                 hasPriceFilter={hasPriceFilter}
+                selectedBrands={selectedBrands}
+                freeShipping={freeShipping}
               />
             </div>
           </details>
@@ -279,6 +319,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
               maxTl={highTl}
               buildHref={buildHref}
               hasPriceFilter={hasPriceFilter}
+              selectedBrands={selectedBrands}
+              freeShipping={freeShipping}
             />
           </div>
         </aside>
@@ -352,6 +394,8 @@ function FilterPanel({
   maxTl,
   buildHref,
   hasPriceFilter,
+  selectedBrands,
+  freeShipping,
 }: {
   idPrefix: string;
   facets: SearchFacets;
@@ -363,7 +407,20 @@ function FilterPanel({
   maxTl?: number;
   buildHref: (changes: Record<string, string | undefined>) => string;
   hasPriceFilter: boolean;
+  selectedBrands: string[];
+  freeShipping: boolean;
 }) {
+  /*
+   * Marka SEÇİMİ EKLEMELİDİR, değiştirmeli değil: kullanıcı "Sony"nin
+   * üstüne "Apple" tıkladığında Sony'yi kaybetmemeli. Her satır kendi
+   * markasını listeye ekleyen ya da çıkaran bir bağlantı taşır.
+   */
+  const brandHref = (name: string) => {
+    const kalan = selectedBrands.includes(name)
+      ? selectedBrands.filter((b) => b !== name)
+      : [...selectedBrands, name];
+    return buildHref({ marka: kalan.length > 0 ? kalan.join(',') : undefined });
+  };
   return (
     <>
       <section>
@@ -397,7 +454,69 @@ function FilterPanel({
         maxTl={maxTl}
         clearHref={buildHref({ min: undefined, max: undefined })}
         active={hasPriceFilter}
+        selectedBrands={selectedBrands}
+        freeShipping={freeShipping}
       />
+
+      {/*
+        KARGO.
+        Sitenin vaadi "kargo dahil fiyat"; kargosuz teklifi ayırabilmek bu
+        vaadin doğal uzantısı. Sayaç sıfırsa bölüm hiç çizilmez — sonuç
+        vermeyecek bir filtre sunmak kullanıcıyı boş ekrana götürür.
+      */}
+      {(facets.freeShippingCount > 0 || freeShipping) && (
+        <section className="mt-6">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">Kargo</h2>
+          <nav aria-label="Kargo filtresi" className="mt-3">
+            <FilterRow
+              href={buildHref({ kargo: freeShipping ? undefined : 'bedava' })}
+              active={freeShipping}
+              count={facets.freeShippingCount}
+            >
+              Ücretsiz kargo
+            </FilterRow>
+          </nav>
+        </section>
+      )}
+
+      {/*
+        MARKA.
+        Göç uygulanmadıysa `facets.brands` boş döner ve bu bölüm hiç
+        çizilmez. Filtreyi "0 sonuç" diye göstermek, veritabanı eksiğini
+        kullanıcıya bir arıza gibi yansıtırdı.
+
+        Seçili bir marka sayacı sıfıra düşse bile listede KALIR: kullanıcı
+        kendi seçtiği filtreyi geri alabilmeli.
+      */}
+      {facets.brands.length > 0 && (
+        <section className="mt-6">
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">Marka</h2>
+            {selectedBrands.length > 0 && (
+              <Link
+                href={buildHref({ marka: undefined })}
+                className="text-2xs font-medium text-brand hover:underline"
+              >
+                Temizle
+              </Link>
+            )}
+          </div>
+          <nav aria-label="Marka filtresi" className="mt-3 max-h-72 space-y-1.5 overflow-y-auto">
+            {facets.brands
+              .filter((brand) => brand.count > 0 || selectedBrands.includes(brand.name))
+              .map((brand) => (
+                <FilterRow
+                  key={brand.name}
+                  href={brandHref(brand.name)}
+                  active={selectedBrands.includes(brand.name)}
+                  count={brand.count}
+                >
+                  {brand.name}
+                </FilterRow>
+              ))}
+          </nav>
+        </section>
+      )}
     </>
   );
 }
@@ -445,6 +564,8 @@ function PriceFilter({
   maxTl,
   clearHref,
   active,
+  selectedBrands,
+  freeShipping,
 }: {
   idPrefix: string;
   facets: SearchFacets;
@@ -455,6 +576,8 @@ function PriceFilter({
   maxTl?: number;
   clearHref: string;
   active: boolean;
+  selectedBrands: string[];
+  freeShipping: boolean;
 }) {
   if (facets.minPriceCents === null || facets.maxPriceCents === null) return null;
 
@@ -473,6 +596,16 @@ function PriceFilter({
         {q && <input type="hidden" name="q" value={q} />}
         {kategori && <input type="hidden" name="kategori" value={kategori} />}
         {sort !== 'relevance' && <input type="hidden" name="sirala" value={sort} />}
+        {/*
+          Fiyat bir GET FORMUDUR: gönderildiğinde adres çubuğunu tamamen
+          yeniden yazar. Marka ve kargo seçimi burada taşınmazsa kullanıcı
+          fiyatı değiştirdiği anda o filtreleri KAYBEDER — hiçbir şey
+          tıklamadığı hâlde sonuç genişler.
+        */}
+        {selectedBrands.length > 0 && (
+          <input type="hidden" name="marka" value={selectedBrands.join(',')} />
+        )}
+        {freeShipping && <input type="hidden" name="kargo" value="bedava" />}
 
         <div className="flex items-center gap-2">
           <label className="sr-only" htmlFor={`${idPrefix}-fiyat-min`}>
