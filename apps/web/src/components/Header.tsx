@@ -31,7 +31,7 @@ export function Header({ userMenu }: { userMenu?: React.ReactNode }) {
         <Logo />
         <div className="hidden flex-1 md:block">
           <Suspense fallback={<div className="h-10 w-full max-w-xl bg-surface-2" />}>
-            <SearchBar />
+            <SearchBar label="Üst çubukta ürün ara" />
           </Suspense>
         </div>
         <div className="ml-auto flex items-center gap-2 text-sm sm:gap-3">
@@ -42,7 +42,7 @@ export function Header({ userMenu }: { userMenu?: React.ReactNode }) {
       </div>
       <div className="border-t border-line px-4 py-2 md:hidden">
         <Suspense fallback={<div className="h-10 w-full bg-surface-2" />}>
-          <SearchBar />
+          <SearchBar label="Üst çubukta ürün ara" />
         </Suspense>
       </div>
       </header>

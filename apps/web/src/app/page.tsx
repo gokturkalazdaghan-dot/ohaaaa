@@ -1,6 +1,8 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 
 import { FlashDeals } from '@/components/FlashDeals';
+import { SearchBar } from '@/components/SearchBar';
 import { ProductCard } from '@/components/ProductCard';
 import { RecentlyViewed } from '@/components/RecentlyViewed';
 import { TrustSignals } from '@/components/TrustSignals';
@@ -35,8 +37,28 @@ export default async function HomePage() {
           En düşük toplam üstte durur.
         </p>
 
+        {/*
+          HERO ARAMA KUTUSU.
+
+          `size="hero"` varyantı yazılmıştı ama HİÇBİR YERDE kullanılmıyordu —
+          arama yalnızca üst çubuktaki küçük kutudan yapılabiliyordu.
+
+          Bir pazar yerinde arama, ana sayfanın birincil eylemidir: ziyaretçi
+          gezmeye değil, aklındaki ürünü bulmaya gelir. Onu üst çubuktaki
+          küçük bir alana yönlendirmek, dükkânın kapısındaki danışmayı
+          arka odaya koymaya benzer.
+
+          Kategori çipleri hemen altında kalır: ne aradığını bilmeyen
+          ziyaretçinin yolu da açık olsun.
+        */}
+        <div className="mt-8 max-w-2xl">
+          <Suspense fallback={<div className="h-[68px] w-full rounded-2xl bg-surface-2" />}>
+            <SearchBar size="hero" label="Ürün, marka veya model ara" />
+          </Suspense>
+        </div>
+
         {categories.length > 0 && (
-          <nav aria-label="Kategoriler" className="mt-7">
+          <nav aria-label="Kategoriler" className="mt-6">
             <ul className="flex flex-wrap gap-2">
               {categories.map((category) => (
                 <li key={category.id}>

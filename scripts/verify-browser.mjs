@@ -390,6 +390,50 @@ check(scaled.size > 12, 'Küçük yazılar kullanıcı ayarıyla büyüyor', `${
 check(scaled.overflow <= 1, 'Büyütülmüş yazıda yatay taşma yok', `${scaled.overflow}px`);
 await bigText.close();
 
+// --- Pazar yeri deseni: arama ana sayfanın birincil eylemi ------------------
+/*
+ * `size="hero"` arama varyantı yazılmıştı ama HİÇBİR YERDE kullanılmıyordu;
+ * arama yalnızca üst çubuktaki küçük kutudan yapılabiliyordu. Bir pazar
+ * yerinde ziyaretçi gezmeye değil, aklındaki ürünü bulmaya gelir.
+ */
+await page.setViewportSize({ width: 1280, height: 900 });
+await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+
+const heroSearch = page.locator('main input[name="q"]:visible').first();
+check(await heroSearch.count() > 0, 'Ana sayfada hero arama kutusu var');
+const heroBox = await heroSearch.boundingBox();
+check(
+  heroBox !== null && heroBox.y < 700,
+  'Hero arama kutusu ilk ekranda',
+  `y=${Math.round(heroBox?.y ?? -1)}`,
+);
+
+/*
+ * Tarayıcılar `<button>` için imleci değiştirmez ve Tailwind'in sıfırlaması
+ * da eklemez; sitedeki her düğme tıklanabilir OLMADIĞINI söylüyordu.
+ */
+const cursor = await page.locator('button').first().evaluate((el) => getComputedStyle(el).cursor);
+check(cursor === 'pointer', 'Düğmelerde el imleci', cursor);
+
+// --- Kırılım noktaları -----------------------------------------------------
+/*
+ * Dört genişlikte de yatay kaydırma olmamalı. Yatay kaydırma, mobilde
+ * içeriğin bir kısmının hiç görülmemesi demektir.
+ */
+for (const width of [375, 768, 1024, 1440]) {
+  const bp = await browser.newPage({ viewport: { width, height: 900 } });
+  let worst = 0;
+  for (const path of ['/', '/arama', '/urun/sony-wh-1000xm5', '/odeme']) {
+    await bp.goto(`${BASE}${path}`, { waitUntil: 'networkidle' });
+    const over = await bp.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    worst = Math.max(worst, over);
+  }
+  check(worst <= 1, `${width}px genişlikte yatay taşma yok`, `${worst}px`);
+  await bp.close();
+}
+
 // --- Konsol hataları -------------------------------------------------------
 const realErrors = consoleErrors.filter(
   (text) => !/favicon|Failed to load resource.*40[34]/i.test(text),

@@ -169,6 +169,23 @@
     font-family: var(--font-sans);
   }
 
+  /*
+   * Tıklanabilir ögelerde EL İMLECİ.
+   *
+   * Tarayıcılar `<button>` için imleci değiştirmez (varsayılan ok kalır) ve
+   * Tailwind'in sıfırlaması da eklemez. Sonuçta sitedeki her düğme, üzerine
+   * gelindiğinde tıklanabilir OLMADIĞINI söylüyordu. Küçük bir ayrıntı gibi
+   * durur ama imleç, bir şeyin tıklanabilir olduğunu anlatan en eski ve en
+   * hızlı sinyaldir.
+   *
+   * `:disabled` dışarıda: pasif bir düğmeye el imleci göstermek yalan olur.
+   */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  summary {
+    cursor: pointer;
+  }
+
   :focus-visible {
     outline: 2px solid var(--brand);
     outline-offset: 2px;

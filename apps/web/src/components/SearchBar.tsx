@@ -24,9 +24,19 @@ const SUGGESTIONS = ['iPhone 15', 'kulaklık', 'airfryer', 'koşu ayakkabısı',
 export function SearchBar({
   size = 'compact',
   autoFocus = false,
+  label,
 }: {
   size?: 'hero' | 'compact';
   autoFocus?: boolean;
+  /**
+   * Bu arama alanının adı.
+   *
+   * Sayfada birden fazla `role="search"` bölgesi olabilir (üst çubuk ve
+   * ana sayfadaki hero kutusu). Ekran okuyucu bölgeler arasında gezinirken
+   * hepsi "arama" diye görünürse hangisinin ne olduğu anlaşılmaz — bu
+   * yüzden her biri KENDİ adını taşır.
+   */
+  label?: string;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -134,7 +144,12 @@ export function SearchBar({
 
   return (
     <div className={isHero ? 'w-full' : 'w-full max-w-xl'}>
-      <form onSubmit={submit} role="search" className="relative">
+      <form
+        onSubmit={submit}
+        role="search"
+        aria-label={label ?? (size === 'hero' ? 'Ürün ara' : 'Üst çubukta ürün ara')}
+        className="relative"
+      >
         {/* Gradyan çerçeve: odaklandığında parlar. */}
         <div
           className={`group relative rounded-2xl bg-gradient-to-r from-brand/60 via-electric/50 to-cyan/40 transition-colors duration-200 ease-out focus-within:from-brand focus-within:via-electric focus-within:to-cyan ${
