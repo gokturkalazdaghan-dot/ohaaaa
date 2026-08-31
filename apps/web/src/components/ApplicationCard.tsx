@@ -171,7 +171,7 @@ function DecisionButton({
       disabled={pending}
       className={`rounded-xl px-4 py-2 text-sm font-semibold transition-transform disabled:cursor-not-allowed disabled:opacity-50 ${
         tone === 'approve'
-          ? 'bg-gradient-to-r from-brand to-electric text-white hover:scale-[1.03]'
+          ? 'bg-brand-cta text-white hover:scale-[1.03]'
           : 'border border-line text-muted hover:border-danger/40 hover:text-danger'
       }`}
     >

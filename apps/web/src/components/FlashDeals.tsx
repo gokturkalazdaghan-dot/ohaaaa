@@ -64,7 +64,7 @@ function HeadlineDeal({ deal }: { deal: FlashDeal }) {
       />
 
       <div className="relative">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-oha px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-cta px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
           <BoltIcon className="h-3.5 w-3.5" />
           {deal.headline}
         </span>

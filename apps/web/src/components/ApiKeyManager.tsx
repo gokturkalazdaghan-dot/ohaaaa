@@ -215,7 +215,7 @@ export function ApiKeyManager() {
             <button
               type="submit"
               disabled={submitting || scopes.length === 0 || name.trim().length < 2}
-              className="rounded-xl bg-gradient-to-r from-brand to-electric px-5 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl bg-brand-cta px-5 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? 'Oluşturuluyor…' : 'Anahtarı oluştur'}
             </button>
@@ -232,7 +232,7 @@ export function ApiKeyManager() {
         <button
           type="button"
           onClick={() => setCreating(true)}
-          className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand to-electric px-5 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
+          className="flex items-center gap-2 rounded-xl bg-brand-cta px-5 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
         >
           <KeyIcon className="h-4 w-4" />
           Yeni anahtar oluştur
@@ -371,7 +371,7 @@ function RevealedKey({
               type="button"
               onClick={copy}
               className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                copied ? 'bg-success text-white' : 'bg-surface-2 text-fg hover:bg-surface-hover'
+                copied ? 'bg-success text-[#0b0b0d]' : 'bg-surface-2 text-fg hover:bg-surface-hover'
               }`}
             >
               {copied ? <CheckIcon className="h-3.5 w-3.5" /> : <CopyIcon className="h-3.5 w-3.5" />}

@@ -112,7 +112,7 @@ export function CheckoutFlow() {
         <p className="mt-1.5 text-sm text-muted">Ödeme yapabilmek için önce ürün ekleyin.</p>
         <Link
           href="/arama"
-          className="mt-5 inline-block rounded-xl bg-gradient-to-r from-brand to-electric px-5 py-2.5 text-sm font-semibold text-white"
+          className="mt-5 inline-block rounded-xl bg-brand-cta px-5 py-2.5 text-sm font-semibold text-white"
         >
           Alışverişe başla
         </Link>
@@ -241,7 +241,7 @@ export function CheckoutFlow() {
           <button
             type="submit"
             disabled={submitting}
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand to-electric px-5 py-3 font-semibold text-white transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-cta px-5 py-3 font-semibold text-white transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? 'İşleniyor…' : `${formatMoney(summary.grandTotalCents)} öde`}
           </button>
@@ -337,7 +337,7 @@ function OrderSuccess({ result }: { result: OrderResult }) {
               className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4"
             >
               <div className="flex items-center gap-3">
-                <span className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-brand to-electric text-xs font-black text-white">
+                <span className="grid h-9 w-9 place-items-center rounded-lg bg-brand-cta text-xs font-black text-white">
                   {vendorOrder.vendor_name.charAt(0)}
                 </span>
                 <div>

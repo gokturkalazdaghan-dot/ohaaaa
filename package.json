@@ -20,10 +20,12 @@
     "test": "npm run test --workspaces --if-present",
     "db:reset": "supabase db reset",
     "db:push": "supabase db push",
-    "verify:browser": "node scripts/verify-browser.mjs"
+    "verify:browser": "node scripts/verify-browser.mjs",
+    "verify:a11y": "node scripts/verify-a11y.mjs"
   },
   "devDependencies": {
-    "typescript": "^5.9.2",
-    "playwright-core": "^1.49.0"
+    "axe-core": "^4.10.0",
+    "playwright-core": "^1.49.0",
+    "typescript": "^5.9.2"
   }
 }

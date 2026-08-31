@@ -10,7 +10,7 @@ import { AlertIcon } from './Icons';
  */
 export function PrelaunchBanner() {
   return (
-    <div className="border-b border-brand/25 bg-brand/10">
+    <aside aria-label="Yayın durumu uyarısı" className="border-b border-brand/25 bg-brand/10">
       <div className="mx-auto flex max-w-7xl items-start gap-3 px-4 py-2 text-xs text-brand-soft sm:items-center sm:px-6">
         <AlertIcon className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" />
         <p>
@@ -21,6 +21,6 @@ export function PrelaunchBanner() {
           <code className="font-mono">NEXT_PUBLIC_LAUNCH_STATE=live</code> ile açılır.
         </p>
       </div>
-    </div>
+    </aside>
   );
 }

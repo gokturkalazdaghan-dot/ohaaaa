@@ -162,7 +162,7 @@ export default async function StorePage({ params, searchParams }: StorePageProps
       <header className="flex flex-wrap items-start gap-5">
         <span
           aria-hidden="true"
-          className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-brand text-2xl font-black text-[#fffaf5]"
+          className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-brand-cta text-2xl font-black text-[#fffaf5]"
         >
           {vendor.displayName.slice(0, 1).toLocaleUpperCase('tr')}
         </span>
@@ -201,6 +201,14 @@ export default async function StorePage({ params, searchParams }: StorePageProps
         </p>
       ) : (
         <>
+          {/*
+            Kart başlıkları <h3>. Araya bir <h2> girmezse başlık düzeyi
+            h1'den h3'e atlar; ekran okuyucu kullanıcısı başlıklar arasında
+            gezinirken bir seviyenin kaybolduğunu görür. Başlık görsel olarak
+            gizli: sayfada zaten "<kategori> Fiyatları" yazıyor, ikinci bir
+            görünür başlık tekrar olurdu.
+          */}
+          <h2 className="sr-only">Ürünler</h2>
           <ul className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
             {products.results.map((result) => (
               <li key={result.groupId}>

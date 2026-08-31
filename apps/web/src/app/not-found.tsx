@@ -25,7 +25,7 @@ export default function NotFound() {
       <div className="mt-7 flex flex-wrap justify-center gap-3">
         <Link
           href="/arama"
-          className="rounded-xl bg-gradient-to-r from-brand to-electric px-5 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.03]"
+          className="rounded-xl bg-brand-cta px-5 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.03]"
         >
           Ürün ara
         </Link>

@@ -59,7 +59,7 @@ export function VendorApplicationForm() {
         <div className="mt-5 flex justify-center gap-2">
           <Link
             href="/kayit"
-            className="rounded-xl bg-gradient-to-r from-brand to-electric px-5 py-2.5 text-sm font-semibold text-white"
+            className="rounded-xl bg-brand-cta px-5 py-2.5 text-sm font-semibold text-white"
           >
             Hesap oluştur
           </Link>
@@ -87,7 +87,7 @@ export function VendorApplicationForm() {
         </p>
         <Link
           href="/tasoron/panel"
-          className="mt-6 inline-block rounded-xl bg-gradient-to-r from-brand to-electric px-5 py-2.5 text-sm font-semibold text-white"
+          className="mt-6 inline-block rounded-xl bg-brand-cta px-5 py-2.5 text-sm font-semibold text-white"
         >
           Paneli incele
         </Link>
@@ -175,7 +175,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="w-full rounded-xl bg-gradient-to-r from-brand to-electric px-5 py-3 font-semibold text-white transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
+      className="w-full rounded-xl bg-brand-cta px-5 py-3 font-semibold text-white transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
     >
       {pending ? 'Gönderiliyor…' : 'Başvuruyu gönder'}
     </button>

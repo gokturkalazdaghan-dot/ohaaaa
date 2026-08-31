@@ -73,7 +73,7 @@ export function OfferRow({
       }`}
     >
       {isBest && (
-        <span className="absolute -top-2.5 left-4 rounded-full bg-success px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+        <span className="absolute -top-2.5 left-4 rounded-full bg-success px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#0b0b0d]">
           En iyi toplam fiyat
         </span>
       )}
@@ -82,7 +82,7 @@ export function OfferRow({
       {/* min-w: düğme metni uzadığında (“Mağazaya git”) satıcı adının
           birkaç karaktere kırpılmasını önler. */}
       <div className="flex min-w-0 flex-1 items-center gap-3 sm:min-w-[10rem]">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand to-electric text-sm font-black text-white">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-cta text-sm font-black text-white">
           {sellerName.charAt(0)}
         </span>
         <div className="min-w-0">
@@ -173,7 +173,7 @@ export function OfferRow({
             offer.stock === 0
               ? 'pointer-events-none border border-line bg-surface-2 opacity-40'
               : isBest
-                ? 'bg-gradient-to-r from-brand to-electric text-white hover:scale-[1.03]'
+                ? 'bg-brand-cta text-white hover:scale-[1.03]'
                 : 'border border-line bg-surface-2 text-fg hover:border-brand/50'
           }`}
         >
@@ -189,9 +189,9 @@ export function OfferRow({
           disabled={offer.stock === 0}
           className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-40 ${
             added
-              ? 'bg-success text-white'
+              ? 'bg-success text-[#0b0b0d]'
               : isBest
-                ? 'bg-gradient-to-r from-brand to-electric text-white hover:scale-[1.03]'
+                ? 'bg-brand-cta text-white hover:scale-[1.03]'
                 : 'border border-line bg-surface-2 text-fg hover:border-brand/50'
           }`}
         >

@@ -41,6 +41,21 @@
    */
   --brand: #e9692a;
   --brand-strong: #c13515;
+
+  /*
+   * DOLGU olarak kullanılan marka rengi.
+   *
+   * `--brand` (#e9692a) beyaz yazıyla yalnızca 3.1:1 kontrast verir; WCAG AA
+   * küçük yazı için 4.5:1 ister. Yani sitedeki her dolu marka düğmesi —
+   * "Ara", "Uygula", "Sepete ekle", "Mağazaya git" — sınırın altındaydı.
+   * Bu, dekoratif bir ayrıntı değil: birincil eylem düğmelerinin okunmaması
+   * demek.
+   *
+   * #b84f14 aynı turuncu ailede kalır ve beyazla 4.86:1 verir. `--brand`
+   * yazı ve kenarlık rengi olarak (koyu zemin üstünde) aynen korunur —
+   * orada kontrast zaten yüksek.
+   */
+  --brand-cta: #b84f14;
   --brand-soft: #f08b55;
   --electric: #e9692a;
   --electric-soft: #f08b55;
@@ -82,6 +97,7 @@
   --color-subtle: var(--text-subtle);
   --color-brand: var(--brand);
   --color-brand-strong: var(--brand-strong);
+  --color-brand-cta: var(--brand-cta);
   --color-brand-soft: var(--brand-soft);
   --color-electric: var(--electric);
   --color-electric-soft: var(--electric-soft);
@@ -185,6 +201,23 @@
   }
 
   /* Hap seklinde etiket/filtre. */
+  /*
+   * Metin içindeki bağlantılar ALTI ÇİZİLİ olur.
+   *
+   * Yalnızca renkle ayırt edilen bir bağlantı, renk körü bir okuyucu için
+   * düz metinden farksızdır (WCAG 1.4.1). Denetim bunu üç sayfada yakaladı:
+   * gizlilik, favoriler ve ödeme metinlerindeki bağlantılar sadece turuncu
+   * renkleriyle ayrılıyordu.
+   *
+   * Kural yalnızca PARAGRAF içindeki bağlantılara uygulanır; menü ve kart
+   * bağlantıları zaten konumlarıyla ayırt edilir ve hepsinin altını çizmek
+   * arayüzü gürültüye boğardı.
+   */
+  p a:not(.btn):not(.chip):not(.page-btn) {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
   .chip {
     display: inline-flex;
     align-items: center;
@@ -205,8 +238,9 @@
   }
 
   .chip-active {
-    background-color: var(--brand);
-    border-color: var(--brand);
+    /* Beyaz yazı taşıdığı için dolgu erişilebilir tona çekildi. */
+    background-color: var(--brand-cta);
+    border-color: var(--brand-cta);
     color: #fffaf5;
   }
 
@@ -243,8 +277,8 @@
   }
 
   .page-btn-active {
-    background-color: var(--brand);
-    border-color: var(--brand);
+    background-color: var(--brand-cta);
+    border-color: var(--brand-cta);
     color: #fffaf5;
   }
 

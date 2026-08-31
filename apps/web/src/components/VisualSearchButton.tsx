@@ -80,7 +80,14 @@ export function VisualSearchButton({
         accept="image/*"
         capture="environment"
         className="sr-only"
-        // aria-hidden değil: ekran okuyucu kullanıcısı da dosya seçebilmeli.
+        /*
+         * Görünmez ama ERİŞİLEBİLİR AD taşır. `aria-hidden` yapmak yanlış
+         * olurdu: ekran okuyucu kullanıcısı da dosya seçebilmeli. Adsız
+         * bırakmak ise denetimde "etiketsiz form alanı" olarak çıkıyordu —
+         * görünür düğmeye basınca odak buraya geçtiğinde kullanıcı ne
+         * olduğunu duymaz.
+         */
+        aria-label="Aranacak fotoğrafı seç"
         tabIndex={-1}
         onChange={(event) => {
           const file = event.target.files?.[0];

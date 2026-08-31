@@ -209,6 +209,14 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
             ))}
           </nav>
 
+          {/*
+            Kart başlıkları <h3>. Araya bir <h2> girmezse başlık düzeyi
+            h1'den h3'e atlar; ekran okuyucu kullanıcısı başlıklar arasında
+            gezinirken bir seviyenin kaybolduğunu görür. Başlık görsel olarak
+            gizli: sayfada zaten "<kategori> Fiyatları" yazıyor, ikinci bir
+            görünür başlık tekrar olurdu.
+          */}
+          <h2 className="sr-only">Ürünler</h2>
           <ul className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
             {results.results.map((result) => (
               <li key={result.groupId}>

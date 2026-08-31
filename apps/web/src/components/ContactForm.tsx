@@ -167,7 +167,7 @@ export function ContactForm() {
       <button
         type="submit"
         disabled={status === 'sending'}
-        className="w-full rounded-xl bg-gradient-to-r from-brand to-electric px-5 py-3 font-semibold text-white transition-transform hover:scale-[1.01] disabled:opacity-60"
+        className="w-full rounded-xl bg-brand-cta px-5 py-3 font-semibold text-white transition-transform hover:scale-[1.01] disabled:opacity-60"
       >
         {status === 'sending' ? 'Gönderiliyor…' : 'Gönder'}
       </button>

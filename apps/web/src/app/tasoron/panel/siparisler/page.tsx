@@ -106,7 +106,7 @@ export default async function VendorOrdersPage() {
                 <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
                   <button
                     type="button"
-                    className="rounded-xl bg-gradient-to-r from-brand to-electric px-4 py-2 text-xs font-semibold text-white transition-transform hover:scale-[1.03]"
+                    className="rounded-xl bg-brand-cta px-4 py-2 text-xs font-semibold text-white transition-transform hover:scale-[1.03]"
                   >
                     Siparişi onayla
                   </button>
