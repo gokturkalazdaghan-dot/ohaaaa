@@ -201,7 +201,7 @@ export default function ApiDocsPage() {
                 </span>
                 <code className="font-mono text-sm font-semibold">{endpoint.path}</code>
                 {endpoint.scope !== '—' && (
-                  <span className="ml-auto rounded-md bg-surface-2 px-2 py-1 font-mono text-[10px] text-muted">
+                  <span className="ml-auto rounded-md bg-surface-2 px-2 py-1 font-mono text-3xs text-muted">
                     {endpoint.scope}
                   </span>
                 )}
@@ -258,7 +258,7 @@ export default function ApiDocsPage() {
 
 function CodeBlock({ children }: { children: string }) {
   return (
-    <pre className="mt-2 overflow-x-auto rounded-xl border border-line bg-bg p-4 font-mono text-[11px] leading-relaxed text-muted">
+    <pre className="mt-2 overflow-x-auto rounded-xl border border-line bg-bg p-4 font-mono text-2xs leading-relaxed text-muted">
       <code>{children}</code>
     </pre>
   );

@@ -43,7 +43,7 @@ export function ApplicationCard({
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-semibold">{application.displayName}</h3>
             <span
-              className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase ${status.className}`}
+              className={`rounded-full px-2.5 py-0.5 text-3xs font-bold uppercase ${status.className}`}
             >
               {status.label}
             </span>
@@ -69,7 +69,7 @@ export function ApplicationCard({
           )}
         </div>
 
-        <p className="shrink-0 text-right text-[11px] text-subtle">
+        <p className="shrink-0 text-right text-2xs text-subtle">
           {new Date(application.createdAt).toLocaleDateString('tr-TR', {
             day: 'numeric',
             month: 'long',
@@ -94,7 +94,7 @@ export function ApplicationCard({
             <div>
               <label
                 htmlFor={`rate-${application.id}`}
-                className="text-[11px] font-medium text-muted"
+                className="text-2xs font-medium text-muted"
               >
                 Komisyon oranı
               </label>
@@ -118,7 +118,7 @@ export function ApplicationCard({
             <div className="flex-1 min-w-48">
               <label
                 htmlFor={`reason-${application.id}`}
-                className="text-[11px] font-medium text-muted"
+                className="text-2xs font-medium text-muted"
               >
                 Ret gerekçesi (reddediyorsanız)
               </label>

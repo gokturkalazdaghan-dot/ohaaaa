@@ -142,7 +142,7 @@ export function ContactForm() {
           }`}
         />
         {errors.message && (
-          <p className="mt-1 text-[11px] text-danger" role="alert">
+          <p className="mt-1 text-2xs text-danger" role="alert">
             {errors.message}
           </p>
         )}
@@ -172,7 +172,7 @@ export function ContactForm() {
         {status === 'sending' ? 'Gönderiliyor…' : 'Gönder'}
       </button>
 
-      <p className="text-center text-[11px] text-subtle">
+      <p className="text-center text-2xs text-subtle">
         Gönderdiğiniz bilgiler yalnızca talebinizi yanıtlamak için kullanılır.
       </p>
     </form>
@@ -206,7 +206,7 @@ function Field({
         {...rest}
       />
       {error && (
-        <p className="mt-1 text-[11px] text-danger" role="alert">
+        <p className="mt-1 text-2xs text-danger" role="alert">
           {error}
         </p>
       )}

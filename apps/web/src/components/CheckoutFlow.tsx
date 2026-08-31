@@ -171,7 +171,7 @@ export function CheckoutFlow() {
           <h2 className="text-sm font-semibold">Sipariş özeti</h2>
 
           {summary.vendorCount > 1 && (
-            <p className="mt-3 rounded-xl border border-electric/25 bg-electric/10 px-3 py-2 text-[11px] text-electric-soft">
+            <p className="mt-3 rounded-xl border border-electric/25 bg-electric/10 px-3 py-2 text-2xs text-electric-soft">
               Siparişiniz {summary.vendorCount} mağazaya bölünecek. Her mağaza kendi kargosuyla
               gönderim yapar; ürünler ayrı ayrı ulaşabilir.
             </p>
@@ -185,7 +185,7 @@ export function CheckoutFlow() {
                     <StoreIcon className="h-3.5 w-3.5 text-brand" />
                     {group.vendorName}
                   </span>
-                  <span className="text-[10px] text-subtle">
+                  <span className="text-3xs text-subtle">
                     {group.estimatedDeliveryDays} gün
                   </span>
                 </div>
@@ -253,7 +253,7 @@ export function CheckoutFlow() {
             kullanıcının kart bilgisi girmeyi düşündüğü anda söylenen bir
             yanlış, sayfadaki en pahalı yanlıştır.
           */}
-          <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-[11px] text-subtle">
+          <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-2xs text-subtle">
             <ShieldIcon className="h-3.5 w-3.5 shrink-0" />
             Bu bir simülasyondur — tahsilat yapılmaz, kart bilgisi gönderilmez
           </p>
@@ -296,7 +296,7 @@ function Field({
       )}
 
       {error && (
-        <p className="mt-1 text-[11px] text-danger" role="alert">
+        <p className="mt-1 text-2xs text-danger" role="alert">
           {error}
         </p>
       )}
@@ -321,7 +321,7 @@ function OrderSuccess({ result }: { result: OrderResult }) {
         </p>
 
         {result.demo && (
-          <p className="mt-3 inline-block rounded-lg bg-warning/10 px-3 py-1.5 text-[11px] text-warning">
+          <p className="mt-3 inline-block rounded-lg bg-warning/10 px-3 py-1.5 text-2xs text-warning">
             Demo modu — gerçek bir tahsilat yapılmadı.
           </p>
         )}
@@ -342,7 +342,7 @@ function OrderSuccess({ result }: { result: OrderResult }) {
                 </span>
                 <div>
                   <p className="text-sm font-medium">{vendorOrder.vendor_name}</p>
-                  <p className="text-[11px] text-muted">
+                  <p className="text-2xs text-muted">
                     {vendorOrder.shipping_cents === 0
                       ? 'Ücretsiz kargo'
                       : `Kargo ${formatMoney(vendorOrder.shipping_cents)}`}

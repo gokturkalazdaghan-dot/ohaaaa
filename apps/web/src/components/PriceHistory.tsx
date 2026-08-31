@@ -75,7 +75,7 @@ export function PriceHistory({
           ['En yüksek', summary.highestCents],
         ].map(([label, value]) => (
           <div key={label as string} className="rounded-lg bg-surface-2 px-2 py-2">
-            <dt className="text-[11px] text-muted">{label}</dt>
+            <dt className="text-2xs text-muted">{label}</dt>
             <dd className="tabular mt-0.5 text-sm font-bold text-fg">
               {formatMoney(value as number)}
             </dd>
@@ -83,7 +83,7 @@ export function PriceHistory({
         ))}
       </dl>
 
-      <p className="mt-3 text-[11px] leading-relaxed text-subtle">
+      <p className="mt-3 text-2xs leading-relaxed text-subtle">
         Geçmiş, bu ürünü izlemeye başladığımızdan bu yana kendi gözlemlerimize
         dayanır. Gözlemediğimiz dönemler için fiyat üretmiyoruz.
       </p>

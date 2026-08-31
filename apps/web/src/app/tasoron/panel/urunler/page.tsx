@@ -73,13 +73,13 @@ export default function VendorProductsPage() {
                 <tr key={offer.id} className="transition-colors hover:bg-surface-hover">
                   <td className="px-4 py-3">
                     <p className="line-clamp-1 font-medium">{offer.title}</p>
-                    <p className="text-[11px] text-subtle">{group.title}</p>
+                    <p className="text-2xs text-subtle">{group.title}</p>
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-muted">{offer.sku}</td>
                   <td className="tabular px-4 py-3 text-right">
                     <span className="font-semibold">{formatMoney(offer.priceCents)}</span>
                     {percent !== null && (
-                      <span className="ml-1.5 text-[11px] text-success">%{percent}</span>
+                      <span className="ml-1.5 text-2xs text-success">%{percent}</span>
                     )}
                   </td>
                   <td className="tabular px-4 py-3 text-right">
@@ -91,11 +91,11 @@ export default function VendorProductsPage() {
                   {/* Agregatörün taşerona sunduğu asıl değer: rakip konumu. */}
                   <td className="px-4 py-3 text-right">
                     {isCheapest ? (
-                      <span className="rounded-lg bg-success/12 px-2 py-1 text-[11px] font-semibold text-success">
+                      <span className="rounded-lg bg-success/12 px-2 py-1 text-2xs font-semibold text-success">
                         En ucuz
                       </span>
                     ) : (
-                      <span className="tabular rounded-lg bg-warning/12 px-2 py-1 text-[11px] font-semibold text-warning">
+                      <span className="tabular rounded-lg bg-warning/12 px-2 py-1 text-2xs font-semibold text-warning">
                         +{formatMoney(gapCents)} pahalı
                       </span>
                     )}

@@ -71,7 +71,7 @@ function HeadlineDeal({ deal }: { deal: FlashDeal }) {
       />
 
       <div className="relative">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-cta px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-cta px-3 py-1 text-2xs font-bold uppercase tracking-wide text-white">
           <BoltIcon className="h-3.5 w-3.5" />
           {deal.headline}
         </span>
@@ -183,7 +183,7 @@ function Countdown({ endsAt }: { endsAt: string }) {
           <span className="tabular text-lg font-bold leading-none text-oha">
             {String(unit.value).padStart(2, '0')}
           </span>
-          <span className="text-[10px] text-muted">{unit.label}</span>
+          <span className="text-3xs text-muted">{unit.label}</span>
         </div>
       ))}
     </div>

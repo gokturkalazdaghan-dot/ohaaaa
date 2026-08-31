@@ -96,7 +96,7 @@ function FavoritesButton() {
     >
       <HeartIcon className="h-5 w-5" />
       {count > 0 && (
-        <span className="tabular absolute right-1 top-1 min-w-[18px] rounded-full press bg-brand-cta px-1 text-[10px] font-bold leading-[18px] text-[#fffaf5]">
+        <span className="tabular absolute right-1 top-1 min-w-[18px] rounded-full press bg-brand-cta px-1 text-3xs font-bold leading-[18px] text-[#fffaf5]">
           {count}
         </span>
       )}

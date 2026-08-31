@@ -147,7 +147,7 @@ export function ApiKeyManager() {
               minLength={2}
               className="mt-1.5 w-full rounded-xl border border-line bg-bg px-3.5 py-2.5 text-sm outline-none focus:border-brand"
             />
-            <p className="mt-1 text-[11px] text-subtle">
+            <p className="mt-1 text-2xs text-subtle">
               Sonradan hangi sistemin kullandığını hatırlamanızı sağlar.
             </p>
           </div>
@@ -175,7 +175,7 @@ export function ApiKeyManager() {
 
           <fieldset>
             <legend className="text-xs font-medium text-muted">Yetkiler</legend>
-            <p className="mt-1 text-[11px] text-subtle">
+            <p className="mt-1 text-2xs text-subtle">
               En az yetki ilkesi: anahtara yalnızca gerçekten ihtiyaç duyduğu izinleri verin.
             </p>
 
@@ -197,7 +197,7 @@ export function ApiKeyManager() {
                   />
                   <span>
                     <span className="block text-sm font-medium">{SCOPE_LABELS[scope]}</span>
-                    <code className="font-mono text-[11px] text-subtle">{scope}</code>
+                    <code className="font-mono text-2xs text-subtle">{scope}</code>
                   </span>
                 </label>
               ))}
@@ -250,7 +250,7 @@ export function ApiKeyManager() {
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="font-semibold">{key.name}</h3>
                   <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                    className={`rounded-full px-2 py-0.5 text-3xs font-bold uppercase ${
                       key.environment === 'live'
                         ? 'bg-success/12 text-success'
                         : 'bg-warning/12 text-warning'
@@ -259,7 +259,7 @@ export function ApiKeyManager() {
                     {key.environment === 'live' ? 'Canlı' : 'Test'}
                   </span>
                   {key.revoked && (
-                    <span className="rounded-full bg-danger/12 px-2 py-0.5 text-[10px] font-bold uppercase text-danger">
+                    <span className="rounded-full bg-danger/12 px-2 py-0.5 text-3xs font-bold uppercase text-danger">
                       İptal edildi
                     </span>
                   )}
@@ -273,7 +273,7 @@ export function ApiKeyManager() {
                   {key.scopes.map((scope) => (
                     <span
                       key={scope}
-                      className="rounded-md bg-surface-2 px-2 py-0.5 font-mono text-[10px] text-muted"
+                      className="rounded-md bg-surface-2 px-2 py-0.5 font-mono text-3xs text-muted"
                     >
                       {scope}
                     </span>
@@ -282,7 +282,7 @@ export function ApiKeyManager() {
               </div>
 
               <div className="flex items-center gap-4 text-right">
-                <div className="text-[11px] text-muted">
+                <div className="text-2xs text-muted">
                   <p className="tabular font-semibold text-fg">
                     {key.requestCount.toLocaleString('tr-TR')}
                   </p>
@@ -312,7 +312,7 @@ export function ApiKeyManager() {
 
       <div className="card p-5">
         <h3 className="text-sm font-semibold">Anahtarı kullanma</h3>
-        <pre className="mt-3 overflow-x-auto rounded-xl bg-bg p-4 font-mono text-[11px] leading-relaxed text-muted">
+        <pre className="mt-3 overflow-x-auto rounded-xl bg-bg p-4 font-mono text-2xs leading-relaxed text-muted">
           <code>{`curl ${apiBaseUrl}/api/v1/me \\
   -H "x-api-key: ohk_live_..."`}</code>
         </pre>

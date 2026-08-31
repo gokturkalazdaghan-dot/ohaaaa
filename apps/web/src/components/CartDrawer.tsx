@@ -119,7 +119,7 @@ export function CartDrawer() {
                       <StoreIcon className="h-4 w-4 text-brand" />
                       {group.vendorName}
                     </span>
-                    <span className="text-[11px] text-subtle">
+                    <span className="text-2xs text-subtle">
                       {group.estimatedDeliveryDays} günde kargoda
                     </span>
                   </div>
@@ -188,7 +188,7 @@ export function CartDrawer() {
                   </div>
 
                   {group.freeShippingRemainingCents !== null && (
-                    <p className="mt-2 rounded-lg bg-brand/10 px-3 py-2 text-[11px] text-brand-soft">
+                    <p className="mt-2 rounded-lg bg-brand/10 px-3 py-2 text-2xs text-brand-soft">
                       {formatMoney(group.freeShippingRemainingCents)} daha ekleyin, kargo bedava
                       olsun.
                     </p>
@@ -199,7 +199,7 @@ export function CartDrawer() {
 
             <footer className="border-t border-line bg-surface px-5 py-4">
               {summary.vendorCount > 1 && (
-                <p className="mb-3 rounded-lg border border-electric/25 bg-electric/10 px-3 py-2 text-[11px] text-electric-soft">
+                <p className="mb-3 rounded-lg border border-electric/25 bg-electric/10 px-3 py-2 text-2xs text-electric-soft">
                   Siparişiniz {summary.vendorCount} mağazaya bölünecek ve{' '}
                   {summary.vendorCount} ayrı kargo ile gelecek.
                 </p>

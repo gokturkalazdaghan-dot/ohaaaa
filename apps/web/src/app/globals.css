@@ -84,6 +84,26 @@
 }
 
 @theme inline {
+  /*
+   * Tailwind'in ölçeğinin ALTINDA iki adım.
+   *
+   * Arayüzde rozet, birim ve yardımcı metin gibi `text-xs`ten (12px) de
+   * küçük yazılar var. Bunlar `text-[11px]` / `text-[10px]` olarak SABİT
+   * PİKSELLE yazılmıştı (61 yer): kullanıcı tarayıcısında yazı boyutunu
+   * büyüttüğünde bu ögeler olduğu gibi kalıyordu. Zaten en küçük yazılar,
+   * yani büyütmeye en çok ihtiyaç duyulan yerler.
+   *
+   * `rem` cinsinden tanımlanınca kullanıcının ayarıyla birlikte ölçekleniyor
+   * ve düzen de onunla büyüyor (boşluklar zaten rem tabanlı).
+   *
+   * Satır yüksekliği küçük boyutta ORANSAL OLARAK DAHA BÜYÜK: küçük yazıda
+   * satırların birbirine girmesi okunurluğu en çok bozan şeydir.
+   */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1.45;
+  --text-3xs: 0.625rem;
+  --text-3xs--line-height: 1.4;
+
   --color-bg: var(--bg);
   --color-bg-elevated: var(--bg-elevated);
   --color-surface: var(--surface);

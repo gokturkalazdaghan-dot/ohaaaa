@@ -73,7 +73,7 @@ export function OfferRow({
       }`}
     >
       {isBest && (
-        <span className="absolute -top-2.5 left-4 rounded-full bg-success px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#0b0b0d]">
+        <span className="absolute -top-2.5 left-4 rounded-full bg-success px-2.5 py-0.5 text-3xs font-bold uppercase tracking-wide text-[#0b0b0d]">
           En iyi toplam fiyat
         </span>
       )}
@@ -102,7 +102,7 @@ export function OfferRow({
           ) : (
             <p className="truncate text-sm font-semibold">{sellerName}</p>
           )}
-          <p className="flex items-center gap-1 text-[11px] text-muted">
+          <p className="flex items-center gap-1 text-2xs text-muted">
             <StarIcon className="h-3 w-3 fill-warning text-warning" />
             <span className="tabular">{sellerRating?.toFixed(2) ?? '—'}</span>
             {offer.condition !== 'new' && (
@@ -115,7 +115,7 @@ export function OfferRow({
       </div>
 
       {/* Kargo ve teslimat */}
-      <div className="flex shrink-0 flex-col gap-0.5 text-[11px] text-muted sm:w-40">
+      <div className="flex shrink-0 flex-col gap-0.5 text-2xs text-muted sm:w-40">
         <span className="flex items-center gap-1.5">
           <TruckIcon className="h-3.5 w-3.5" />
           {offer.shippingFeeCents === 0 ? (
@@ -133,7 +133,7 @@ export function OfferRow({
         <div className="flex items-baseline gap-2 sm:justify-end">
           <span className="tabular text-lg font-bold">{formatMoney(offer.priceCents)}</span>
           {percent !== null && (
-            <span className="rounded bg-success/15 px-1.5 py-0.5 text-[11px] font-bold text-success">
+            <span className="rounded bg-success/15 px-1.5 py-0.5 text-2xs font-bold text-success">
               %{percent}
             </span>
           )}
@@ -145,11 +145,11 @@ export function OfferRow({
           </p>
         )}
 
-        <p className="tabular mt-0.5 text-[11px] text-muted">
+        <p className="tabular mt-0.5 text-2xs text-muted">
           kargo dahil {formatMoney(offer.totalCostCents)}
         </p>
         {isAffiliate && (
-          <p className="mt-0.5 text-[10px] text-subtle">satış {sellerName}’de tamamlanır</p>
+          <p className="mt-0.5 text-3xs text-subtle">satış {sellerName}’de tamamlanır</p>
         )}
       </div>
 

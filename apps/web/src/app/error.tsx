@@ -63,7 +63,7 @@ export default function GlobalError({
       </div>
 
       {error.digest && (
-        <p className="mt-6 font-mono text-[11px] text-subtle">
+        <p className="mt-6 font-mono text-2xs text-subtle">
           Destek kodu: {error.digest}
         </p>
       )}

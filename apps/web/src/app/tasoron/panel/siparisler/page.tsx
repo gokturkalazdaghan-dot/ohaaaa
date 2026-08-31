@@ -58,7 +58,7 @@ export default async function VendorOrdersPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <code className="font-mono text-sm font-semibold">{order.orderNumber}</code>
                     <span
-                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase ${status.className}`}
+                      className={`rounded-full px-2.5 py-0.5 text-3xs font-bold uppercase ${status.className}`}
                     >
                       {status.label}
                     </span>
@@ -116,7 +116,7 @@ export default async function VendorOrdersPage() {
                   >
                     Reddet
                   </button>
-                  <p className="ml-auto self-center text-[11px] text-subtle">
+                  <p className="ml-auto self-center text-2xs text-subtle">
                     API: <code className="font-mono">PATCH /api/v1/orders/{'{id}'}</code>
                   </p>
                 </div>

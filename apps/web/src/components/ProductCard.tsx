@@ -72,7 +72,7 @@ export function ProductCard({
 
       <div className="flex flex-1 flex-col p-4">
         {result.brand && (
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-subtle">
+          <p className="text-2xs font-semibold uppercase tracking-wide text-subtle">
             {result.brand}
           </p>
         )}

@@ -360,6 +360,36 @@ check(
 );
 await reduced.close();
 
+// --- Kullanıcının yazı boyutu ayarı ----------------------------------------
+/*
+ * Arayüzdeki en küçük yazılar (rozet, birim, yardımcı metin) sabit pikselle
+ * yazılmıştı — 61 yerde. Yani tarayıcısında yazıyı büyüten kullanıcı için
+ * TAM DA büyütmeye en çok ihtiyaç duyulan ögeler olduğu gibi kalıyordu.
+ * Ölçek `rem`e taşındı; burada gerçekten ölçeklendiği ve düzeni bozmadığı
+ * doğrulanır.
+ */
+const bigText = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+await bigText.addInitScript(() => {
+  document.addEventListener('DOMContentLoaded', () => {
+    document.documentElement.style.fontSize = '20px';
+  });
+});
+await bigText.goto(`${BASE}/arama`, { waitUntil: 'networkidle' });
+await bigText.waitForTimeout(300);
+
+const scaled = await bigText.evaluate(() => {
+  const el = document.querySelector('.text-2xs');
+  return {
+    size: el ? parseFloat(getComputedStyle(el).fontSize) : 0,
+    overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  };
+});
+
+// 16px varsayılanda 11px olan yazı, 20px kökte ~13.75px olmalı.
+check(scaled.size > 12, 'Küçük yazılar kullanıcı ayarıyla büyüyor', `${scaled.size}px`);
+check(scaled.overflow <= 1, 'Büyütülmüş yazıda yatay taşma yok', `${scaled.overflow}px`);
+await bigText.close();
+
 // --- Konsol hataları -------------------------------------------------------
 const realErrors = consoleErrors.filter(
   (text) => !/favicon|Failed to load resource.*40[34]/i.test(text),

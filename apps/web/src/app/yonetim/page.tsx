@@ -213,7 +213,7 @@ function Metric({
       >
         {value}
       </dd>
-      <dt className="text-[11px] text-muted">
+      <dt className="text-2xs text-muted">
         {label}
         {hint && <span className="ml-1 text-subtle">({hint})</span>}
       </dt>
@@ -250,7 +250,7 @@ function StatCard({
           {value.toLocaleString('tr-TR')}
         </p>
         <p className="mt-1 text-sm font-medium">{label}</p>
-        {hint && <p className="text-[11px] text-subtle">{hint}</p>}
+        {hint && <p className="text-2xs text-subtle">{hint}</p>}
       </div>
     </article>
   );

@@ -124,7 +124,7 @@ function Field({
         className="mt-1.5 w-full rounded-xl border border-line bg-bg px-3.5 py-2.5 text-sm text-fg outline-none transition-colors focus:border-brand"
         {...rest}
       />
-      {hint && <p className="mt-1 text-[11px] text-subtle">{hint}</p>}
+      {hint && <p className="mt-1 text-2xs text-subtle">{hint}</p>}
     </div>
   );
 }

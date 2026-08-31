@@ -160,7 +160,7 @@ export function VendorApplicationForm() {
 
       <SubmitButton />
 
-      <p className="text-center text-[11px] text-subtle">
+      <p className="text-center text-2xs text-subtle">
         Göndererek satıcı sözleşmesini ve komisyon koşullarını kabul etmiş olursunuz.
       </p>
     </form>
@@ -229,11 +229,11 @@ function Field({
       </div>
 
       {error ? (
-        <p className="mt-1 text-[11px] text-danger" role="alert">
+        <p className="mt-1 text-2xs text-danger" role="alert">
           {error}
         </p>
       ) : hint ? (
-        <p className="mt-1 text-[11px] text-subtle">{hint}</p>
+        <p className="mt-1 text-2xs text-subtle">{hint}</p>
       ) : null}
     </div>
   );

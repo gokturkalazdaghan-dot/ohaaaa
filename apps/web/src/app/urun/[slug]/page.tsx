@@ -298,7 +298,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
             {savingsCents > 0 && (
               <div className="ml-auto rounded-xl bg-success/12 px-4 py-2.5 text-right">
-                <p className="text-[11px] text-success/85">Doğru mağazayı seçerek</p>
+                <p className="text-2xs text-success/85">Doğru mağazayı seçerek</p>
                 <p className="tabular text-lg font-black text-success">
                   {formatMoney(savingsCents)} kazanın
                 </p>

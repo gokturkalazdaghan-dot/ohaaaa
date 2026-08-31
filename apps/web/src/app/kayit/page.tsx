@@ -33,7 +33,7 @@ export default function SignUpPage() {
         </Link>
       </p>
 
-      <p className="mt-4 text-center text-[11px] leading-relaxed text-subtle">
+      <p className="mt-4 text-center text-2xs leading-relaxed text-subtle">
         Kayıt olarak <Link href="/kosullar" className="underline underline-offset-2">
           kullanım şartlarını
         </Link>{' '}

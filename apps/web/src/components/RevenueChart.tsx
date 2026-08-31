@@ -50,7 +50,7 @@ export function RevenueChart({
           {gridRatios.map((ratio) => (
             <span
               key={ratio}
-              className="tabular absolute right-0 -translate-y-1/2 text-[10px] text-subtle"
+              className="tabular absolute right-0 -translate-y-1/2 text-3xs text-subtle"
               style={{ top: `${(1 - (ratio * plotHeight) / height) * 100}%` }}
             >
               {formatMoneyCompact(maxRevenue * ratio)}
@@ -126,7 +126,7 @@ export function RevenueChart({
         )}
       </div>
 
-      <div className="mt-2 flex justify-between pl-14 text-[11px] text-subtle">
+      <div className="mt-2 flex justify-between pl-14 text-2xs text-subtle">
         <span>{formatDay(data[0]!.day)}</span>
         <span>{formatDay(data[data.length - 1]!.day)}</span>
       </div>
@@ -190,9 +190,9 @@ function Tooltip({
       }}
       role="status"
     >
-      <p className="text-[11px] text-muted">{formatDay(point.day)}</p>
+      <p className="text-2xs text-muted">{formatDay(point.day)}</p>
       <p className="tabular text-sm font-bold">{formatMoney(point.revenueCents)}</p>
-      <p className="tabular text-[11px] text-muted">{point.orderCount} sipariş</p>
+      <p className="tabular text-2xs text-muted">{point.orderCount} sipariş</p>
     </div>
   );
 }

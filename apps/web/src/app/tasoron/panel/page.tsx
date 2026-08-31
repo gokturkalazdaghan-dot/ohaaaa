@@ -148,7 +148,7 @@ function Metric({
       >
         {value}
       </dd>
-      <dt className="text-[11px] text-muted">{label}</dt>
+      <dt className="text-2xs text-muted">{label}</dt>
     </div>
   );
 }
@@ -180,7 +180,7 @@ function StatusCard({
       <div className="min-w-0">
         <p className="tabular text-2xl font-black leading-none">{value}</p>
         <p className="mt-1 text-sm font-medium">{label}</p>
-        <p className="text-[11px] text-subtle">{hint}</p>
+        <p className="text-2xs text-subtle">{hint}</p>
       </div>
     </article>
   );
