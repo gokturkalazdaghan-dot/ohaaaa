@@ -60,6 +60,28 @@ as $$
   select coalesce(auth.jwt() ->> 'role', 'anon');
 $$;
 
+-- pgTAP: iddia testleri için (yalnızca yerel/CI).
+create extension if not exists pgtap;
+
+-- ---------------------------------------------------------------------------
+-- SUPABASE'İN VARSAYILAN YETKİLERİ — burada olması ŞART.
+-- ---------------------------------------------------------------------------
+-- Supabase'in stok kurulumu bu satırı içerir ve `public` şemasında açılan
+-- HER tabloyu anon/authenticated rollerine tam yetkiyle verir (TRUNCATE
+-- dahil).
+--
+-- Bu satır shim'de yokken yerel ortam ÜRETİMDEN DAHA GÜVENLİYDİ: testler
+-- hiçbir tabloda fazla yetki görmüyordu, çünkü yerelde o yetki hiç
+-- verilmemişti. Yani yetki katmanını sınayan her test yerelde boşuna
+-- geçiyor, üretimdeki gerçek durumu hiç ölçmüyordu.
+--
+-- Bir doğrulama ortamının üretimden güvenli olması, güvensiz olmasından
+-- daha tehlikelidir: ikincisi gürültü yapar, birincisi susar.
+alter default privileges in schema public
+  grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema public
+  grant all on sequences to anon, authenticated, service_role;
+
 -- Gerçek Supabase'de bu izinler platform tarafından verilir.
 grant usage on schema auth to anon, authenticated, service_role;
 grant execute on function auth.jwt(), auth.uid(), auth.role()

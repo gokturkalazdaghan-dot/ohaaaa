@@ -21,10 +21,50 @@ done
 echo "▸ Seed verisi"
 psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$ROOT/supabase/seed.sql"
 
+# ---------------------------------------------------------------------------
+# pgTAP TESTLERİ SESSİZCE GEÇMEZ.
+# ---------------------------------------------------------------------------
+# psql, pgTAP iddiaları BAŞARISIZ olsa bile 0 ile çıkar: "not ok" satırları
+# hata değil, çıktıdır. Ölçüldü — 39 başarısız iddiaya rağmen çıkış kodu 0.
+# Yani bu döngü, güvenlik testi tamamen düşerken "geçti" diyebilirdi.
+#
+# Bu yüzden çıktı okunur: bir "not ok" satırı ya da plan uyuşmazlığı
+# ("Looks like you planned/failed ...") derlemeyi düşürür.
+#
+# `raise exception` ile yazılmış eski testler zaten ON_ERROR_STOP ile
+# düşüyor; bu ek kontrol yalnızca pgTAP tarzı dosyalar için gerekli ama
+# hepsine uygulanması zarar vermez.
+run_sql_test() {
+  local file="$1" out status
+  out="$(psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$file" 2>&1)"
+  status=$?
+
+  if [ $status -ne 0 ]; then
+    printf '%s\n' "$out" >&2
+    echo "✗ $(basename "$file"): psql hata verdi" >&2
+    return 1
+  fi
+
+  if printf '%s' "$out" | grep -qE '^[[:space:]]*not ok'; then
+    printf '%s\n' "$out" | grep -E '^[[:space:]]*not ok' >&2
+    echo "✗ $(basename "$file"): pgTAP iddiaları başarısız" >&2
+    return 1
+  fi
+
+  if printf '%s' "$out" | grep -qE 'Looks like you (failed|planned)'; then
+    printf '%s\n' "$out" | grep -E 'Looks like you (failed|planned)' >&2
+    echo "✗ $(basename "$file"): pgTAP plan uyuşmazlığı" >&2
+    return 1
+  fi
+
+  printf '%s' "$out" | grep -E '^[[:space:]]*(NOTICE|psql.*NOTICE)' || true
+  return 0
+}
+
 for f in "$ROOT"/supabase/tests/[1-9]*.sql; do
   [ -e "$f" ] || continue
   echo "▸ Test: $(basename "$f")"
-  psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$f"
+  run_sql_test "$f"
 done
 
 # İmza hesabı iki yerde yapılır (JS ve SQL); ayrışırlarsa fiyat karşılaştırması
