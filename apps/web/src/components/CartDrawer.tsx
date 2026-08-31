@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { formatMoney } from '@ohaaaa/shared';
 
@@ -14,6 +14,22 @@ import { useCart, useCartSummary } from '@/store/cart';
  * Sepet, taşeron bazında GRUPLANMIŞ gösterilir. Bu, split-cart modelinin
  * kullanıcıya yansımasıdır: "3 ürün aldım ama 2 ayrı kargo geliyor" bilgisi
  * ödeme adımında sürpriz olmamalıdır.
+ *
+ * NEDEN <dialog>?
+ * Panel `aria-modal="true"` diyordu ama ODAK TUZAĞI YOKTU: sekme tuşuyla
+ * arkadaki sayfaya geçilebiliyordu. Ekran okuyucuya "burası kipli bir
+ * pencere" deyip odağı serbest bırakmak, hiçbir şey dememekten kötüdür —
+ * kullanıcı kapatamadığı bir yerde olduğunu sanır.
+ *
+ * `<dialog open>` yerine `showModal()` kullanılır. Yalnızca `showModal()`
+ * odak tuzağını, arka planın etkisizleştirilmesini (inert), ESC ile
+ * kapanmayı ve `::backdrop` katmanını verir; `open` özniteliği bunların
+ * hiçbirini getirmez.
+ *
+ * Çıkış animasyonu da bu sayede mümkün: React öğeyi anında sökerse
+ * animasyon çalışamaz. `display`/`overlay` geçişleri `allow-discrete` ile
+ * tarayıcıya bırakılır — ve geçiş (keyframe değil) olduğu için kullanıcı
+ * kapanırken tekrar açarsa hareket bulunduğu yerden geri döner.
  */
 export function CartDrawer() {
   const isOpen = useCart((state) => state.isOpen);
@@ -21,38 +37,61 @@ export function CartDrawer() {
   const remove = useCart((state) => state.remove);
   const setQuantity = useCart((state) => state.setQuantity);
   const summary = useCartSummary();
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
-  // Panel açıkken arka planın kaymasını engelle ve ESC ile kapat.
+  // Açılış/kapanış tarayıcıya bırakılır; React yalnızca hangi durumda
+  // olunacağını söyler.
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    if (isOpen && !dialog.open) dialog.showModal();
+    if (!isOpen && dialog.open) dialog.close();
+  }, [isOpen]);
+
+  /*
+   * ESC ve `::backdrop` tıklaması tarayıcının kendi kapatma yollarıdır ve
+   * React durumunu güncellemezler. `close` olayı ikisini de yakalar —
+   * kendi tuş dinleyicimizi yazmak, platformun zaten yaptığı işi ikinci
+   * kez ve daha kötü yapmak olurdu.
+   */
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    const onClose = () => close();
+    dialog.addEventListener('close', onClose);
+    return () => dialog.removeEventListener('close', onClose);
+  }, [close]);
+
+  // Arka planın kayması engellenir: showModal() bunu her tarayıcıda yapmaz.
   useEffect(() => {
     if (!isOpen) return;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') close();
-    }
-
-    window.addEventListener('keydown', onKeyDown);
-
     return () => {
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', onKeyDown);
     };
-  }, [isOpen, close]);
-
-  if (!isOpen) return null;
+  }, [isOpen]);
 
   return (
-    <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="Sepet">
+    <dialog ref={dialogRef} className="cart-dialog" aria-label="Sepet">
+      {/*
+        Örtü tıklaması. `::backdrop` doğrudan tıklama almadığı için panelin
+        arkasında tam ekran bir düğme durur; ekran okuyucuda gizli değildir,
+        çünkü "kapat" gerçek bir eylemdir.
+      */}
       <button
         type="button"
         onClick={close}
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 h-full w-full cursor-default"
         aria-label="Sepeti kapat"
+        tabIndex={-1}
       />
 
-      <aside className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col border-l border-line bg-bg-elevated shadow-2xl drawer-enter">
+      <aside className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col border-l border-line bg-bg-elevated shadow-2xl">
         <header className="flex items-center justify-between border-b border-line px-5 py-4">
           <h2 className="flex items-center gap-2 text-base font-semibold">
             <CartIcon className="h-5 w-5 text-brand" />
@@ -197,7 +236,7 @@ export function CartDrawer() {
           </>
         )}
       </aside>
-    </div>
+    </dialog>
   );
 }
 

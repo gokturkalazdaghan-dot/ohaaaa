@@ -297,49 +297,67 @@ check(
 /*
  * Animasyonun "yazılmış olması" çalıştığı anlamına gelmiyor: bu depoda iki
  * sınıf (`animate-[rise_...]`, `animate-[float_...]`) hiç tanımlanmamış
- * keyframe'lere işaret ediyordu, yani sepet çekmecesi bir anda beliriyordu
- * ve kimse fark etmemişti. Bu yüzden hesaplanmış stil doğrulanır.
+ * keyframe'lere işaret ediyordu, yani sepet paneli bir anda beliriyordu ve
+ * kimse fark etmemişti. Bu yüzden hesaplanmış stil doğrulanır.
  */
 await page.setViewportSize({ width: 1280, height: 900 });
 await page.goto(`${BASE}/urun/sony-wh-1000xm5`, { waitUntil: 'networkidle' });
 await page.locator('button:has-text("Sepete ekle")').first().click();
-await page.waitForTimeout(120);
+await page.waitForTimeout(400);
 
-const drawerAnim = await page
-  .locator('.drawer-enter')
-  .evaluate((el) => {
-    const s = getComputedStyle(el);
-    return { name: s.animationName, duration: parseFloat(s.animationDuration), ease: s.animationTimingFunction };
-  })
-  .catch(() => null);
+const dialog = page.locator('dialog.cart-dialog');
+check(await dialog.count() > 0, 'Sepet paneli <dialog> olarak çiziliyor');
 
-check(drawerAnim?.name === 'cekmece-gir', 'Çekmece girişi gerçekten çalışıyor', String(drawerAnim?.name));
-check(
-  drawerAnim !== null && drawerAnim.duration > 0 && drawerAnim.duration <= 0.3,
-  'Çekmece süresi 300ms altında',
-  `${drawerAnim?.duration}s`,
-);
-// ease-in, kullanıcının en çok baktığı anı (hareketin başını) geciktirir.
-check(
-  drawerAnim !== null && !/^ease-in$|cubic-bezier\(0\.42/.test(drawerAnim.ease),
-  'Çekmece eğrisi ease-in değil',
-  drawerAnim?.ease,
-);
+/*
+ * `showModal()` ile açılmış olması şart: yalnızca o odak tuzağını, arka
+ * planın etkisizleştirilmesini ve ESC ile kapanmayı verir. `open`
+ * özniteliğini elle koymak bunların hiçbirini getirmez — panel
+ * `aria-modal="true"` deyip odağı serbest bırakıyordu.
+ */
+const modalState = await dialog.evaluate((el) => ({
+  open: el.open,
+  // Üst katmanda mı? Yalnızca showModal() öyle açar.
+  topLayer: el.matches(':modal'),
+}));
+check(modalState.open === true, 'Panel açık');
+check(modalState.topLayer === true, 'showModal() ile açılmış (odak tuzağı var)');
+
+// Odak panelin İÇİNDE kalmalı: sekme tuşu arkadaki sayfaya geçmemeli.
+await page.keyboard.press('Tab');
+await page.keyboard.press('Tab');
+const focusInside = await page.evaluate(() => {
+  const dlg = document.querySelector('dialog.cart-dialog');
+  return dlg ? dlg.contains(document.activeElement) : false;
+});
+check(focusInside, 'Odak panelin içinde kalıyor');
+
+// Giriş ve çıkış AYNI yoldan: geçiş transform üzerinde tanımlı olmalı.
+const asideTransition = await dialog.locator('aside').evaluate((el) => getComputedStyle(el).transitionProperty);
+check(/transform/.test(asideTransition), 'Panel geçişi transform üzerinde', asideTransition);
+
+// ESC platformun kendi kapatma yolu; React durumu da güncellenmeli.
+await page.keyboard.press('Escape');
+await page.waitForTimeout(500);
+check((await page.locator('dialog.cart-dialog[open]').count()) === 0, 'ESC ile kapanıyor');
 
 /*
  * Hareketi azaltılmış mod TÜM siteyi kapsamalı. Önce yalnızca logo harfleri
- * kapatılıyordu; kart kalkması, düğme büyümesi ve çekmece girişi açık
+ * kapatılıyordu; kart kalkması, düğme büyümesi ve panel girişi açık
  * kalıyordu. Tek bileşeni istisna tutmak, kuralı uygulamamakla aynı şey.
  */
 const reduced = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
 await reduced.goto(`${BASE}/urun/sony-wh-1000xm5`, { waitUntil: 'networkidle' });
 await reduced.locator('button:has-text("Sepete ekle")').first().click();
-await reduced.waitForTimeout(100);
-const reducedAnim = await reduced
-  .locator('.drawer-enter')
-  .evaluate((el) => getComputedStyle(el).animationName)
+await reduced.waitForTimeout(200);
+const reducedTransform = await reduced
+  .locator('dialog.cart-dialog aside')
+  .evaluate((el) => getComputedStyle(el).transitionDuration)
   .catch(() => null);
-check(reducedAnim === 'none', 'Azaltılmış modda çekmece animasyonu kapalı', String(reducedAnim));
+check(
+  reducedTransform === null || parseFloat(reducedTransform) < 0.05,
+  'Azaltılmış modda panel hareketi kapalı',
+  String(reducedTransform),
+);
 await reduced.close();
 
 // --- Konsol hataları -------------------------------------------------------
