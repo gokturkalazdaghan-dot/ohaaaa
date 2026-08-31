@@ -121,10 +121,14 @@ export default async function HomePage() {
       {vendors.length > 0 && (
         <section className="mt-12">
           <SectionHead title="Karşılaştırdığımız mağazalar" />
+          {/* Mağaza adları artık kendi vitrinlerine bağlanıyor. Tıklanamayan
+              bir isim, ziyaretçiye o mağaza hakkında hiçbir şey vermiyordu. */}
           <ul className="mt-4 flex flex-wrap gap-2">
             {vendors.map((vendor) => (
-              <li key={vendor.id} className="chip cursor-default">
-                {vendor.displayName}
+              <li key={vendor.id}>
+                <Link href={`/magaza/${vendor.slug}`} className="chip">
+                  {vendor.displayName}
+                </Link>
               </li>
             ))}
           </ul>

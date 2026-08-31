@@ -108,6 +108,26 @@ await page.waitForTimeout(400);
 const recent = page.locator('#son-gezilen');
 check(await recent.count() > 0, 'Son gezdikleriniz şeridi görünüyor');
 
+// --- Mağaza vitrini --------------------------------------------------------
+/*
+ * Satıcı başvuru formu adaya `ohaaaa.com/magaza/<slug>` adresini gösteriyor.
+ * O sayfanın gerçekten açıldığı ve ürün sayfasından bağlandığı doğrulanır —
+ * kayıt anında verilen bir söz karşılıksız kalmasın.
+ */
+await page.goto(`${BASE}/urun/sony-wh-1000xm5`, { waitUntil: 'networkidle' });
+const storeLink = page.locator('a[href^="/magaza/"]').first();
+check(await storeLink.count() > 0, 'Ürün sayfasından mağaza vitrinine bağ var');
+
+if ((await storeLink.count()) > 0) {
+  const href = await storeLink.getAttribute('href');
+  const response = await page.goto(`${BASE}${href}`, { waitUntil: 'networkidle' });
+  check(response?.status() === 200, 'Mağaza vitrini açılıyor', `${href} → ${response?.status()}`);
+  check(await page.locator('h1').count() > 0, 'Mağaza sayfasında başlık var');
+}
+
+const missing = await page.goto(`${BASE}/magaza/olmayan-magaza`, { waitUntil: 'networkidle' });
+check(missing?.status() === 404, 'Olmayan mağaza 404 dönüyor', String(missing?.status()));
+
 // --- Arama filtreleri ------------------------------------------------------
 await page.goto(`${BASE}/arama`, { waitUntil: 'networkidle' });
 /*

@@ -645,6 +645,122 @@ export async function getVendors(): Promise<Vendor[]> {
   return demoVendors;
 }
 
+/**
+ * Bir mağazayı adresinden (slug) okur.
+ *
+ * Onaylı OLMAYAN mağaza null döner: başvurusu bekleyen ya da askıya alınmış
+ * bir mağazanın vitrini herkese açık olmamalı. Aksi hâlde reddedilmiş bir
+ * başvurunun sayfası dizinde kalırdı.
+ */
+export async function getVendorBySlug(slug: string): Promise<Vendor | null> {
+  const supabase = createAnonClient();
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('vendors')
+      .select(
+        `id, slug, display_name, description, logo_url, status,
+         commission_rate, rating, rating_count, active_product_count`,
+      )
+      .eq('slug', slug)
+      .eq('status', 'approved')
+      .maybeSingle();
+
+    if (error) throw new Error(`Mağaza okunamadı: ${error.message}`);
+    if (!data) return null;
+
+    return {
+      id: String(data.id),
+      slug: String(data.slug),
+      displayName: String(data.display_name),
+      description: data.description ? String(data.description) : null,
+      logoUrl: data.logo_url ? String(data.logo_url) : null,
+      status: 'approved' as const,
+      commissionRate: Number(data.commission_rate),
+      rating: Number(data.rating),
+      ratingCount: Number(data.rating_count),
+      activeProductCount: Number(data.active_product_count),
+    };
+  }
+
+  return demoVendors.find((vendor) => vendor.slug === slug) ?? null;
+}
+
+/**
+ * Bir mağazanın vitrini.
+ *
+ * `search_products` üzerinden GEÇMEZ: o fonksiyon kanonik ürün bazında
+ * çalışır ve mağaza filtresi yoktur. Burada mağazanın KENDİ tekliflerinden
+ * yola çıkılır — sayfa "bu mağazada neler var" sorusunu yanıtlar.
+ *
+ * Aynı kanonik ürüne birden çok teklifi olsa bile ürün bir kez listelenir;
+ * vitrinde aynı ürünün iki kez görünmesi kataloğu bozuk gösterir.
+ */
+export async function getVendorProducts(
+  vendorId: string,
+  options: { limit: number; offset: number },
+): Promise<SearchPage> {
+  const supabase = createAnonClient();
+
+  if (!supabase) {
+    const results = demoProductGroups
+      .filter((group) => group.offers.some((offer) => offer.vendorId === vendorId))
+      .map(toSearchResult);
+
+    return {
+      results: results.slice(options.offset, options.offset + options.limit),
+      totalCount: results.length,
+    };
+  }
+
+  const { data, error, count } = await supabase
+    .from('products')
+    .select(
+      `price_cents, shipping_fee_cents,
+       group:product_groups!group_id (
+         id, slug, title, brand, image_url, offer_count,
+         min_price_cents, max_price_cents, best_offer_id
+       )`,
+      { count: 'exact' },
+    )
+    .eq('vendor_id', vendorId)
+    .eq('status', 'active')
+    .order('updated_at', { ascending: false })
+    .range(options.offset, options.offset + options.limit - 1);
+
+  if (error) throw new Error(`Mağaza ürünleri okunamadı: ${error.message}`);
+
+  const seen = new Set<string>();
+  const results: SearchResult[] = [];
+
+  for (const row of data ?? []) {
+    const group = unwrapRelation((row as Record<string, unknown>).group);
+    if (!group) continue;
+
+    const groupId = String(group.id);
+    if (seen.has(groupId)) continue;
+    seen.add(groupId);
+
+    results.push({
+      groupId,
+      slug: String(group.slug),
+      title: String(group.title),
+      brand: group.brand ? String(group.brand) : null,
+      imageUrl: group.image_url ? String(group.image_url) : null,
+      offerCount: Number(group.offer_count),
+      minPriceCents: group.min_price_cents === null ? null : Number(group.min_price_cents),
+      maxPriceCents: group.max_price_cents === null ? null : Number(group.max_price_cents),
+      bestOfferId: group.best_offer_id ? String(group.best_offer_id) : null,
+      // Vitrin sayfasında "en iyi satıcı" bilgisi anlamsız: zaten o mağazanın
+      // sayfasındayız. Kart bunu göstermez.
+      bestVendorId: null,
+      bestVendorName: null,
+    });
+  }
+
+  return { results, totalCount: count ?? results.length };
+}
+
 /** Ürün sayfasındaki "Bunlara da bakın" bloğu. */
 export async function getRelatedGroups(
   slug: string,

@@ -18,7 +18,7 @@
 
 import type { MetadataRoute } from 'next';
 
-import { getCategories, searchProducts } from '@/data/catalog';
+import { getCategories, getVendors, searchProducts } from '@/data/catalog';
 import { siteUrl } from '@/lib/env';
 
 /** Tek haritaya sığdırılacak en fazla ürün. */
@@ -79,7 +79,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: product.offerCount > 1 ? 0.9 : 0.6,
     }));
 
-    return [...staticPages, ...categoryPages, ...productPages];
+    // --- Mağaza vitrinleri ---------------------------------------------------
+    // Sayıları sınırlı ve içerikleri kararlı; "X mağazası fiyatları" gibi
+    // gerçek aramalara denk gelirler.
+    const vendors = await getVendors().catch(() => []);
+
+    const vendorPages: MetadataRoute.Sitemap = vendors
+      .filter((vendor) => vendor.activeProductCount > 0)
+      .map((vendor) => ({
+        url: `${siteUrl}/magaza/${vendor.slug}`,
+        lastModified: now,
+        changeFrequency: 'daily' as const,
+        priority: 0.6,
+      }));
+
+    return [...staticPages, ...categoryPages, ...vendorPages, ...productPages];
   } catch (error) {
     // Katalog okunamazsa BOŞ harita döndürmek, Google'a "sitede sayfa yok"
     // demektir. Statik sayfalarla dönmek çok daha güvenlidir.

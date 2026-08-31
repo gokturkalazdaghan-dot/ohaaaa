@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 
 import {
@@ -85,7 +86,22 @@ export function OfferRow({
           {sellerName.charAt(0)}
         </span>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">{sellerName}</p>
+          {/*
+            Taşeron mağazasının adı kendi vitrinine bağlanır. Ortak mağaza
+            (affiliate) tekliflerinde böyle bir sayfa YOKTUR — o satış bizde
+            değil, karşı tarafta tamamlanır — ve olmayan bir sayfaya bağ
+            vermek 404 üretirdi. Bu yüzden bağ yalnızca `vendor.slug` varsa.
+          */}
+          {offer.vendor?.slug ? (
+            <Link
+              href={`/magaza/${offer.vendor.slug}`}
+              className="block truncate text-sm font-semibold underline-offset-2 hover:underline"
+            >
+              {sellerName}
+            </Link>
+          ) : (
+            <p className="truncate text-sm font-semibold">{sellerName}</p>
+          )}
           <p className="flex items-center gap-1 text-[11px] text-muted">
             <StarIcon className="h-3 w-3 fill-warning text-warning" />
             <span className="tabular">{sellerRating?.toFixed(2) ?? '—'}</span>
