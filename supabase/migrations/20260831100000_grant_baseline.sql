@@ -50,19 +50,37 @@
 -- etkiler. Göçleri hangi rolün çalıştırdığı ortama göre değişebildiği için
 -- (Supabase'de `postgres`, kurulumda `supabase_admin` olabilir) var olan
 -- adayların hepsi için geri alınır.
+--
+-- `supabase_admin` PLATFORMA aittir ve onun varsayilanlari degistirilemez:
+-- deneme "42501 permission denied to change default privileges" ile doner.
+-- Bu bir eksiklik degil, sinir: o rolun actigi nesneler Supabase'in kendi
+-- altyapisidir, bu deponun gocleri degil. Goc dosyalari `postgres` rolu ile
+-- calisir; uygulamanin actigi HER tablo onun varsayilanindan gelir, yani
+-- asil delik orada ve orasi kapatilabiliyor.
+--
+-- Yine de liste denenir: ortamlar arasi rol adlari degisebilir ve
+-- yetkimizin YETTIGI her rolde varsayilan kapatilmali. Yetmeyeni atlamak,
+-- gocun tamamini dusurmekten iyidir.
 do $$
 declare
   r text;
 begin
   foreach r in array array['postgres', 'supabase_admin'] loop
-    if exists (select 1 from pg_roles where rolname = r) then
+    if not exists (select 1 from pg_roles where rolname = r) then
+      continue;
+    end if;
+    begin
       execute format(
         'alter default privileges for role %I in schema public
            revoke all on tables from anon, authenticated', r);
       execute format(
         'alter default privileges for role %I in schema public
            revoke all on sequences from anon, authenticated', r);
-    end if;
+    exception
+      when insufficient_privilege then
+        raise notice
+          'Varsayilan yetkiler % rolu icin degistirilemedi (yetki yok) - atlandi.', r;
+    end;
   end loop;
 end
 $$;

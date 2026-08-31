@@ -157,9 +157,26 @@ export async function POST(request: Request) {
 
   const created = order as { id: string; order_number: string };
 
-  // Ödeme sağlayıcısı entegrasyonu buraya girer (iyzico, PayTR, Stripe…).
-  // Simülasyonda ödeme daima başarılıdır.
-  const { error: paymentError } = await supabase.rpc('confirm_payment', {
+  /*
+   * Ödeme sağlayıcısı entegrasyonu buraya girer (iyzico, PayTR, Stripe…).
+   * Simülasyonda ödeme daima başarılıdır.
+   *
+   * BU ÇAĞRI SUNUCU ANAHTARIYLA YAPILIR, ziyaretçinin oturumuyla değil.
+   *
+   * `confirm_payment` bir sipariş kimliği alıp onu "ödendi" olarak
+   * işaretler ve içinde SAHİPLİK KONTROLÜ YOKTUR. İstemciye açık kaldığı
+   * sürece, bir sipariş kimliğini ele geçiren herkes o siparişi ödeme
+   * yapmadan ödenmiş gösterebilir. Bugün ödeme bir simülasyon olduğu için
+   * para kaybı yok; ama sipariş durumu tedarik akışını tetikler ve gerçek
+   * tahsilat eklendiğinde bu doğrudan dolandırıcılık yoluna dönüşür.
+   *
+   * Sipariş OLUŞTURMA (`create_order`) ziyaretçinin oturumuyla kalmalı:
+   * misafir alışverişi destekleniyor ve siparişin kime bağlanacağı oturumdan
+   * geliyor. Ödemeyi onaylamak ise kimlik gerektirmez, yalnızca YETKİ
+   * gerektirir — o yüzden sunucuya taşındı ve istemciden tamamen kaldırıldı.
+   */
+  const { getServiceClient } = await import('@/lib/supabase/service');
+  const { error: paymentError } = await getServiceClient().rpc('confirm_payment', {
     p_order_id: created.id,
     p_provider: 'simulated',
     p_reference: `SIM-${Date.now()}`,
