@@ -8,6 +8,7 @@ import { DataUnavailable } from '@/components/DataUnavailable';
 import { ShieldIcon, TruckIcon } from '@/components/Icons';
 import { JsonLd } from '@/components/JsonLd';
 import { OfferRow } from '@/components/OfferRow';
+import { FavoriteButton } from '@/components/FavoriteButton';
 import { ProductGallery } from '@/components/ProductGallery';
 import { RecentlyViewed, RecordProductView } from '@/components/RecentlyViewed';
 import { PriceHistory } from '@/components/PriceHistory';
@@ -271,6 +272,15 @@ export default async function ProductPage({ params }: ProductPageProps) {
           {group.description && (
             <p className="mt-4 leading-relaxed text-muted">{group.description}</p>
           )}
+
+          <div className="mt-5">
+            <FavoriteButton
+              slug={group.slug}
+              title={group.title}
+              imageUrl={galleryImages[0] ?? null}
+              priceCents={bestOffer?.priceCents ?? group.minPriceCents}
+            />
+          </div>
 
           {/* Agregasyonun değerini tek cümlede özetleyen şerit. */}
           <div className="mt-6 flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-surface p-4">

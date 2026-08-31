@@ -34,6 +34,15 @@ export const SearchIcon = (p: IconProps) => (
   </Icon>
 );
 
+export const HeartIcon = ({ filled = false, ...p }: IconProps & { filled?: boolean }) => (
+  <Icon {...p}>
+    <path
+      d="M12 20.5S3.5 15 3.5 9.2A4.7 4.7 0 0 1 12 6.4a4.7 4.7 0 0 1 8.5 2.8c0 5.8-8.5 11.3-8.5 11.3Z"
+      fill={filled ? 'currentColor' : 'none'}
+    />
+  </Icon>
+);
+
 export const CameraIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2l1.1-2h8.4l1.1 2h2.2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z" />

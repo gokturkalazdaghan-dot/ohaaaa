@@ -108,6 +108,34 @@ await page.waitForTimeout(400);
 const recent = page.locator('#son-gezilen');
 check(await recent.count() > 0, 'Son gezdikleriniz şeridi görünüyor');
 
+// --- Favoriler -------------------------------------------------------------
+/*
+ * Favori listesinin bir fiyat karşılaştırma sitesindeki asıl değeri
+ * "işaretlediğimden beri ne oldu" sorusunun cevabı. Ekleme, sayaç ve liste
+ * sayfası uçtan uca sınanır.
+ */
+await page.goto(`${BASE}/urun/sony-wh-1000xm5`, { waitUntil: 'networkidle' });
+const favButton = page.locator('button[aria-label="Favorilere ekle"]').first();
+check(await favButton.count() > 0, 'Ürün sayfasında favori düğmesi var');
+
+await favButton.click();
+await page.waitForTimeout(200);
+check(
+  await page.locator('button[aria-label="Favorilerden çıkar"]').count() > 0,
+  'Favori düğmesi eklenmiş duruma geçiyor',
+);
+
+await page.goto(`${BASE}/favoriler`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(600);
+check(
+  await page.locator('a[href="/urun/sony-wh-1000xm5"]').count() > 0,
+  'Favoriler sayfasında ürün listeleniyor',
+);
+check(
+  await page.locator('text=Eklediğinizde').count() > 0,
+  'Kaydedildiği andaki fiyat gösteriliyor',
+);
+
 // --- Mağaza vitrini --------------------------------------------------------
 /*
  * Satıcı başvuru formu adaya `ohaaaa.com/magaza/<slug>` adresini gösteriyor.

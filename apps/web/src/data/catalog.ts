@@ -645,6 +645,59 @@ export async function getVendors(): Promise<Vendor[]> {
   return demoVendors;
 }
 
+/** Favori listesinin güncel fiyatları için sade bir kayıt. */
+export interface ProductPrice {
+  slug: string;
+  title: string;
+  imageUrl: string | null;
+  minPriceCents: number | null;
+  offerCount: number;
+}
+
+/**
+ * Verilen adreslerin GÜNCEL fiyatları.
+ *
+ * Favori listesi tarayıcıda tutulduğu için sunucu kimin neyi kaydettiğini
+ * bilmez; liste sayfası elindeki adresleri sorar. Tek sorguda hepsi
+ * okunur — ürün başına bir istek, 40 favorisi olan kullanıcıda 40 gidiş
+ * dönüş demek olurdu.
+ *
+ * Bulunamayan adres sessizce atlanır: katalogdan kalkmış bir ürün, favori
+ * sayfasını bozmamalı.
+ */
+export async function getProductPrices(slugs: string[]): Promise<ProductPrice[]> {
+  if (slugs.length === 0) return [];
+
+  const supabase = createAnonClient();
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('product_groups')
+      .select('slug, title, image_url, min_price_cents, offer_count')
+      .in('slug', slugs);
+
+    if (error) throw new Error(`Fiyatlar okunamadı: ${error.message}`);
+
+    return (data ?? []).map((row) => ({
+      slug: String(row.slug),
+      title: String(row.title),
+      imageUrl: row.image_url ? String(row.image_url) : null,
+      minPriceCents: row.min_price_cents === null ? null : Number(row.min_price_cents),
+      offerCount: Number(row.offer_count),
+    }));
+  }
+
+  return demoProductGroups
+    .filter((group) => slugs.includes(group.slug))
+    .map((group) => ({
+      slug: group.slug,
+      title: group.title,
+      imageUrl: group.imageUrl,
+      minPriceCents: group.minPriceCents,
+      offerCount: group.offerCount,
+    }));
+}
+
 /**
  * Bir mağazayı adresinden (slug) okur.
  *
