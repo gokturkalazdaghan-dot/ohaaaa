@@ -190,7 +190,7 @@ export function SearchBar({
 
             <button
               type="submit"
-              className={`shrink-0 rounded-xl bg-brand-cta font-semibold text-white transition-transform hover:scale-[1.03] active:scale-95 ${
+              className={`shrink-0 rounded-xl press bg-brand-cta font-semibold text-white ${
                 isHero ? 'px-6 py-2.5 text-base' : 'px-4 py-1.5 text-sm'
               }`}
             >

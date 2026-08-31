@@ -75,7 +75,7 @@ export function ConsentBanner() {
           <button
             type="button"
             onClick={() => decide('granted')}
-            className="flex-1 rounded-xl bg-brand-cta px-5 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02] sm:flex-none"
+            className="flex-1 rounded-xl press bg-brand-cta px-5 py-2.5 text-sm font-semibold text-white sm:flex-none"
           >
             Kabul et
           </button>

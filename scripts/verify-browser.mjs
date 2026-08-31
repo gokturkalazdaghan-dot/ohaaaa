@@ -234,6 +234,65 @@ for (const path of ['/', '/arama', '/kategori/elektronik', '/urun/sony-wh-1000xm
   check(overflow <= 1, `Mobilde yatay taşma yok: ${path}`, `${overflow}px taşma`);
 }
 
+// --- Üst çubuk: yüzen malzeme katmanı ---------------------------------------
+/*
+ * Üst çubuk sayfayla birlikte kayıp gidiyordu; arama ve sepet ürün
+ * listesinin ortasında erişilemez oluyordu. Yapışkan olması, yarı saydam
+ * olması ve kenarlığın ancak içeriğin üstüne bindiğinde belirmesi
+ * (Apple'ın "kaydırma kenar etkisi" kuralı) doğrulanır.
+ */
+await page.setViewportSize({ width: 1280, height: 900 });
+await page.goto(`${BASE}/arama`, { waitUntil: 'networkidle' });
+
+const header = page.locator('header.site-header');
+const headerStyle = await header.evaluate((el) => {
+  const s = getComputedStyle(el);
+  return {
+    position: s.position,
+    backdrop: s.backdropFilter === 'none' ? s.webkitBackdropFilter : s.backdropFilter,
+    border: s.borderBottomColor,
+  };
+});
+
+check(headerStyle.position === 'sticky', 'Üst çubuk yapışkan', headerStyle.position);
+/*
+ * Bulanıklık iki kez kırıldı: önce `.glass` kuralı `backdrop-filter: none`
+ * bırakılmıştı, sonra elle yazılan `-webkit-` öneki yüzünden derleyici
+ * STANDART özelliği çıktıdan düşürdü (Firefox'ta hiç uygulanmıyordu).
+ * Bu yüzden hesaplanmış değer sınanıyor, kaynaktaki yazı değil.
+ */
+check(/blur/.test(headerStyle.backdrop ?? ''), 'Üst çubuk yarı saydam malzeme', headerStyle.backdrop);
+check(
+  headerStyle.border === 'rgba(0, 0, 0, 0)',
+  'Sayfanın tepesinde ayırıcı çizgi yok',
+  headerStyle.border,
+);
+
+await page.evaluate(() => window.scrollTo(0, 600));
+await page.waitForTimeout(400);
+check((await header.getAttribute('data-stuck')) === 'true', 'Kaydırınca çubuk "stuck" oluyor');
+check(
+  (await header.evaluate((el) => getComputedStyle(el).borderBottomColor)) !== 'rgba(0, 0, 0, 0)',
+  'Kaydırınca ayırıcı çizgi beliriyor',
+);
+const headerBox = await header.boundingBox();
+check(headerBox !== null && headerBox.y < 5, 'Çubuk ekranda kalıyor', `y=${headerBox?.y}`);
+await page.evaluate(() => window.scrollTo(0, 0));
+
+// --- Basma geri bildirimi ---------------------------------------------------
+/*
+ * Apple'ın birinci kuralı: tepki BASINCA verilir, bırakınca değil. Gecikme,
+ * doğrudanlık hissini bitiren şeydir.
+ */
+const pressed = page.locator('.press').first();
+check((await page.locator('.press').count()) > 0, 'Birincil düğmelerde basma sınıfı var');
+const pressDuration = await pressed.evaluate((el) => parseFloat(getComputedStyle(el).transitionDuration));
+check(
+  pressDuration > 0 && pressDuration <= 0.12,
+  'Basma tepkisi 120ms altında',
+  `${pressDuration}s`,
+);
+
 // --- Hareket (motion) ------------------------------------------------------
 /*
  * Animasyonun "yazılmış olması" çalıştığı anlamına gelmiyor: bu depoda iki

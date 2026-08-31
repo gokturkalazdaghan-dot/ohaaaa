@@ -24,7 +24,7 @@ export default async function VendorPanelLayout({ children }: { children: React.
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <span className="grid h-12 w-12 place-items-center rounded-xl bg-brand-cta text-lg font-black text-white">
+          <span className="grid h-12 w-12 place-items-center rounded-xl press bg-brand-cta text-lg font-black text-white">
             {displayName.charAt(0).toUpperCase()}
           </span>
           <div>

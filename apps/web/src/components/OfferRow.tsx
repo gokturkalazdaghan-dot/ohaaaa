@@ -82,7 +82,7 @@ export function OfferRow({
       {/* min-w: düğme metni uzadığında (“Mağazaya git”) satıcı adının
           birkaç karaktere kırpılmasını önler. */}
       <div className="flex min-w-0 flex-1 items-center gap-3 sm:min-w-[10rem]">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-cta text-sm font-black text-white">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl press bg-brand-cta text-sm font-black text-white">
           {sellerName.charAt(0)}
         </span>
         <div className="min-w-0">
@@ -173,7 +173,7 @@ export function OfferRow({
             offer.stock === 0
               ? 'pointer-events-none border border-line bg-surface-2 opacity-40'
               : isBest
-                ? 'bg-brand-cta text-white hover:scale-[1.03]'
+                ? 'press bg-brand-cta text-white'
                 : 'border border-line bg-surface-2 text-fg hover:border-brand/50'
           }`}
         >
@@ -191,7 +191,7 @@ export function OfferRow({
             added
               ? 'bg-success text-[#0b0b0d]'
               : isBest
-                ? 'bg-brand-cta text-white hover:scale-[1.03]'
+                ? 'press bg-brand-cta text-white'
                 : 'border border-line bg-surface-2 text-fg hover:border-brand/50'
           }`}
         >

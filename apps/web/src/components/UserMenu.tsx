@@ -63,7 +63,7 @@ export async function UserMenu() {
         href={user.role === 'admin' ? '/yonetim' : '/tasoron/panel'}
         className="flex items-center gap-2 rounded-xl border border-line bg-surface px-2 py-1.5 text-sm font-medium transition-colors hover:border-brand/40"
       >
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-brand-cta text-xs font-black text-white">
+        <span className="grid h-7 w-7 place-items-center rounded-lg press bg-brand-cta text-xs font-black text-white">
           {initial}
         </span>
         <span className="hidden max-w-28 truncate sm:inline">{user.fullName ?? user.email}</span>

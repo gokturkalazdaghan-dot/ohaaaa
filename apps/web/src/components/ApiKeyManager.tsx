@@ -215,7 +215,7 @@ export function ApiKeyManager() {
             <button
               type="submit"
               disabled={submitting || scopes.length === 0 || name.trim().length < 2}
-              className="rounded-xl bg-brand-cta px-5 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl press bg-brand-cta px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? 'Oluşturuluyor…' : 'Anahtarı oluştur'}
             </button>
@@ -232,7 +232,7 @@ export function ApiKeyManager() {
         <button
           type="button"
           onClick={() => setCreating(true)}
-          className="flex items-center gap-2 rounded-xl bg-brand-cta px-5 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
+          className="flex items-center gap-2 rounded-xl press bg-brand-cta px-5 py-2.5 text-sm font-semibold text-white"
         >
           <KeyIcon className="h-4 w-4" />
           Yeni anahtar oluştur

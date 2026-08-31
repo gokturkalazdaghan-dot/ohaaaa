@@ -173,6 +173,69 @@
     backdrop-filter: none;
   }
 
+  /*
+   * -----------------------------------------------------------------------
+   * Üst çubuk — yüzen bir malzeme katmanı
+   * -----------------------------------------------------------------------
+   * Üst çubuk sayfayla birlikte kayıp gidiyordu; arama ve sepet, ürün
+   * listesinin ortasında erişilemez hale geliyordu. Bir pazar yerinde arama
+   * kutusu her an elin altında olmalı.
+   *
+   * Opak bir şerit yerine YARI SAYDAM bir malzeme: içerik altından akar,
+   * sayfanın devam ettiği görünür kalır. Katman, sabit bir şeridin
+   * çaldığı dikey alanı geri verir.
+   *
+   * `saturate` bilinçli: bulanıklaştırma rengi soldurur, doygunluğu geri
+   * eklemek malzemeyi cam gibi gösterir, sisli plastik gibi değil.
+   */
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background-color: color-mix(in srgb, var(--surface) 72%, transparent);
+    /*
+     * Önek ELLE YAZILMIYOR. Yazıldığında Lightning CSS (Tailwind v4'ün
+     * derleyicisi) yalnızca `-webkit-` sürümünü çıktıya koyup STANDART
+     * özelliği düşürüyordu — yani Firefox'ta bulanıklık hiç uygulanmıyordu.
+     * Derleyici hedef tarayıcılara göre gereken öneki zaten kendisi ekler.
+     */
+    backdrop-filter: blur(20px) saturate(180%);
+    /*
+     * Kenarlık BAŞLANGIÇTA YOK. Apple'ın "kaydırma kenar etkisi" kuralı:
+     * çizgi ancak yüzen çubuk gerçekten içeriğin üstüne bindiğinde belirir.
+     * Sayfanın en üstünde çizmek, ayıracak bir şey yokken ayırmaktır.
+     */
+    border-bottom: 1px solid transparent;
+    transition: border-color 200ms ease-out, box-shadow 200ms ease-out;
+  }
+
+  .site-header[data-stuck='true'] {
+    border-bottom-color: var(--line);
+    box-shadow: 0 1px 12px rgb(0 0 0 / 0.28);
+  }
+
+  /*
+   * Saydamlığı azaltılmış modda malzeme KATILAŞIR.
+   * Bulanık bir zemin üstündeki metin, düşük görme keskinliğinde ya da
+   * bilişsel yük altında okunmayı zorlaştırır. İşletim sistemi bunu
+   * bildirdiğinde çubuk opak olur.
+   */
+  @media (prefers-reduced-transparency: reduce) {
+    .site-header {
+      background-color: var(--surface);
+      backdrop-filter: none;
+    }
+  }
+
+  /* Yüksek kontrast modunda kenarlık her zaman görünür ve belirgindir. */
+  @media (prefers-contrast: more) {
+    .site-header {
+      background-color: var(--surface);
+      backdrop-filter: none;
+      border-bottom-color: var(--line-strong);
+    }
+  }
+
   .card,
   .card-glow {
     background-color: var(--surface);
@@ -183,6 +246,32 @@
 
   .card-glow::before {
     content: none;
+  }
+
+  /*
+   * -----------------------------------------------------------------------
+   * Basma geri bildirimi — bırakınca değil, BASINCA
+   * -----------------------------------------------------------------------
+   * Geri bildirimi `click` olayına bağlamak arayüzü ölü hissettirir:
+   * kullanıcı parmağını bastığı anda bir şey olmasını bekler. Bu yüzden
+   * tepki `:active` üzerinde ve çok kısa (90ms) — gecikme burada
+   * doğrudanlık hissini bitiren şeydir.
+   *
+   * Ölçek küçük tutuldu (%2): düğmenin yerinden oynadığını değil,
+   * bastırıldığını anlatmalı.
+   */
+  .press {
+    transition: transform 90ms ease-out;
+  }
+
+  .press:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  /* Kartlarda basma daha belirgin: yüzey büyük, aynı oran daha az okunur. */
+  .card-link:active {
+    transform: scale(0.985);
+    transition-duration: 90ms;
   }
 
   /* Tiklanabilir kart: fare uzerine gelince hafifce kalkar. */
@@ -401,6 +490,52 @@
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
+  }
+
+  /*
+   * -----------------------------------------------------------------------
+   * Tipografi — harf aralığı boyuta göre değişir
+   * -----------------------------------------------------------------------
+   * Tek bir `letter-spacing` değeri her boyutta yanlıştır. Harfler
+   * büyüdükçe aralarındaki boşluk optik olarak AÇILIR; büyük başlıklar
+   * sıkılaştırılmalı. Küçük metinlerde ise tam tersi: biraz açmak
+   * okunurluğu artırır.
+   *
+   * Satır yüksekliği ters yönde çalışır: büyük başlıkta sıkı, gövde
+   * metninde rahat.
+   *
+   * Değerler `rem` cinsinden eşiklerle bağlanmadı; sınıflar doğrudan
+   * boyut adımlarına uygulanıyor, böylece kullanıcının yazı boyutu
+   * ayarıyla birlikte ölçekleniyor.
+   */
+  h1,
+  .display {
+    letter-spacing: -0.022em;
+    line-height: 1.08;
+  }
+
+  h2 {
+    letter-spacing: -0.016em;
+    line-height: 1.18;
+  }
+
+  h3 {
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+  }
+
+  /* Gövde metni nötr aralıkta ve rahat satır yüksekliğinde kalır. */
+  p {
+    letter-spacing: 0;
+  }
+
+  /*
+   * Küçük ve BÜYÜK HARFLİ etiketler (rozet, üst başlık) POZİTİF aralık
+   * ister: küçük boyutta harfler birbirine girer ve büyük harfler
+   * birbirine daha çok benzer; aralarını açmak okunurluğu artırır.
+   */
+  .uppercase {
+    letter-spacing: 0.045em;
   }
 
   /* Iki satirdan sonra kes - kart yuksekliklerini esitler. */

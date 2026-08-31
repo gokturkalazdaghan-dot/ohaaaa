@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Suspense } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 
 import { Logo } from './Logo';
 import { SearchBar } from './SearchBar';
@@ -10,8 +10,23 @@ import { useCart, useCartSummary } from '@/store/cart';
 import { useFavorites } from '@/lib/favorites';
 
 export function Header({ userMenu }: { userMenu?: React.ReactNode }) {
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const isStuck = useStuck(sentinelRef);
+
   return (
-    <header className="border-b border-line bg-surface">
+    <>
+      {/*
+        Gözcü öge: sayfanın en tepesinde duran 1 pikselik bir işaret.
+        Görünürlükten çıktığı an, üst çubuk gerçekten içeriğin üstüne
+        binmiş demektir.
+
+        Neden kaydırma dinleyicisi değil: `scroll` olayı her karede
+        çalışır ve ana iş parçacığını meşgul eder. IntersectionObserver
+        yalnızca eşik geçildiğinde bir kez haber verir.
+      */}
+      <div ref={sentinelRef} aria-hidden="true" className="h-px w-full" />
+
+      <header className="site-header" data-stuck={isStuck}>
       <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 sm:px-6">
         <Logo />
         <div className="hidden flex-1 md:block">
@@ -30,8 +45,35 @@ export function Header({ userMenu }: { userMenu?: React.ReactNode }) {
           <SearchBar />
         </Suspense>
       </div>
-    </header>
+      </header>
+    </>
   );
+}
+
+/**
+ * Üst çubuğun içeriğin üstüne binip binmediğini bildirir.
+ *
+ * Sunucuda ve ilk boyamada `false`: sayfa henüz kaydırılmamıştır ve
+ * sunucuda farklı bir değer üretmek hidrasyon uyuşmazlığı olurdu.
+ */
+function useStuck(sentinelRef: React.RefObject<HTMLDivElement | null>): boolean {
+  const [isStuck, setIsStuck] = useState(false);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || typeof IntersectionObserver === 'undefined') return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsStuck(!entry?.isIntersecting),
+      // Eşik 0: gözcü tamamen görünmez olunca tetiklenir.
+      { threshold: 0 },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [sentinelRef]);
+
+  return isStuck;
 }
 
 /**
@@ -54,7 +96,7 @@ function FavoritesButton() {
     >
       <HeartIcon className="h-5 w-5" />
       {count > 0 && (
-        <span className="tabular absolute right-1 top-1 min-w-[18px] rounded-full bg-brand-cta px-1 text-[10px] font-bold leading-[18px] text-[#fffaf5]">
+        <span className="tabular absolute right-1 top-1 min-w-[18px] rounded-full press bg-brand-cta px-1 text-[10px] font-bold leading-[18px] text-[#fffaf5]">
           {count}
         </span>
       )}

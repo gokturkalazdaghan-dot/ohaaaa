@@ -152,7 +152,7 @@ function LaunchState() {
         <div className="mt-7 flex flex-wrap items-center gap-3">
           <Link
             href="/tasoron"
-            className="rounded-full bg-brand-cta px-6 py-3 text-sm font-bold text-[#fffaf5] transition-colors hover:bg-brand-strong"
+            className="rounded-full press bg-brand-cta px-6 py-3 text-sm font-bold text-[#fffaf5] transition-colors hover:bg-brand-strong"
           >
             Mağazanızı ücretsiz yayınlayın
           </Link>

@@ -63,7 +63,7 @@ export function ProductCard({
             loading={priority ? 'eager' : 'lazy'}
             decoding="async"
             fetchPriority={priority ? 'high' : 'auto'}
-            className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
+            className="h-full w-full object-contain transition-transform duration-200 ease-out group-hover:scale-[1.03]"
           />
         ) : (
           <ProductPlaceholder seed={result.slug} />

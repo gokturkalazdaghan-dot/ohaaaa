@@ -513,7 +513,7 @@ function PriceFilter({
         <div className="flex items-center gap-2">
           <button
             type="submit"
-            className="rounded-lg bg-brand-cta px-3 py-2 text-sm font-semibold text-[#fffaf5] transition-colors hover:bg-brand-strong"
+            className="rounded-lg press bg-brand-cta px-3 py-2 text-sm font-semibold text-[#fffaf5] transition-colors hover:bg-brand-strong"
           >
             Uygula
           </button>

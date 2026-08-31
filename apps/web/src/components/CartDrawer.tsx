@@ -188,7 +188,7 @@ export function CartDrawer() {
               <Link
                 href="/odeme"
                 onClick={close}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-cta px-5 py-3 font-semibold text-white transition-transform hover:scale-[1.02] active:scale-[0.99]"
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl press bg-brand-cta px-5 py-3 font-semibold text-white"
               >
                 Ödemeye geç
                 <ArrowRightIcon className="h-4 w-4" />

@@ -50,7 +50,7 @@ export default function GlobalError({
         <button
           type="button"
           onClick={reset}
-          className="rounded-xl bg-brand-cta px-5 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.03]"
+          className="rounded-xl press bg-brand-cta px-5 py-2.5 text-sm font-semibold text-white"
         >
           Tekrar dene
         </button>

@@ -162,7 +162,7 @@ export default async function StorePage({ params, searchParams }: StorePageProps
       <header className="flex flex-wrap items-start gap-5">
         <span
           aria-hidden="true"
-          className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-brand-cta text-2xl font-black text-[#fffaf5]"
+          className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl press bg-brand-cta text-2xl font-black text-[#fffaf5]"
         >
           {vendor.displayName.slice(0, 1).toLocaleUpperCase('tr')}
         </span>

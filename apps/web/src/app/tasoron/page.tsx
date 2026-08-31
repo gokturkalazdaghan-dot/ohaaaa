@@ -75,7 +75,7 @@ export default function VendorLandingPage() {
         <div className="mt-7 flex flex-wrap items-center gap-3">
           <Link
             href="/tasoron/basvuru"
-            className="rounded-full bg-brand-cta px-6 py-3 text-sm font-bold text-[#fffaf5] transition-colors hover:bg-brand-strong"
+            className="rounded-full press bg-brand-cta px-6 py-3 text-sm font-bold text-[#fffaf5] transition-colors hover:bg-brand-strong"
           >
             Başvuru formunu doldur
           </Link>
@@ -111,7 +111,7 @@ export default function VendorLandingPage() {
         <ol className="mt-5 grid gap-4 sm:grid-cols-3">
           {STEPS.map((step) => (
             <li key={step.n} className="card p-5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-cta text-sm font-extrabold text-[#fffaf5]">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full press bg-brand-cta text-sm font-extrabold text-[#fffaf5]">
                 {step.n}
               </span>
               <h3 className="mt-3 text-sm font-bold text-fg">{step.title}</h3>
@@ -135,7 +135,7 @@ export default function VendorLandingPage() {
           </Link>
           <Link
             href="/tasoron/basvuru"
-            className="rounded-full bg-brand-cta px-5 py-2.5 text-sm font-bold text-[#fffaf5] transition-colors hover:bg-brand-strong"
+            className="rounded-full press bg-brand-cta px-5 py-2.5 text-sm font-bold text-[#fffaf5] transition-colors hover:bg-brand-strong"
           >
             Başvur
           </Link>
