@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 
+import { FEED_FIELDS } from '@ohaaaa/shared';
+
 import { apiBaseUrl } from '@/lib/env';
 
 export const metadata: Metadata = {
@@ -224,6 +226,64 @@ export default function ApiDocsPage() {
               )}
             </article>
           ))}
+        </div>
+      </section>
+
+      {/*
+        BESLEME ALANLARI TABLOSU.
+
+        Önceden yalnızca tek bir örnek gövde vardı; hangi alanın zorunlu
+        olduğu, sınırların ne olduğu ve gönderilmezse ne olacağı hiçbir yerde
+        yazmıyordu. Entegrasyoncu bunu 400 hatalarından öğreniyordu.
+
+        Tablo `@ohaaaa/shared` içindeki FEED_FIELDS'tan gelir ve orada bir
+        test, tablonun şemayla aynı şeyi söylediğini DAVRANIŞSAL olarak
+        doğrular: alan çıkarılır, şema reddediyor mu bakılır. Şemaya alan
+        eklenip burası güncellenmezse test düşer.
+      */}
+      <section className="mt-12">
+        <h2 className="text-2xl font-black tracking-tight">Besleme alanları</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
+          <code className="font-mono text-xs">POST /api/v1/products</code> gövdesindeki{' '}
+          <code className="font-mono text-xs">products[]</code> dizisinin her kalemi.
+          Tanımlı olmayan bir alan gönderilirse istek reddedilir — yazım hatası
+          sessizce yutulmaz.
+        </p>
+
+        <div className="mt-5 overflow-x-auto">
+          <table className="w-full min-w-[46rem] border-collapse text-left text-sm">
+            <thead>
+              <tr className="border-b border-line">
+                <th scope="col" className="py-2 pr-4 font-semibold text-fg">Alan</th>
+                <th scope="col" className="py-2 pr-4 font-semibold text-fg">Tip</th>
+                <th scope="col" className="py-2 pr-4 font-semibold text-fg">Zorunlu</th>
+                <th scope="col" className="py-2 font-semibold text-fg">Açıklama</th>
+              </tr>
+            </thead>
+            <tbody>
+              {FEED_FIELDS.map((field) => (
+                <tr key={field.name} className="border-b border-line align-top">
+                  <td className="py-3 pr-4">
+                    <code className="font-mono text-xs text-fg">{field.name}</code>
+                  </td>
+                  <td className="py-3 pr-4 text-xs text-muted">{field.type}</td>
+                  <td className="py-3 pr-4 text-xs">
+                    {field.required ? (
+                      <span className="font-semibold text-brand">evet</span>
+                    ) : field.fallback !== undefined ? (
+                      <span className="text-muted">
+                        hayır — varsayılan{' '}
+                        <code className="font-mono text-2xs text-fg">{field.fallback}</code>
+                      </span>
+                    ) : (
+                      <span className="text-muted">hayır</span>
+                    )}
+                  </td>
+                  <td className="py-3 text-xs leading-relaxed text-muted">{field.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
 

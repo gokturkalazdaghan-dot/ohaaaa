@@ -17,8 +17,15 @@ const centsSchema = z
   .nonnegative('Tutar negatif olamaz')
   .max(99_999_999_999, 'Tutar üst sınırı aşıyor');
 
-/** Taşeron beslemesindeki tek bir ürün. */
-export const productFeedItemSchema = z
+/*
+ * Taşeron beslemesindeki tek bir ürün.
+ *
+ * İç nesne AYRI tutulur: `.refine()` sonucu bir ZodEffects'tir ve `.shape`
+ * taşımaz. Belgelerdeki alan tablosu ile bu tablonun şemaya uyduğunu sınayan
+ * test, anahtar listesini buradan okur — elle yazılmış bir liste, şemaya yeni
+ * bir alan eklendiğinde sessizce eskir.
+ */
+const productFeedItemObject = z
   .object({
     /** Taşeronun kendi sistemindeki benzersiz kimlik — upsert anahtarı. */
     external_id: z.string().min(1).max(120),
@@ -50,16 +57,22 @@ export const productFeedItemSchema = z
     status: z.enum(['draft', 'active', 'out_of_stock', 'archived']).default('active'),
     attributes: z.record(z.string(), z.string()).default({}),
   })
-  .strict()
-  .refine(
-    (item) =>
-      item.compare_at_price_cents == null ||
-      item.compare_at_price_cents >= item.price_cents,
-    {
-      message: 'Üstü çizili fiyat (compare_at_price_cents) satış fiyatından düşük olamaz',
-      path: ['compare_at_price_cents'],
-    },
-  );
+  .strict();
+
+export const productFeedItemSchema = productFeedItemObject.refine(
+  (item) =>
+    item.compare_at_price_cents == null ||
+    item.compare_at_price_cents >= item.price_cents,
+  {
+    message: 'Üstü çizili fiyat (compare_at_price_cents) satış fiyatından düşük olamaz',
+    path: ['compare_at_price_cents'],
+  },
+);
+
+/** Besleme alanlarının adları — belge tablosu ve testi bunu kaynak alır. */
+export const PRODUCT_FEED_FIELDS = Object.keys(
+  productFeedItemObject.shape,
+) as Array<keyof typeof productFeedItemObject.shape>;
 
 export type ProductFeedItem = z.infer<typeof productFeedItemSchema>;
 

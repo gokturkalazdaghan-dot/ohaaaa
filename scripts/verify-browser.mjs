@@ -498,7 +498,11 @@ check(cursor === 'pointer', 'Düğmelerde el imleci', cursor);
 for (const width of [375, 768, 1024, 1440]) {
   const bp = await browser.newPage({ viewport: { width, height: 900 } });
   let worst = 0;
-  for (const path of ['/', '/arama', '/urun/sony-wh-1000xm5', '/odeme']) {
+  /* `/tasoron/api` listede: sitedeki EN GENİŞ öge (besleme alanları tablosu,
+     min 46rem) orada duruyor ve kendi `overflow-x-auto` kabında kaymalı.
+     Eklendiğinde hiçbir test o sayfayı ziyaret etmiyordu — yani sitenin
+     taşmaya en yatkın parçası, taşma denetiminin dışındaydı. */
+  for (const path of ['/', '/arama', '/urun/sony-wh-1000xm5', '/odeme', '/tasoron/api']) {
     await bp.goto(`${BASE}${path}`, { waitUntil: 'networkidle' });
     const over = await bp.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -507,6 +511,33 @@ for (const width of [375, 768, 1024, 1440]) {
   }
   check(worst <= 1, `${width}px genişlikte yatay taşma yok`, `${worst}px`);
   await bp.close();
+}
+
+/*
+ * Taşma olmaması tek başına yeterli değil: geniş bir tablo `overflow: hidden`
+ * ile de taşmayı bitirir ama o zaman sütunların bir kısmı ERİŞİLEMEZ olur.
+ * Sayfa taşmıyor VE tablo kendi içinde kaydırılabiliyor olmalı.
+ */
+{
+  const tp = await browser.newPage({ viewport: { width: 375, height: 900 } });
+  await tp.goto(`${BASE}/tasoron/api`, { waitUntil: 'networkidle' });
+  const table = await tp.evaluate(() => {
+    const el = document.querySelector('table');
+    if (!el) return null;
+    const box = el.parentElement;
+    if (!box) return null;
+    return {
+      tasiyorMu: box.scrollWidth > box.clientWidth,
+      kaydirilabilir: ['auto', 'scroll'].includes(getComputedStyle(box).overflowX),
+    };
+  });
+  check(table !== null, 'Besleme alanları tablosu çiziliyor');
+  check(
+    table !== null && (!table.tasiyorMu || table.kaydirilabilir),
+    'Geniş tablo kendi kabında kaydırılabiliyor',
+    table ? JSON.stringify(table) : 'tablo yok',
+  );
+  await tp.close();
 }
 
 // --- Konsol hataları -------------------------------------------------------

@@ -26,7 +26,7 @@ import { readFileSync } from 'node:fs';
 
 const B = (process.argv[2] ?? 'http://127.0.0.1:3137').replace(/\/+$/, '');
 const axe = readFileSync('node_modules/axe-core/axe.min.js', 'utf8');
-const PAGES = ['/', '/arama', '/kategori/elektronik', '/urun/sony-wh-1000xm5', '/tasoron', '/favoriler', '/magaza/teknomarkt', '/odeme', '/giris'];
+const PAGES = ['/', '/arama', '/kategori/elektronik', '/urun/sony-wh-1000xm5', '/tasoron', '/tasoron/api', '/favoriler', '/magaza/teknomarkt', '/odeme', '/giris'];
 
 const browser = await launchBrowser();
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
