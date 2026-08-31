@@ -100,6 +100,7 @@ export function VendorApplicationForm() {
       <Field
         label="Mağaza adı"
         name="display_name"
+        required
         value={displayName}
         onChange={(event) => onDisplayNameChange(event.target.value)}
         error={errors.display_name}
@@ -109,6 +110,7 @@ export function VendorApplicationForm() {
       <Field
         label="Mağaza adresi"
         name="slug"
+        required
         value={slug}
         onChange={(event) => {
           setSlugTouched(true);
@@ -118,19 +120,38 @@ export function VendorApplicationForm() {
         prefix="ohaaaa.com/magaza/"
       />
 
-      <Field label="Ticari unvan" name="legal_name" error={errors.legal_name} hint="Fatura üzerindeki resmi unvan." />
+      <Field
+        label="Ticari unvan"
+        name="legal_name"
+        required
+        error={errors.legal_name}
+        hint="Fatura üzerindeki resmi unvan."
+      />
 
       <Field
         label="Vergi / TC kimlik numarası"
         name="tax_id"
+        required
         error={errors.tax_id}
         inputMode="numeric"
         hint="Doğrulama için kullanılır, müşterilere gösterilmez."
       />
 
       <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="Destek e-postası" name="support_email" type="email" error={errors.support_email} />
-        <Field label="Destek telefonu" name="support_phone" error={errors.support_phone} />
+        <Field
+          label="Destek e-postası"
+          name="support_email"
+          type="email"
+          required
+          error={errors.support_email}
+        />
+        {/* Şemada isteğe bağlı; etiketi de öyle demeli. Web sitesi alanı
+            zaten "(isteğe bağlı)" diyordu, telefon atlanmıştı. */}
+        <Field
+          label="Destek telefonu (isteğe bağlı)"
+          name="support_phone"
+          error={errors.support_phone}
+        />
       </div>
 
       <Field
@@ -143,6 +164,7 @@ export function VendorApplicationForm() {
       <Field
         label="Mağaza tanıtımı"
         name="description"
+        required
         error={errors.description}
         multiline
         hint="Ürün gamınızı ve tedarik gücünüzü kısaca anlatın (en az 20 karakter)."
@@ -190,6 +212,7 @@ function Field({
   prefix,
   multiline = false,
   type = 'text',
+  required = false,
   ...rest
 }: {
   label: string;
@@ -199,10 +222,45 @@ function Field({
   prefix?: string;
   multiline?: boolean;
   type?: string;
+  required?: boolean;
 } & React.InputHTMLAttributes<HTMLInputElement>) {
   const base = `w-full bg-bg text-sm outline-none transition-colors placeholder:text-subtle ${
     prefix ? 'rounded-r-xl px-3 py-2.5' : 'rounded-xl px-3.5 py-2.5'
   }`;
+
+  /*
+   * HATA VE İPUCU METNİ ALANA BAĞLANIR.
+   *
+   * Önceden bağlanmıyordu. Sonuçları:
+   *   • Hata yalnızca KIRMIZI KENARLIKLA anlatılıyordu. Rengi ayırt
+   *     edemeyen bir kullanıcı için alan sağlamdan farksızdı (WCAG 1.4.1
+   *     ve 3.3.1).
+   *   • `role="alert"` metni belirdiği anda BİR KEZ okunur. Kullanıcı
+   *     sonradan alana geri sekerse hatayı bir daha duymaz.
+   *   • İpucu metni ("Fatura üzerindeki resmi unvan") ekran okuyucuya HİÇ
+   *     ulaşmıyordu; gözle görülüp kulakla duyulmayan bir yardım metniydi.
+   *
+   * `aria-describedby` ikisini de alana bağlar, `aria-invalid` durumu
+   * renkten bağımsız olarak bildirir.
+   */
+  const errorId = `${name}-hata`;
+  const hintId = `${name}-ipucu`;
+  const describedBy = error ? errorId : hint ? hintId : undefined;
+
+  /*
+   * Zorunluluk, sunucudaki zod şemasıyla aynı olmalı. İşaretlenmediğinde
+   * kullanıcı boş formu gönderip sunucudan dönmesini bekliyordu; ekran
+   * okuyucu kullanıcısı ise hangi alanın zorunlu olduğunu gönderene kadar
+   * hiç öğrenemiyordu.
+   */
+  const shared = {
+    id: name,
+    name,
+    required,
+    'aria-invalid': error ? (true as const) : undefined,
+    'aria-describedby': describedBy,
+    className: base,
+  };
 
   return (
     <div>
@@ -222,18 +280,28 @@ function Field({
         )}
 
         {multiline ? (
-          <textarea id={name} name={name} rows={4} className={base} />
+          /* `...rest` buraya da geçiriliyor. Önceden yalnızca `<input>`
+             dalına geçiyordu; çok satırlı bir alana verilen HİÇBİR öznitelik
+             (değer, olay, uzunluk sınırı) uygulanmıyor, sessizce
+             yutuluyordu. */
+          <textarea
+            {...shared}
+            rows={4}
+            {...(rest as unknown as React.TextareaHTMLAttributes<HTMLTextAreaElement>)}
+          />
         ) : (
-          <input id={name} name={name} type={type} className={base} {...rest} />
+          <input {...shared} type={type} {...rest} />
         )}
       </div>
 
       {error ? (
-        <p className="mt-1 text-2xs text-danger" role="alert">
+        <p id={errorId} className="mt-1 text-2xs text-danger" role="alert">
           {error}
         </p>
       ) : hint ? (
-        <p className="mt-1 text-2xs text-subtle">{hint}</p>
+        <p id={hintId} className="mt-1 text-2xs text-subtle">
+          {hint}
+        </p>
       ) : null}
     </div>
   );

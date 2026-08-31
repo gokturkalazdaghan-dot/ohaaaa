@@ -9,6 +9,14 @@
 import { z } from 'zod';
 import { SUPPORTED_CURRENCIES } from './money.js';
 import { API_SCOPES } from './types.js';
+import { useTurkishZodMessages } from './zodTurkish.js';
+
+/*
+ * Doğrulama mesajları Türkçeleştirilir. Bu modül içe aktarıldığı anda
+ * kurulur — şemaların hepsi buradan geçtiği için web formları, taşeron
+ * API'si ve besleme hattı aynı metinleri görür.
+ */
+useTurkishZodMessages();
 
 /** Kuruş cinsinden tutar: negatif olamaz, ondalık olamaz. */
 const centsSchema = z
