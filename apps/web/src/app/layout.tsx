@@ -8,7 +8,6 @@ import { Header } from '@/components/Header';
 import { UserMenu } from '@/components/UserMenu';
 import { CartDrawer } from '@/components/CartDrawer';
 import { DemoBanner } from '@/components/DemoBanner';
-import { PrelaunchBanner } from '@/components/PrelaunchBanner';
 import { JsonLd } from '@/components/JsonLd';
 import { isDemoMode } from '@/data/catalog';
 import { gaMeasurementId, isPrelaunch, searchConsoleVerification, siteUrl } from '@/lib/env';
@@ -44,6 +43,7 @@ const jakarta = Plus_Jakarta_Sans({
   variable: '--font-jakarta',
 });
 
+/** Header oturum için cookies() kullanır; derlemede statik sayfa üretme. */
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
@@ -131,7 +131,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           durumun tek görünür işareti de yoktu: canlıya geçtiğinizi sanıp
           haftalarca hiç indekslenmeyen bir siteyle yaşayabilirdiniz.
         */}
-        {isPrelaunch && <PrelaunchBanner />}
         <Header userMenu={<UserMenu />} />
         <main id="icerik">{children}</main>
         <Footer />

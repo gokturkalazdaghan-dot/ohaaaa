@@ -23,7 +23,6 @@
           "value": "max-age=31536000; includeSubDomains"
         },
         {
-          "_comment": "camera ve microphone SELF: arama kutusundaki fotograf ve sesli arama bunlari gerektirir. Onceden ikisi de tamamen kapaliydi ve o iki ozellik sessizce calismazdi. 'self' ucuncu taraf cerceveleri disarida birakir; izni yine kullanici verir.",
           "key": "permissions-policy",
           "value": "camera=(self), microphone=(self), geolocation=(), interest-cohort=()"
         }
