@@ -6,6 +6,34 @@ konusunda dürüsttür.
 
 ---
 
+## Bekleyen migration'ları uygulama
+
+Uygulama kodu dağıtılır ama veritabanı şeması geride kalabilir — kod Vercel'e
+gider, migration ise elle uygulanır. O aralıkta yeni bir SQL fonksiyonunu
+çağıran her yol hata verir.
+
+Tek komutla kapatılır:
+
+```sh
+SUPABASE_DB_URL='postgresql://...' ./scripts/apply-migrations.sh
+```
+
+Bağlantı dizesi: Supabase paneli → Settings → Database → Connection string (URI).
+
+Betik yalnızca EKSİK olanları uygular; uygulanmış olanları atlar. Hangi
+sürümün uygulandığı `supabase_migrations.schema_migrations` defterinde tutulur
+— Supabase CLI'nin kendi tablosu, yani `supabase db push` ile de uyumludur.
+
+Her dosya tek bir işlemde çalışır: yarıda hata verirse hiçbir şey uygulanmaz
+ve defter de yazılmaz. Yarım uygulanmış bir şema, hiç uygulanmamıştan
+beterdir.
+
+`supabase/seed.sql` UYGULANMAZ. O dosya uydurma satıcı ve fiyat içerir; canlı
+bir fiyat karşılaştırma sitesinde sahte fiyat göstermek ziyaretçiye yalan
+söylemektir.
+
+---
+
 ## 0. Otomasyonun sınırı — önce bu okunmalı
 
 Sistemin üç katmanı vardır ve her birinin gözetim ihtiyacı farklıdır:

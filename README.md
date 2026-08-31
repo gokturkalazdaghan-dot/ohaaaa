@@ -130,3 +130,14 @@ Ayrıntı: [`docs/vendor-api.md`](docs/vendor-api.md) ve uygulama içindeki
 ## Lisans
 
 MIT
+
+### Şemayı hizalama
+
+Kod dağıtıldı ama migration uygulanmadıysa, yeni SQL fonksiyonlarını çağıran
+yollar hata verir. Tek komutla kapatılır:
+
+```sh
+SUPABASE_DB_URL='postgresql://...' ./scripts/apply-migrations.sh
+```
+
+Yalnızca eksik olanları uygular; ayrıntılar `docs/operations.md` içinde.
