@@ -149,6 +149,9 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     offerCount: 5,
     minPriceCents: 5_349_900,
     maxPriceCents: 5_629_900,
+    // Demo kumesinde yorum YOK ve uydurulmaz.
+    rating: 0,
+    ratingCount: 0,
     offers: [
       affiliateOffer({
         id: '60000000-0000-4000-8000-000000000001',
@@ -198,6 +201,9 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     offerCount: 3,
     minPriceCents: 1_149_900,
     maxPriceCents: 1_249_000,
+    // Demo kumesinde yorum YOK ve uydurulmaz.
+    rating: 0,
+    ratingCount: 0,
     offers: [
       affiliateOffer({
         id: '60000000-0000-4000-8000-000000000003',
@@ -233,6 +239,9 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     offerCount: 2,
     minPriceCents: 2_199_900,
     maxPriceCents: 2_249_000,
+    // Demo kumesinde yorum YOK ve uydurulmaz.
+    rating: 0,
+    ratingCount: 0,
     offers: [
       offer({
         id: 'offer-lenovo-tm', vendorId: 'vendor-teknomarkt',
@@ -260,6 +269,9 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     offerCount: 2,
     minPriceCents: 2_899_900,
     maxPriceCents: 2_949_900,
+    // Demo kumesinde yorum YOK ve uydurulmaz.
+    rating: 0,
+    ratingCount: 0,
     offers: [
       offer({
         id: 'offer-dyson-ebd', vendorId: 'vendor-ev-bahce',
@@ -287,6 +299,9 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     offerCount: 1,
     minPriceCents: 449_900,
     maxPriceCents: 449_900,
+    // Demo kumesinde yorum YOK ve uydurulmaz.
+    rating: 0,
+    ratingCount: 0,
     offers: [
       offer({
         id: 'offer-pegasus-mv', vendorId: 'vendor-moda-vitrin',
@@ -308,6 +323,9 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     offerCount: 2,
     minPriceCents: 799_900,
     maxPriceCents: 824_900,
+    // Demo kumesinde yorum YOK ve uydurulmaz.
+    rating: 0,
+    ratingCount: 0,
     offers: [
       offer({
         id: 'offer-airfryer-ebd', vendorId: 'vendor-ev-bahce',

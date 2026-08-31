@@ -13,7 +13,8 @@ import { ProductGallery } from '@/components/ProductGallery';
 import { RecentlyViewed, RecordProductView } from '@/components/RecentlyViewed';
 import { PriceHistory } from '@/components/PriceHistory';
 import { ProductCard, resolveProductImage } from '@/components/ProductCard';
-import { getPriceHistory, getProductGroup, getRelatedGroups } from '@/data/catalog';
+import { ProductReviews } from '@/components/ProductReviews';
+import { getPriceHistory, getProductGroup, getProductReviews, getRelatedGroups } from '@/data/catalog';
 import { siteUrl } from '@/lib/env';
 
 type ProductPageProps = { params: Promise<{ slug: string }> };
@@ -68,6 +69,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
   // Benzer ürünler ürünün KENDİ bağlamıyla aranır: aynı kategori, yakın
   // fiyat. Bağlam verilmezse bölüm katalog genelini gösterir ve her sayfada
   // aynı dört ürün çıkar.
+  const reviews = await getProductReviews(group.id);
   const related = await getRelatedGroups(slug, 4, {
     categoryId: group.categoryId,
     minPriceCents: group.minPriceCents,
@@ -121,6 +123,22 @@ export default async function ProductPage({ params }: ProductPageProps) {
     name: group.title,
     description: group.description ?? undefined,
     ...(group.brand ? { brand: { '@type': 'Brand', name: group.brand } } : {}),
+    /*
+     * AggregateRating YALNIZCA gercek degerlendirme varsa eklenir.
+     * Puani olmayan urune 0 yildiz bildirmek hem yaniltici hem de Google'in
+     * yapilandirilmis veri politikasina aykiri; zengin sonuc kaybettirir.
+     */
+    ...(group.ratingCount > 0
+      ? {
+          aggregateRating: {
+            '@type': 'AggregateRating',
+            ratingValue: group.rating.toFixed(1),
+            reviewCount: group.ratingCount,
+            bestRating: '5',
+            worstRating: '1',
+          },
+        }
+      : {}),
     ...(group.imageUrl ? { image: [group.imageUrl] } : {}),
     url: productUrl,
     ...(sellableOffers.length > 0
@@ -357,6 +375,14 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
         </div>
       </div>
+
+      {/* Degerlendirmeler, ONERILERDEN once: yorum bu urun hakkinda, oneriler
+          baska urunler hakkinda. Alicinin karari once bu urunle ilgili. */}
+      <ProductReviews
+        reviews={reviews}
+        rating={group.rating}
+        ratingCount={group.ratingCount}
+      />
 
       {related.length > 0 && (
         <section className="mt-20">

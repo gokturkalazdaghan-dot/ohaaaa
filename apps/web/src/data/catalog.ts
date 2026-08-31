@@ -558,7 +558,7 @@ export async function getProductGroup(slug: string): Promise<ProductGroupWithOff
       .from('product_groups')
       .select(
         `id, slug, title, brand, image_url, description, category_id, attributes,
-         offer_count, min_price_cents, max_price_cents,
+         offer_count, min_price_cents, max_price_cents, rating, rating_count,
          offers:products!group_id (
            id, fulfillment, vendor_id, merchant_id, product_url,
            title, sku, image_urls, price_cents, compare_at_price_cents,
@@ -642,6 +642,8 @@ export async function getProductGroup(slug: string): Promise<ProductGroupWithOff
       categoryId: data.category_id ? String(data.category_id) : null,
       attributes: (data.attributes as Record<string, string> | null) ?? {},
       offerCount: Number(data.offer_count),
+      rating: Number(data.rating ?? 0),
+      ratingCount: Number(data.rating_count ?? 0),
       minPriceCents: data.min_price_cents === null ? null : Number(data.min_price_cents),
       maxPriceCents: data.max_price_cents === null ? null : Number(data.max_price_cents),
       offers,
@@ -1044,4 +1046,80 @@ export async function getPriceHistory(
     day: String(row.day).slice(0, 10),
     minPriceCents: Number(row.min_price_cents),
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Değerlendirmeler
+// ---------------------------------------------------------------------------
+
+export interface ProductReview {
+  id: string;
+  productRating: number;
+  vendorRating: number;
+  title: string | null;
+  body: string | null;
+  createdAt: string;
+  /** Yazarın görünen adı. Tam ad gösterilmez; bkz. aşağıdaki not. */
+  authorLabel: string;
+  vendorName: string | null;
+}
+
+/**
+ * Bir kanonik ürünün yayındaki değerlendirmeleri.
+ *
+ * Demo modunda BOŞ döner ve uydurma yorum üretilmez. Sahte değerlendirme,
+ * bu sitenin tek sermayesi olan güveni bitirir; yerleşik veri kümesinde
+ * ürün ve fiyat var ama yorum yok, olmayacak da.
+ */
+export async function getProductReviews(
+  groupId: string,
+  limit = 20,
+): Promise<ProductReview[]> {
+  const supabase = createAnonClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('reviews')
+    .select(
+      `id, product_rating, vendor_rating, title, body, created_at,
+       author:users!inner ( email ),
+       vendor:vendors ( display_name )`,
+    )
+    .eq('group_id', groupId)
+    .eq('status', 'published')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error(
+      JSON.stringify({ level: 'error', msg: 'Değerlendirmeler alınamadı', error: error.message }),
+    );
+    return [];
+  }
+
+  return (data ?? []).map((row: Record<string, unknown>): ProductReview => {
+    const author = unwrapRelation(row.author);
+    const vendor = unwrapRelation(row.vendor);
+
+    /*
+     * Yazar adı olarak e-postanın YALNIZCA ilk harfi ve alan adı öncesi
+     * kısaltması gösterilir ("a***@"). Tam e-posta göstermek, yorum yazan
+     * her müşterinin adresini herkese açık hale getirirdi — hem KVKK
+     * açısından savunulamaz hem de spam toplayıcılara davetiye.
+     */
+    const email = String(author?.email ?? '');
+    const local = email.split('@')[0] ?? '';
+    const authorLabel = local.length > 0 ? `${local[0]}${'*'.repeat(Math.min(local.length - 1, 4))}` : 'Müşteri';
+
+    return {
+      id: String(row.id),
+      productRating: Number(row.product_rating),
+      vendorRating: Number(row.vendor_rating),
+      title: row.title ? String(row.title) : null,
+      body: row.body ? String(row.body) : null,
+      createdAt: String(row.created_at),
+      authorLabel,
+      vendorName: vendor?.display_name ? String(vendor.display_name) : null,
+    };
+  });
 }

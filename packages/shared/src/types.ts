@@ -153,6 +153,9 @@ export interface ProductGroup {
   offerCount: number;
   minPriceCents: number | null;
   maxPriceCents: number | null;
+  /** Yayindaki degerlendirmelerin urun puani ortalamasi (0 = puan yok). */
+  rating: number;
+  ratingCount: number;
 }
 
 export interface ProductGroupWithOffers extends ProductGroup {
