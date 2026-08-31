@@ -1123,3 +1123,77 @@ export async function getProductReviews(
     };
   });
 }
+
+export interface ReviewableItem {
+  orderItemId: string;
+  groupId: string;
+  vendorId: string;
+  title: string;
+  imageUrl: string | null;
+  vendorName: string;
+  productSlug: string | null;
+  deliveredAt: string | null;
+}
+
+/**
+ * Kullanıcının değerlendirebileceği kalemler: TESLİM EDİLMİŞ ve HENÜZ
+ * DEĞERLENDİRİLMEMİŞ siparişler.
+ *
+ * Kullanıcının oturumuyla okunur; RLS zaten yalnızca kendi siparişlerini
+ * gösterir. Burada ayrıca `user_id` süzmüyoruz — iki yerde tutulan bir
+ * kural, bir yerde unutulduğunda sessizce delinir. Tek kaynak RLS.
+ */
+export async function getReviewableItems(): Promise<ReviewableItem[]> {
+  const { createClient } = await import('@/lib/supabase/server');
+  const supabase = await createClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('order_items')
+    .select(
+      `id, title_snapshot, image_url_snapshot, vendor_id,
+       vendor:vendors!vendor_id ( display_name ),
+       product:products!product_id ( group_id, group:product_groups!group_id ( slug ) ),
+       vendor_order:vendor_orders!vendor_order_id ( status, delivered_at ),
+       review:reviews ( id )`,
+    )
+    .eq('vendor_order.status', 'delivered')
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error) {
+    console.error(
+      JSON.stringify({ level: 'error', msg: 'Değerlendirilecek siparişler alınamadı', error: error.message }),
+    );
+    return [];
+  }
+
+  return (data ?? [])
+    .filter((row: Record<string, unknown>) => {
+      // Zaten değerlendirilmiş kalem listede durmamalı: yapılacak iş gibi
+      // görünüp tıklandığında reddedilen bir satır, kullanıcıyı yanıltır.
+      const review = row.review;
+      return Array.isArray(review) ? review.length === 0 : !review;
+    })
+    .map((row: Record<string, unknown>): ReviewableItem | null => {
+      const vendor = unwrapRelation(row.vendor);
+      const product = unwrapRelation(row.product);
+      const group = product ? unwrapRelation(product.group) : null;
+      const vendorOrder = unwrapRelation(row.vendor_order);
+
+      // Ürün silinmişse grup bağı kopar; o kalem değerlendirilemez.
+      if (!product?.group_id) return null;
+
+      return {
+        orderItemId: String(row.id),
+        groupId: String(product.group_id),
+        vendorId: String(row.vendor_id),
+        title: String(row.title_snapshot),
+        imageUrl: row.image_url_snapshot ? String(row.image_url_snapshot) : null,
+        vendorName: String(vendor?.display_name ?? 'Mağaza'),
+        productSlug: group?.slug ? String(group.slug) : null,
+        deliveredAt: vendorOrder?.delivered_at ? String(vendorOrder.delivered_at) : null,
+      };
+    })
+    .filter((item): item is ReviewableItem => item !== null);
+}

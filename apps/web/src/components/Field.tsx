@@ -24,6 +24,14 @@ import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTML
 export interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
   name: string;
+  /*
+   * Alanın DOM kimliği. Varsayılan olarak `name` kullanılır; ancak aynı
+   * sayfada aynı adı taşıyan birden çok form varsa (her siparişe bir
+   * değerlendirme formu gibi) kimlikler çakışır ve `<label for>` bağı
+   * bozulur — ekran okuyucu yanlış alanı okur. O durumda benzersiz bir
+   * kimlik verilir; gönderilen alan ADI değişmez.
+   */
+  inputId?: string;
   /** Sunucudan ya da şemadan gelen hata metni. */
   error?: string;
   /** Hata yokken gösterilen yardım metni. */
@@ -41,6 +49,7 @@ export interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
 export function Field({
   label,
   name,
+  inputId,
   error,
   hint,
   prefix,
@@ -52,8 +61,9 @@ export function Field({
   required = false,
   ...rest
 }: FieldProps) {
-  const errorId = `${name}-hata`;
-  const hintId = `${name}-ipucu`;
+  const fieldId = inputId ?? name;
+  const errorId = `${fieldId}-hata`;
+  const hintId = `${fieldId}-ipucu`;
 
   /* Hata varken hatayı, yokken ipucunu bağlar. İkisini birden bağlamak,
      hata anında kullanıcıya iki metni arka arkaya okuturdu. */
@@ -69,7 +79,7 @@ export function Field({
    * ayrışmasına yol açan şeydi.
    */
   const shared = {
-    id: name,
+    id: fieldId,
     name,
     required,
     'aria-invalid': error ? (true as const) : undefined,
@@ -79,7 +89,7 @@ export function Field({
 
   return (
     <div className={wrapperClassName}>
-      <label htmlFor={name} className="text-xs font-medium text-muted">
+      <label htmlFor={fieldId} className="text-xs font-medium text-muted">
         {label}
       </label>
 
