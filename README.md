@@ -81,6 +81,24 @@ tutar ile tahsil edilen ayrışır:
 | Web | `packages/shared/src/cart.ts` |
 | Mobil | `apps/mobile/lib/src/cart.dart` |
 
+### Tarayıcı doğrulaması
+
+Birim testleri ve durum kodu kontrolleri bir arayüzün çalıştığını kanıtlamaz.
+Öneri listesinin açıldığını, ok tuşlarıyla gezilebildiğini, Enter'ın doğru
+yere gittiğini, mobilde yatay kaydırma olmadığını ve konsola hata düşmediğini
+yalnızca gerçek bir tarayıcı gösterir.
+
+```sh
+cd apps/web
+NEXT_PUBLIC_SITE_URL=https://www.ohaaaa.com npm run build
+NEXT_PUBLIC_SITE_URL=https://www.ohaaaa.com npx next start -p 3137 &
+
+npm run verify:browser          # 19 kontrol
+```
+
+Demo modunda (Supabase yapılandırılmamışken) çalışır; yerleşik veri kümesi
+kontrollerin hepsini besler.
+
 ## Doğrulama
 
 ```sh
