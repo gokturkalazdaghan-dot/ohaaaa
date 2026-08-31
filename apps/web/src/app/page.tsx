@@ -1,9 +1,9 @@
 import Link from 'next/link';
 
-import { formatMoney } from '@ohaaaa/shared';
-
+import { FlashDeals } from '@/components/FlashDeals';
 import { ProductCard } from '@/components/ProductCard';
 import { RecentlyViewed } from '@/components/RecentlyViewed';
+import { TrustSignals } from '@/components/TrustSignals';
 import { getCategories, getFlashDeals, getVendors, searchProducts } from '@/data/catalog';
 
 export default async function HomePage() {
@@ -56,52 +56,21 @@ export default async function HomePage() {
           bölüm hiç çizilmez. */}
       <RecentlyViewed />
 
-      {/* --- Firsatlar ----------------------------------------------------- */}
-      {deals.length > 0 && (
-        <section className="mt-2">
-          <SectionHead title="Fırsat fiyatı" />
-          <ul className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {deals.map((deal) => {
-              const off =
-                deal.originalPriceCents > deal.dealPriceCents
-                  ? Math.round(
-                      ((deal.originalPriceCents - deal.dealPriceCents) / deal.originalPriceCents) *
-                        100,
-                    )
-                  : null;
-              return (
-                <li key={deal.id}>
-                  <Link
-                    href={deal.groupSlug ? `/urun/${deal.groupSlug}` : '/arama'}
-                    className="card-link flex h-full flex-col justify-between gap-4 p-5"
-                  >
-                    <p className="clamp-2 text-sm font-semibold leading-snug text-fg">
-                      {deal.title}
-                    </p>
-                    <div className="flex items-end justify-between gap-3">
-                      <div>
-                        <p className="tabular text-2xl font-extrabold leading-none text-brand">
-                          {formatMoney(deal.dealPriceCents)}
-                        </p>
-                        {off !== null && (
-                          <p className="tabular mt-1 text-xs text-subtle line-through">
-                            {formatMoney(deal.originalPriceCents)}
-                          </p>
-                        )}
-                      </div>
-                      {off !== null && (
-                        <span className="shrink-0 rounded-full bg-brand px-2.5 py-1 text-xs font-bold text-[#fffaf5]">
-                          %{off}
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
+      {/* Güven sinyalleri: her maddesi doğrulanabilir ve ayrıntısını anlatan
+          sayfaya bağlanıyor. Bileşen yazılmış ama hiç kullanılmamıştı. */}
+      <div className="mt-16">
+        <TrustSignals />
+      </div>
+
+      {/* --- Firsatlar -----------------------------------------------------
+          Ana sayfa bu bloğu KENDİ işaretlemesiyle çiziyordu; FlashDeals
+          bileşeni yazılmış ama hiç kullanılmamıştı. İki kopya, aynı verinin
+          iki farklı görünümü demekti. Bileşen olan sürüm daha iyi: geri
+          sayım ve stok çubuğu var, ikisi de aciliyeti gerçek veriden
+          kuruyor (uydurma bir "son 2 ürün" yazmıyor). */}
+      <div className="mt-2">
+        <FlashDeals deals={deals} />
+      </div>
 
       {/* --- Urunler -------------------------------------------------------- */}
       {trending.length > 0 && (
