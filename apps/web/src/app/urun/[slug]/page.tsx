@@ -330,16 +330,29 @@ export default async function ProductPage({ params }: ProductPageProps) {
             )}
           </div>
 
+          {/*
+            BURADAKI HER IFADE SITENIN GERCEKTEN YAPTIGI BIR SEY OLMALI.
+
+            Önceki hâli "Alıcı koruması — ürün elinize ulaşana kadar ödemeniz
+            güvencede tutulur" diyordu. Sitede ÖDEME SİSTEMİ YOK; ödeme akışı
+            açıkça bir simülasyon. Yani var olmayan bir emanet hizmeti
+            vaat ediliyordu. Aynı şekilde "tek ödemede birleştirin" de
+            gerçekleşmeyen bir ödemeyi anlatıyordu.
+
+            Bu yalnızca yanlış değil, Ticari Reklam ve Haksız Ticari
+            Uygulamalar Yönetmeliği açısından da ispatlanamaz bir iddia.
+            Yerine sitenin gerçekten yaptığı iki şey yazıldı.
+          */}
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <Guarantee
-              icon={<ShieldIcon className="h-5 w-5 text-success" />}
-              title="Alıcı koruması"
-              description="Ürün elinize ulaşana kadar ödemeniz güvencede tutulur."
+              icon={<TruckIcon className="h-5 w-5 text-electric" />}
+              title="Kargo dahil sıralama"
+              description="Teklifler etiket fiyatına değil, kargoyla birlikte ödeyeceğiniz toplama göre sıralanır."
             />
             <Guarantee
-              icon={<TruckIcon className="h-5 w-5 text-electric" />}
-              title="Tek sepet, çoklu mağaza"
-              description="Farklı mağazalardan aldıklarınızı tek ödemede birleştirin."
+              icon={<ShieldIcon className="h-5 w-5 text-success" />}
+              title="Satışın tarafı değiliz"
+              description="Sözleşme sizinle mağaza arasında kurulur; fatura, garanti ve iade süreçleri mağazaya aittir."
             />
           </div>
         </div>

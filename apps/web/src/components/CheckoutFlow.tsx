@@ -246,9 +246,16 @@ export function CheckoutFlow() {
             {submitting ? 'İşleniyor…' : `${formatMoney(summary.grandTotalCents)} öde`}
           </button>
 
-          <p className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-subtle">
-            <ShieldIcon className="h-3.5 w-3.5" />
-            Ödemeniz ürün teslim edilene kadar güvencede
+          {/*
+            Önceki hâli "Ödemeniz ürün teslim edilene kadar güvencede" idi.
+            Bu ekranın kendisi bir SİMÜLASYON: tahsilat yapılmıyor, dolayısıyla
+            güvenceye alınan bir ödeme de yok. Düğmenin hemen altında, tam da
+            kullanıcının kart bilgisi girmeyi düşündüğü anda söylenen bir
+            yanlış, sayfadaki en pahalı yanlıştır.
+          */}
+          <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-[11px] text-subtle">
+            <ShieldIcon className="h-3.5 w-3.5 shrink-0" />
+            Bu bir simülasyondur — tahsilat yapılmaz, kart bilgisi gönderilmez
           </p>
         </div>
       </aside>
