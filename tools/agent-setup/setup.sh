@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# Agent araç kurulumu — Claude Code için beş yardımcı aracı tek komutta hazırlar.
+# Agent araç kurulumu — Claude Code için yardımcı araçları tek komutta hazırlar.
 #
 # Bu betik yeniden çalıştırılabilir (idempotent): kurulu olanı atlar, eksik
 # olanı kurar. Ephemeral (geçici) container'larda oturum başında çalıştırın.
 #
 # Kurulan araçlar:
-#   1. Playwright CLI  — ajanlar için token-verimli tarayıcı sürücüsü
+#   1. Playwright CLI     — ajanlar için token-verimli tarayıcı sürücüsü
 #   2. Supabase eklentisi — Claude Code plugin (skills + MCP)
-#   3. Context7        — güncel kütüphane dokümanı MCP sunucusu
-#   4. SkillUI         — web sitesinden tasarım sistemi çıkarır (statik)
-#   5. Strix           — otonom AI penetrasyon testi ajanı (opsiyonel, docker)
+#   3. Context7           — güncel kütüphane dokümanı MCP sunucusu
+#   4. SkillUI            — web sitesinden tasarım sistemi çıkarır (statik)
+#   5. codebase-memory    — kod tabanı bilgi grafiği MCP (yerel, anahtarsız)
+#   6. Strix              — otonom AI penetrasyon testi ajanı (opsiyonel, docker)
+#   7. jcode              — alternatif ajan harness'ı (opsiyonel, Rust)
 #
 # Kullanım:
 #   ./tools/agent-setup/setup.sh            # varsayılan araçları kur
-#   ./tools/agent-setup/setup.sh --all      # Strix dahil her şeyi kur
+#   ./tools/agent-setup/setup.sh --all      # Strix + jcode dahil her şeyi kur
+#   ./tools/agent-setup/setup.sh --strix    # yalnız Strix'i ayrıca ekle
+#   ./tools/agent-setup/setup.sh --jcode    # yalnız jcode'u ayrıca ekle
 #   ./tools/agent-setup/setup.sh --check    # sadece durumu raporla, kurma
 #
 # Ortam değişkenleri (opsiyonel):
@@ -26,14 +30,16 @@ set -uo pipefail
 
 # ----- bayraklar -----------------------------------------------------------
 INSTALL_STRIX=0
+INSTALL_JCODE=0
 CHECK_ONLY=0
 for arg in "$@"; do
   case "$arg" in
-    --all)   INSTALL_STRIX=1 ;;
+    --all)   INSTALL_STRIX=1; INSTALL_JCODE=1 ;;
     --strix) INSTALL_STRIX=1 ;;
+    --jcode) INSTALL_JCODE=1 ;;
     --check) CHECK_ONLY=1 ;;
     -h|--help)
-      sed -n '3,23p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '3,27p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     *)
       echo "Bilinmeyen argüman: $arg" >&2
@@ -164,7 +170,36 @@ setup_skillui() {
 }
 
 # ---------------------------------------------------------------------------
-# 5) Strix (opsiyonel — otonom pentest ajanı)
+# 5) codebase-memory-mcp (kod tabanı bilgi grafiği — yerel, anahtarsız)
+# ---------------------------------------------------------------------------
+setup_codebase_memory() {
+  step "codebase-memory-mcp (kod tabanı bilgi grafiği MCP)"
+  if have codebase-memory-mcp; then
+    c_green "binary zaten kurulu"
+  else
+    [ "$CHECK_ONLY" = 1 ] && { c_yellow "eksik (kurulacak)"; return; }
+    # Tek statik binary; API key/DB/runtime gerekmez, ~/.cache altında saklar.
+    if curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh | bash; then
+      c_green "kuruldu"
+    else
+      c_red "kurulum başarısız (proxy uzak betiği engelliyor olabilir)"
+      c_yellow "  Manuel: https://github.com/DeusData/codebase-memory-mcp"
+      return
+    fi
+  fi
+  # Kurucu Claude Code'u otomatik yapılandırır; yine de MCP kaydını teyit et.
+  if [ "$HAVE_CLAUDE" = 1 ] && ! claude mcp list 2>/dev/null | grep -qi codebase-memory; then
+    if have codebase-memory-mcp; then
+      claude mcp add codebase-memory -- codebase-memory-mcp >/dev/null 2>&1 \
+        && c_green "MCP eklendi" \
+        || c_yellow "MCP otomatik eklenemedi; kurucunun yazdığı kaydı kontrol edin (claude mcp list)"
+    fi
+  fi
+  c_yellow "Kullanım: ajana 'Bu projeyi indeksle' deyin. Anahtar/DB gerekmez, tamamen yerel."
+}
+
+# ---------------------------------------------------------------------------
+# 6) Strix (opsiyonel — otonom pentest ajanı)
 # ---------------------------------------------------------------------------
 setup_strix() {
   step "Strix (otonom AI penetrasyon testi ajanı)"
@@ -192,6 +227,34 @@ setup_strix() {
 }
 
 # ---------------------------------------------------------------------------
+# 7) jcode (opsiyonel — alternatif ajan harness'ı, Rust)
+# ---------------------------------------------------------------------------
+# NOT: jcode bir Claude Code eklentisi/MCP'si DEĞİL; Claude Code'a alternatif
+# ayrı bir ajan CLI'sidir (Claude Code/Codex oturumlarını devralabilir). Bu
+# yüzden varsayılan kurulumda atlanır; --all veya --jcode ile etkinleşir.
+setup_jcode() {
+  step "jcode (alternatif ajan harness'ı)"
+  if [ "$INSTALL_JCODE" = 0 ]; then
+    c_yellow "atlandı (etkinleştirmek için --all veya --jcode)"
+    return
+  fi
+  if have jcode; then
+    c_green "zaten kurulu: $(jcode --version 2>/dev/null || echo '?')"
+  else
+    [ "$CHECK_ONLY" = 1 ] && { c_yellow "eksik (kurulacak)"; return; }
+    if curl -fsSL https://jcode.sh/install | bash; then
+      c_green "kuruldu"
+    else
+      c_red "kurulum başarısız (proxy uzak betiği engelliyor olabilir)"
+      c_yellow "  Manuel: https://github.com/1jehuang/jcode (brew tap 1jehuang/jcode)"
+      return
+    fi
+  fi
+  c_yellow "Giriş: jcode login --provider <sağlayıcı>  (Claude/OpenAI/Gemini/Ollama vb.)"
+  c_yellow "NOT: Claude Code'un yerine geçen ayrı bir harness'tır; MCP/eklenti değildir."
+}
+
+# ---------------------------------------------------------------------------
 # ana akış
 # ---------------------------------------------------------------------------
 require_node
@@ -205,7 +268,9 @@ setup_playwright
 setup_supabase
 setup_context7
 setup_skillui
+setup_codebase_memory
 setup_strix
+setup_jcode
 
 step "Bitti"
 c_green "Kurulum tamamlandı. Ayrıntılar için: tools/agent-setup/README.md"

@@ -21,6 +21,11 @@
       "env": {
         "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}"
       }
+    },
+    "codebase-memory": {
+      "_note": "Kod tabanı bilgi grafiği; yerel tek binary, anahtar/DB gerekmez. Kurucu bunu otomatik yazar; binary PATH'te (örn. ~/.local/bin) olmalı.",
+      "command": "codebase-memory-mcp",
+      "args": []
     }
   }
 }
