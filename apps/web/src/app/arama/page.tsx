@@ -181,6 +181,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
   const hasPriceFilter = lowTl !== undefined || highTl !== undefined;
 
+  // Kapalı panelin üstünde kaç filtre uygulandığı yazar: kullanıcı paneli
+  // açmadan da sonuçların daraltılmış olduğunu bilmeli.
+  const activeFilterCount = (activeCategory ? 1 : 0) + (hasPriceFilter ? 1 : 0);
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       {/* Barkod okundu ama katalogda yok: sessizce boş sonuç göstermek
@@ -226,52 +230,80 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             Filtreler bağlantı ve <form method="get"> olarak render edilir:
             JavaScript olmadan da çalışır, paylaşılabilir ve tarayıcı
             geçmişiyle uyumludur. */}
-        <aside className="space-y-8">
-          <section>
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">Kategori</h2>
-            <nav aria-label="Kategori filtresi" className="mt-3 space-y-1.5">
-              <FilterRow href={buildHref({ kategori: undefined })} active={!activeCategory}>
-                Tümü
-              </FilterRow>
-              {facets.categories
-                .filter((category) => category.count > 0 || category.slug === kategori)
-                .map((category) => (
-                  <FilterRow
-                    key={category.id}
-                    href={buildHref({ kategori: category.slug })}
-                    active={activeCategory?.id === category.id}
-                    count={category.count}
-                  >
-                    {category.name}
-                  </FilterRow>
-                ))}
-            </nav>
-          </section>
+        <aside>
+          {/*
+            MOBİLDE FİLTRELER KAPALI BAŞLAR.
+            Açık bıraktığımızda kategori listesi ve fiyat kutuları ilk ekranın
+            tamamını kaplıyordu; kullanıcı tek bir ürün görmeden önce
+            kaydırmak zorunda kalıyordu. Oysa arama sonucuna gelen kişinin
+            ilk isteği ürünleri görmek, filtrelemek değil.
 
-          <PriceFilter
-            facets={facets}
-            q={q}
-            kategori={kategori}
-            sort={sort}
-            minTl={lowTl}
-            maxTl={highTl}
-            clearHref={buildHref({ min: undefined, max: undefined })}
-            active={hasPriceFilter}
-          />
+            `<details>` seçildi, JavaScript'li bir açılır panel değil: filtreler
+            zaten bağlantı ve GET formu olarak çalışıyor, açma/kapama da
+            JavaScript'siz çalışsın. Masaüstünde ayrı bir panel çizilir
+            (aşağıda) ve orada açma/kapama diye bir şey yoktur.
+          */}
+          <details className="lg:hidden">
+            <summary className="flex cursor-pointer items-center justify-between rounded-xl border border-line bg-surface px-4 py-3 text-sm font-semibold text-fg marker:content-none [&::-webkit-details-marker]:hidden">
+              <span>Filtrele{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</span>
+              <span aria-hidden="true" className="text-muted">
+                ▾
+              </span>
+            </summary>
+
+            <div className="mt-4 space-y-8">
+              <FilterPanel
+                idPrefix="mobil"
+                facets={facets}
+                activeCategoryId={activeCategory?.id}
+                kategori={kategori}
+                q={q}
+                sort={sort}
+                minTl={lowTl}
+                maxTl={highTl}
+                buildHref={buildHref}
+                hasPriceFilter={hasPriceFilter}
+              />
+            </div>
+          </details>
+
+          <div className="hidden space-y-8 lg:block">
+            <FilterPanel
+              idPrefix="masaustu"
+              facets={facets}
+              activeCategoryId={activeCategory?.id}
+              kategori={kategori}
+              q={q}
+              sort={sort}
+              minTl={lowTl}
+              maxTl={highTl}
+              buildHref={buildHref}
+              hasPriceFilter={hasPriceFilter}
+            />
+          </div>
         </aside>
 
         <div>
+          {/*
+            Sıralama seçenekleri dar ekranda SARMAK yerine yatay kayar.
+            Sarınca son seçenek tek başına ikinci satıra düşüyor ve şerit
+            dağınık görünüyordu; kaydırılabilir tek satır, pazar yerlerinin
+            kullandığı ve parmakla en rahat kullanılan biçim.
+
+            `-mx-4 px-4` şeridin kenarlara kadar kaymasını sağlar: kesilen
+            bir seçenek, kaydırılabileceğinin en iyi işaretidir.
+          */}
           <nav
             aria-label="Sıralama"
-            className="flex flex-wrap items-center gap-3 border-b border-line pb-3"
+            className="-mx-4 flex items-center gap-3 overflow-x-auto whitespace-nowrap border-b border-line px-4 pb-3 sm:mx-0 sm:flex-wrap sm:px-0"
           >
-            <span className="text-xs text-subtle">Sırala:</span>
+            <span className="shrink-0 text-xs text-subtle">Sırala:</span>
             {SORT_OPTIONS.map((option) => (
               <Link
                 key={option.value}
                 href={buildHref({ sirala: option.value })}
                 aria-current={sort === option.value ? 'true' : undefined}
-                className={`text-sm ${
+                className={`shrink-0 text-sm ${
                   sort === option.value ? 'font-semibold text-fg' : 'text-muted hover:underline'
                 }`}
               >
@@ -298,6 +330,75 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Filtre gövdesi.
+ *
+ * Aynı içerik iki kez çizilir: mobilde açılır panelin içinde, masaüstünde
+ * sabit rayda. Alan kimlikleri `idPrefix` ile ayrılır — aynı `id` iki kez
+ * geçerse `<label for>` bağlantısı bozulur ve ekran okuyucu yanlış alanı
+ * okur.
+ */
+function FilterPanel({
+  idPrefix,
+  facets,
+  activeCategoryId,
+  kategori,
+  q,
+  sort,
+  minTl,
+  maxTl,
+  buildHref,
+  hasPriceFilter,
+}: {
+  idPrefix: string;
+  facets: SearchFacets;
+  activeCategoryId?: string;
+  kategori?: string;
+  q?: string;
+  sort: SortOption;
+  minTl?: number;
+  maxTl?: number;
+  buildHref: (changes: Record<string, string | undefined>) => string;
+  hasPriceFilter: boolean;
+}) {
+  return (
+    <>
+      <section>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">Kategori</h2>
+        <nav aria-label="Kategori filtresi" className="mt-3 space-y-1.5">
+          <FilterRow href={buildHref({ kategori: undefined })} active={!activeCategoryId}>
+            Tümü
+          </FilterRow>
+          {facets.categories
+            .filter((category) => category.count > 0 || category.slug === kategori)
+            .map((category) => (
+              <FilterRow
+                key={category.id}
+                href={buildHref({ kategori: category.slug })}
+                active={activeCategoryId === category.id}
+                count={category.count}
+              >
+                {category.name}
+              </FilterRow>
+            ))}
+        </nav>
+      </section>
+
+      <PriceFilter
+        idPrefix={idPrefix}
+        facets={facets}
+        q={q}
+        kategori={kategori}
+        sort={sort}
+        minTl={minTl}
+        maxTl={maxTl}
+        clearHref={buildHref({ min: undefined, max: undefined })}
+        active={hasPriceFilter}
+      />
+    </>
   );
 }
 
@@ -335,6 +436,7 @@ function FilterRow({
  * kontrolden kotudur.
  */
 function PriceFilter({
+  idPrefix,
   facets,
   q,
   kategori,
@@ -344,6 +446,7 @@ function PriceFilter({
   clearHref,
   active,
 }: {
+  idPrefix: string;
   facets: SearchFacets;
   q?: string;
   kategori?: string;
@@ -372,11 +475,11 @@ function PriceFilter({
         {sort !== 'relevance' && <input type="hidden" name="sirala" value={sort} />}
 
         <div className="flex items-center gap-2">
-          <label className="sr-only" htmlFor="fiyat-min">
+          <label className="sr-only" htmlFor={`${idPrefix}-fiyat-min`}>
             En az fiyat (TL)
           </label>
           <input
-            id="fiyat-min"
+            id={`${idPrefix}-fiyat-min`}
             name="min"
             type="number"
             inputMode="numeric"
@@ -390,11 +493,11 @@ function PriceFilter({
           <span aria-hidden="true" className="text-subtle">
             –
           </span>
-          <label className="sr-only" htmlFor="fiyat-max">
+          <label className="sr-only" htmlFor={`${idPrefix}-fiyat-max`}>
             En fazla fiyat (TL)
           </label>
           <input
-            id="fiyat-max"
+            id={`${idPrefix}-fiyat-max`}
             name="max"
             type="number"
             inputMode="numeric"

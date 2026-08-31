@@ -110,11 +110,17 @@ check(await recent.count() > 0, 'Son gezdikleriniz şeridi görünüyor');
 
 // --- Arama filtreleri ------------------------------------------------------
 await page.goto(`${BASE}/arama`, { waitUntil: 'networkidle' });
-check(await page.locator('#fiyat-min').count() > 0, 'Fiyat filtresi çiziliyor');
+/*
+ * Filtre gövdesi iki kez çizilir (mobil açılır panel + masaüstü ray) ve alan
+ * kimlikleri önekle ayrılır. Görüntü genişliğine göre GÖRÜNEN olanı seçmek
+ * gerekir; sabit bir kimlik yazmak testi tek düzene bağlardı.
+ */
+const priceMin = page.locator('input[name="min"]:visible').first();
+check(await priceMin.count() > 0, 'Fiyat filtresi çiziliyor');
 
-await page.fill('#fiyat-min', '5000');
-await page.click('button:has-text("Uygula")');
-await page.waitForLoadState('networkidle');
+await priceMin.fill('5000');
+await page.locator('button:has-text("Uygula"):visible').first().click();
+await page.waitForURL(/min=5000/, { timeout: 5000 }).catch(() => {});
 check(page.url().includes('min=5000'), 'Fiyat filtresi URL’e yazılıyor', page.url());
 
 // --- Dokunma hedefleri (WCAG 2.5.5) ---------------------------------------
@@ -140,6 +146,35 @@ check(
   micBox === null || (micBox.width >= 36 && micBox.height >= 36),
   'Mobilde mikrofon butonu dokunulabilir boyutta',
   micBox ? `${Math.round(micBox.width)}x${Math.round(micBox.height)}` : 'buton yok',
+);
+
+// --- Mobilde filtreler kapalı başlamalı ------------------------------------
+/*
+ * Filtreler açık başladığında kategori listesi ve fiyat kutuları ilk ekranın
+ * tamamını kaplıyor ve kullanıcı tek bir ürün görmeden kaydırmak zorunda
+ * kalıyordu. Arama sonucuna gelen kişinin ilk isteği ürünleri görmek.
+ */
+await page.goto(`${BASE}/arama`, { waitUntil: 'networkidle' });
+const disclosure = page.locator('details:visible').first();
+check(await disclosure.count() > 0, 'Mobilde filtreler açılır panelde');
+check(
+  (await disclosure.getAttribute('open')) === null,
+  'Mobilde filtreler KAPALI başlıyor',
+);
+
+const firstCard = page.locator('a[href^="/urun/"]').first();
+const cardBox = await firstCard.boundingBox();
+check(
+  cardBox !== null && cardBox.y < 1200,
+  'İlk ürün kartı makul bir kaydırma içinde',
+  cardBox ? `y=${Math.round(cardBox.y)}px` : 'kart yok',
+);
+
+await disclosure.locator('summary').click();
+await page.waitForTimeout(200);
+check(
+  (await disclosure.getAttribute('open')) !== null,
+  'Filtre paneli tıklayınca açılıyor',
 );
 
 // --- Yatay taşma -----------------------------------------------------------
