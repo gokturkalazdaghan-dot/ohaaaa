@@ -97,7 +97,13 @@ export function FavoritesList() {
             >
               {item.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.imageUrl} alt="" className="h-full w-full object-contain" />
+                <img
+                  src={item.imageUrl}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-contain"
+                />
               ) : (
                 <ProductPlaceholder seed={item.slug} />
               )}

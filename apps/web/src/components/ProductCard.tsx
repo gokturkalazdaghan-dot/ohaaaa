@@ -29,7 +29,14 @@ export function resolveProductImage(url: string | null, slug?: string | null): s
   return localPhotoFor(slug);
 }
 
-export function ProductCard({ result }: { result: SearchResult }) {
+export function ProductCard({
+  result,
+  priority = false,
+}: {
+  result: SearchResult;
+  /** Izgaranın ilk satırındaki kartlar için true. */
+  priority?: boolean;
+}) {
   const vendor =
     result.bestVendorName &&
     !/^örnek\b/i.test(result.bestVendorName) &&
@@ -53,7 +60,9 @@ export function ProductCard({ result }: { result: SearchResult }) {
           <img
             src={image}
             alt=""
-            loading="lazy"
+            loading={priority ? 'eager' : 'lazy'}
+            decoding="async"
+            fetchPriority={priority ? 'high' : 'auto'}
             className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
@@ -94,20 +103,39 @@ export function ProductImage({
   title,
   brand,
   slug,
+  priority = false,
 }: {
   src: string | null;
   title: string;
   brand?: string | null;
   slug?: string | null;
+  /**
+   * Sayfanın ilk ekranında görünen görsel mi?
+   *
+   * Prop tanımlıydı ama HİÇ KULLANILMIYORDU: bütün görseller aynı şekilde,
+   * hepsi hemen yükleniyordu. 24 ürünlük bir ızgarada bu, kullanıcının
+   * hiç görmeyeceği 20 görseli indirmek demek — mobil veriyle en pahalı
+   * israf.
+   */
   priority?: boolean;
 }) {
   const image = resolveProductImage(src, slug);
   if (!image) return <ProductPlaceholder seed={title} />;
   return (
+    // next/image kullanılmıyor: ürün görselleri satıcıların KENDİ alan
+    // adlarından gelir ve hangileri olacağı önceden bilinmez. Hepsine izin
+    // vermek (remotePatterns: '**') siteyi açık bir görsel vekiline çevirir;
+    // bu, başkalarının bant genişliğimizi kullanmasına ve SSRF yüzeyine yol
+    // açar. Düz <img> ile tembel yükleme aynı kazancın büyük kısmını verir.
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={image}
       alt={brand ? `${brand} ${title}` : title}
+      loading={priority ? 'eager' : 'lazy'}
+      // Kod çözme ana iş parçacığını bloklamasın: kaydırma akıcı kalır.
+      decoding="async"
+      // İlk ekrandaki görsel öncelikli sıraya alınır; LCP çoğu sayfada budur.
+      fetchPriority={priority ? 'high' : 'auto'}
       className="h-full w-full object-contain"
     />
   );

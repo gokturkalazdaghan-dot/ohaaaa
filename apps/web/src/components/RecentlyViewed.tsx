@@ -76,6 +76,8 @@ export function RecentlyViewed({ excludeSlug }: { excludeSlug?: string }) {
                   <img
                     src={item.imageUrl}
                     alt=""
+                    loading="lazy"
+                    decoding="async"
                     className="h-full w-full object-contain"
                   />
                 ) : (

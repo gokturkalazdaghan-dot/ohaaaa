@@ -55,6 +55,9 @@ export function ProductGallery({
           <img
             src={current}
             alt={brand ? `${brand} ${title}` : title}
+            // Ürün sayfasının LCP öğesi budur; beklemeye alınmamalı.
+            fetchPriority="high"
+            decoding="async"
             className="h-full w-full object-contain"
           />
         ) : (
@@ -83,7 +86,13 @@ export function ProductGallery({
                 }`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={image} alt="" className="h-full w-full object-contain" />
+                <img
+                  src={image}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-contain"
+                />
               </button>
             </li>
           ))}

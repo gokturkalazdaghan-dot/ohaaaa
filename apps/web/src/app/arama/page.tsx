@@ -317,9 +317,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           ) : (
             <>
               <ul className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-3">
-                {results.results.map((result) => (
+                {results.results.map((result, index) => (
                   <li key={result.groupId}>
-                    <ProductCard result={result} />
+                    <ProductCard result={result} priority={index < 3} />
                   </li>
                 ))}
               </ul>

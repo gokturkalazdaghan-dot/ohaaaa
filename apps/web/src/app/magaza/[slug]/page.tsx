@@ -210,9 +210,9 @@ export default async function StorePage({ params, searchParams }: StorePageProps
           */}
           <h2 className="sr-only">Ürünler</h2>
           <ul className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-            {products.results.map((result) => (
+            {products.results.map((result, index) => (
               <li key={result.groupId}>
-                <ProductCard result={result} />
+                <ProductCard result={result} priority={index < 4} />
               </li>
             ))}
           </ul>

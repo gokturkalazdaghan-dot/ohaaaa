@@ -93,7 +93,8 @@ cd apps/web
 NEXT_PUBLIC_SITE_URL=https://www.ohaaaa.com npm run build
 NEXT_PUBLIC_SITE_URL=https://www.ohaaaa.com npx next start -p 3137 &
 
-npm run verify:browser          # 19 kontrol
+npm run verify:browser          # arayüz akışları (31 kontrol)
+npm run verify:a11y             # erişilebilirlik (axe-core, 9 sayfa)
 ```
 
 Demo modunda (Supabase yapılandırılmamışken) çalışır; yerleşik veri kümesi
