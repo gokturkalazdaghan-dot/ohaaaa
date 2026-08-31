@@ -17,7 +17,7 @@
 \set ON_ERROR_STOP on
 
 begin;
-select plan(51);
+select plan(52);
 
 -- ---------------------------------------------------------------------------
 -- 1) TRUNCATE hiçbir role, hiçbir tabloda verilmemiş olmalı.
@@ -69,7 +69,7 @@ select ok(
   'categories','product_groups','products','vendors','flash_deals',
   'merchants','price_points','users','orders','order_items','vendor_orders',
   'api_keys','api_request_logs','clicks','conversions','sources',
-  'ingest_runs','api_rate_counters'
+  'ingest_runs','api_rate_counters','reviews'
 ]) as t;
 
 -- Gizli tablolar anon'a hiç açılmaz: boş sonuç değil, doğrudan yetki reddi.
@@ -94,8 +94,12 @@ select is_empty(
      where n.nspname = 'public'
        and c.relkind = 'r'
        and has_table_privilege('authenticated', c.oid, 'INSERT')
-       and c.relname not in ('api_keys', 'vendors', 'products')$$,
-  'authenticated yalnizca api_keys/vendors/products tablolarina INSERT edebilir'
+       -- `reviews`: kullanici kendi degerlendirmesini yazar. Hangi SATIRI
+       -- yazabildigine RLS karar verir (yalnizca teslim alinmis kendi
+       -- siparisi); buradaki liste yalnizca yetkinin nereye kadar
+       -- uzandigini sabitler.
+       and c.relname not in ('api_keys', 'vendors', 'products', 'reviews')$$,
+  'authenticated yalnizca api_keys/vendors/products/reviews tablolarina INSERT edebilir'
 );
 
 select is_empty(
@@ -105,8 +109,9 @@ select is_empty(
      where n.nspname = 'public'
        and c.relkind = 'r'
        and has_table_privilege('authenticated', c.oid, 'DELETE')
-       and c.relname not in ('api_keys', 'vendors', 'products')$$,
-  'authenticated yalnizca api_keys/vendors/products tablolarindan DELETE edebilir'
+       -- `reviews`: kullanici kendi yorumunu silebilmeli.
+       and c.relname not in ('api_keys', 'vendors', 'products', 'reviews')$$,
+  'authenticated yalnizca api_keys/vendors/products/reviews tablolarindan DELETE edebilir'
 );
 
 select ok(
