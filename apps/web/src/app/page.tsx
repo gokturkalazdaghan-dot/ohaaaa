@@ -74,16 +74,6 @@ export default async function HomePage() {
 
       {catalogEmpty && <LaunchState />}
 
-      {/* Geri dönen ziyaretçi kaldığı yerden devam edebilsin. Liste boşsa
-          bölüm hiç çizilmez. */}
-      <RecentlyViewed />
-
-      {/* Güven sinyalleri: her maddesi doğrulanabilir ve ayrıntısını anlatan
-          sayfaya bağlanıyor. Bileşen yazılmış ama hiç kullanılmamıştı. */}
-      <div className="mt-16">
-        <TrustSignals />
-      </div>
-
       {/* --- Firsatlar -----------------------------------------------------
           Ana sayfa bu bloğu KENDİ işaretlemesiyle çiziyordu; FlashDeals
           bileşeni yazılmış ama hiç kullanılmamıştı. İki kopya, aynı verinin
@@ -125,6 +115,16 @@ export default async function HomePage() {
           </ul>
         </section>
       )}
+
+      {/* Geri dönen ziyaretçi kaldığı yerden devam edebilsin. Liste boşsa
+          bölüm hiç çizilmez. */}
+      <RecentlyViewed />
+
+      {/* Güven sinyalleri: her maddesi doğrulanabilir ve ayrıntısını anlatan
+          sayfaya bağlanıyor. Bileşen yazılmış ama hiç kullanılmamıştı. */}
+      <div className="mt-16">
+        <TrustSignals />
+      </div>
     </div>
   );
 }
