@@ -169,7 +169,7 @@ export function OfferRow({
           rel="sponsored nofollow noopener"
           target="_blank"
           aria-disabled={offer.stock === 0}
-          className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${
+          className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors duration-150 ease-out ${
             offer.stock === 0
               ? 'pointer-events-none border border-line bg-surface-2 opacity-40'
               : isBest
@@ -187,7 +187,7 @@ export function OfferRow({
           type="button"
           onClick={handleAdd}
           disabled={offer.stock === 0}
-          className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-40 ${
+          className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-40 ${
             added
               ? 'bg-success text-[#0b0b0d]'
               : isBest

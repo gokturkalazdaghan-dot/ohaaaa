@@ -234,6 +234,55 @@ for (const path of ['/', '/arama', '/kategori/elektronik', '/urun/sony-wh-1000xm
   check(overflow <= 1, `Mobilde yatay taşma yok: ${path}`, `${overflow}px taşma`);
 }
 
+// --- Hareket (motion) ------------------------------------------------------
+/*
+ * Animasyonun "yazılmış olması" çalıştığı anlamına gelmiyor: bu depoda iki
+ * sınıf (`animate-[rise_...]`, `animate-[float_...]`) hiç tanımlanmamış
+ * keyframe'lere işaret ediyordu, yani sepet çekmecesi bir anda beliriyordu
+ * ve kimse fark etmemişti. Bu yüzden hesaplanmış stil doğrulanır.
+ */
+await page.setViewportSize({ width: 1280, height: 900 });
+await page.goto(`${BASE}/urun/sony-wh-1000xm5`, { waitUntil: 'networkidle' });
+await page.locator('button:has-text("Sepete ekle")').first().click();
+await page.waitForTimeout(120);
+
+const drawerAnim = await page
+  .locator('.drawer-enter')
+  .evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { name: s.animationName, duration: parseFloat(s.animationDuration), ease: s.animationTimingFunction };
+  })
+  .catch(() => null);
+
+check(drawerAnim?.name === 'cekmece-gir', 'Çekmece girişi gerçekten çalışıyor', String(drawerAnim?.name));
+check(
+  drawerAnim !== null && drawerAnim.duration > 0 && drawerAnim.duration <= 0.3,
+  'Çekmece süresi 300ms altında',
+  `${drawerAnim?.duration}s`,
+);
+// ease-in, kullanıcının en çok baktığı anı (hareketin başını) geciktirir.
+check(
+  drawerAnim !== null && !/^ease-in$|cubic-bezier\(0\.42/.test(drawerAnim.ease),
+  'Çekmece eğrisi ease-in değil',
+  drawerAnim?.ease,
+);
+
+/*
+ * Hareketi azaltılmış mod TÜM siteyi kapsamalı. Önce yalnızca logo harfleri
+ * kapatılıyordu; kart kalkması, düğme büyümesi ve çekmece girişi açık
+ * kalıyordu. Tek bileşeni istisna tutmak, kuralı uygulamamakla aynı şey.
+ */
+const reduced = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
+await reduced.goto(`${BASE}/urun/sony-wh-1000xm5`, { waitUntil: 'networkidle' });
+await reduced.locator('button:has-text("Sepete ekle")').first().click();
+await reduced.waitForTimeout(100);
+const reducedAnim = await reduced
+  .locator('.drawer-enter')
+  .evaluate((el) => getComputedStyle(el).animationName)
+  .catch(() => null);
+check(reducedAnim === 'none', 'Azaltılmış modda çekmece animasyonu kapalı', String(reducedAnim));
+await reduced.close();
+
 // --- Konsol hataları -------------------------------------------------------
 const realErrors = consoleErrors.filter(
   (text) => !/favicon|Failed to load resource.*40[34]/i.test(text),

@@ -137,7 +137,7 @@ export function SearchBar({
       <form onSubmit={submit} role="search" className="relative">
         {/* Gradyan çerçeve: odaklandığında parlar. */}
         <div
-          className={`group relative rounded-2xl bg-gradient-to-r from-brand/60 via-electric/50 to-cyan/40 transition-all duration-300 focus-within:from-brand focus-within:via-electric focus-within:to-cyan ${
+          className={`group relative rounded-2xl bg-gradient-to-r from-brand/60 via-electric/50 to-cyan/40 transition-colors duration-200 ease-out focus-within:from-brand focus-within:via-electric focus-within:to-cyan ${
             isHero ? 'p-[2px] focus-within:shadow-[var(--glow-brand)]' : 'p-px'
           }`}
         >

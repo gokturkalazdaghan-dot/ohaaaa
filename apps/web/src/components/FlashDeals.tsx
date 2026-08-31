@@ -55,11 +55,18 @@ function HeadlineDeal({ deal }: { deal: FlashDeal }) {
   return (
     <Link
       href={deal.groupSlug ? `/urun/${deal.groupSlug}` : '/arama'}
-      className="card-glow group relative overflow-hidden p-6 transition-transform duration-300 hover:-translate-y-1 sm:p-8"
+      className="card-glow group relative overflow-hidden p-6 transition-transform duration-150 ease-out hover:-translate-y-1 sm:p-8"
     >
       {/* Dekoratif ışıma — içerikle etkileşmez. */}
       <div
-        className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-oha/25 blur-3xl animate-[float_7s_ease-in-out_infinite]"
+        /*
+          `animate-[float_...]` sınıfı buradaydı ama `float` keyframe'i hiç
+          tanımlanmamıştı — yani sonsuz bir animasyon yazılmış, hiç
+          çalışmamıştı. Tanımlamak yerine KALDIRILDI: sürekli ve sonsuz bir
+          arka plan hareketi, sık görülen bir öge üzerinde hiçbir şey
+          anlatmaz; yalnızca dikkati fiyattan çalar ve pil harcar.
+        */
+        className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-oha/25 blur-3xl"
         aria-hidden="true"
       />
 
@@ -116,7 +123,7 @@ function SecondaryDeal({ deal }: { deal: FlashDeal }) {
   return (
     <Link
       href={deal.groupSlug ? `/urun/${deal.groupSlug}` : '/arama'}
-      className="card flex items-center gap-4 p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-oha/45"
+      className="card flex items-center gap-4 p-4 transition-[transform,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:border-oha/45"
     >
       <div className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-oha/25 to-brand/25 text-lg font-black text-oha">
         {percent !== null ? `%${percent}` : '!'}

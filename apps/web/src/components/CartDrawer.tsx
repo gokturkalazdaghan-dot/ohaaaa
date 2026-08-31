@@ -52,7 +52,7 @@ export function CartDrawer() {
         aria-label="Sepeti kapat"
       />
 
-      <aside className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col border-l border-line bg-bg-elevated shadow-2xl animate-[rise_0.3s_cubic-bezier(0.16,1,0.3,1)]">
+      <aside className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col border-l border-line bg-bg-elevated shadow-2xl drawer-enter">
         <header className="flex items-center justify-between border-b border-line px-5 py-4">
           <h2 className="flex items-center gap-2 text-base font-semibold">
             <CartIcon className="h-5 w-5 text-brand" />

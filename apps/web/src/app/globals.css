@@ -333,16 +333,73 @@
   }
 
   /*
-   * Hareketi azaltilmis modda animasyon YOK.
-   * Bu bir zevk meselesi degil: vestibuler rahatsizligi olan kullanicilarda
-   * hareketli ogeler bas donmesi ve mide bulantisi yapabilir. Isletim
-   * sistemi bunu bildirdiginde uyulur.
+   * ---------------------------------------------------------------------
+   * Sepet çekmecesinin girişi
+   * ---------------------------------------------------------------------
+   * CartDrawer `animate-[rise_0.3s_...]` sınıfını kullanıyordu ama `rise`
+   * diye bir keyframe HİÇ TANIMLANMAMIŞTI. Yani çekmece bir anda beliriyordu;
+   * yazılmış olan animasyon çalışmıyordu ve kimse fark etmemişti.
+   *
+   * Yönü SAĞDAN: çekmece ekranın sağ kenarına yaslanıyor, oradan gelmeli.
+   * Yukarıdan gelmek ("rise") nereden çıktığını belirsiz bırakırdı — bir
+   * panelin nereden geldiği, kullanıcının onu nasıl kapatacağını anlamasının
+   * yarısıdır.
+   *
+   * Eğri ease-OUT ailesinden: kullanıcının en çok baktığı an hareketin
+   * başıdır; ease-in orayı geciktirir ve arayüzü ağır hissettirir.
+   */
+  @keyframes cekmece-gir {
+    from {
+      opacity: 0;
+      transform: translate3d(100%, 0, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  .drawer-enter {
+    animation: cekmece-gir 260ms cubic-bezier(0.32, 0.72, 0, 1) both;
+    /* Yalnızca kompozisyon katmanında çalışsın: düzen hesabı tetiklenmez. */
+    will-change: transform, opacity;
+  }
+
+  /*
+   * ---------------------------------------------------------------------
+   * Hareketi azaltılmış mod — TÜM SİTE
+   * ---------------------------------------------------------------------
+   * Bu bir zevk meselesi değil: vestibüler rahatsızlığı olan kullanıcılarda
+   * hareketli ögeler baş dönmesi ve mide bulantısı yapabilir. İşletim
+   * sistemi bunu bildirdiğinde uyulur.
+   *
+   * Önce yalnızca logo harfleri kapatılıyordu; sitedeki diğer ~20 hareket
+   * (kart kalkması, düğme büyümesi, çekmece girişi, görsel yakınlaşması)
+   * açık kalıyordu. Tek bir bileşeni istisna tutmak, kuralı uygulamamakla
+   * aynı kapıya çıkar.
+   *
+   * Hareket SIFIRLANMIYOR, İNDİRGENİYOR: opaklık ve renk geçişleri kalır
+   * (durum değişimini onlar anlatır), yer değiştirme ve ölçek gider.
+   * Tamamen kapatmak, bir şeyin değiştiğini fark etmeyi zorlaştırırdı.
    */
   @media (prefers-reduced-motion: reduce) {
     .group:hover .oha-letter,
     .group:focus-visible .oha-letter,
     .oha-word-tap .oha-letter {
       animation: none;
+    }
+
+    .drawer-enter {
+      animation: none;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
     }
   }
 
