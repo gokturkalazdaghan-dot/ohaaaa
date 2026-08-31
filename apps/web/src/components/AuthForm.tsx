@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 
+import { Field } from './Field';
 import { AlertIcon, CheckIcon } from './Icons';
 import { signIn, signUp, type AuthResult } from '@/app/auth/actions';
 
@@ -97,34 +98,5 @@ function SubmitButton({ label }: { label: string }) {
     >
       {pending ? 'İşleniyor…' : label}
     </button>
-  );
-}
-
-function Field({
-  label,
-  name,
-  hint,
-  type = 'text',
-  ...rest
-}: {
-  label: string;
-  name: string;
-  hint?: string;
-  type?: string;
-} & React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <div>
-      <label htmlFor={name} className="text-xs font-medium text-muted">
-        {label}
-      </label>
-      <input
-        id={name}
-        name={name}
-        type={type}
-        className="mt-1.5 w-full rounded-xl border border-line bg-bg px-3.5 py-2.5 text-sm text-fg outline-none transition-colors focus:border-brand"
-        {...rest}
-      />
-      {hint && <p className="mt-1 text-2xs text-subtle">{hint}</p>}
-    </div>
   );
 }

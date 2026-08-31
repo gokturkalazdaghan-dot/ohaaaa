@@ -598,6 +598,38 @@ for (const width of [375, 768, 1024, 1440]) {
   await sp.close();
 }
 
+/*
+ * `aria-describedby` HEDEFİ GERÇEKTEN VAR MI?
+ *
+ * Kırık bir bağ sessizdir: öznitelik durur, ekran okuyucu hiçbir şey
+ * okumaz ve gözle bakan kimse fark etmez. Form alanları paylaşılan tek bir
+ * bileşene taşındığı için kimlikler orada üretiliyor; bu kontrol o üretimin
+ * doğru çalıştığını sayfa sayfa doğrular.
+ */
+{
+  const fp = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const broken = [];
+  for (const path of ['/tasoron/basvuru', '/iletisim', '/giris', '/kayit']) {
+    await fp.goto(`${BASE}${path}`, { waitUntil: 'networkidle' });
+    const bad = await fp.evaluate(() =>
+      [...document.querySelectorAll('[aria-describedby]')]
+        .flatMap((el) =>
+          (el.getAttribute('aria-describedby') || '')
+            .split(/\s+/)
+            .filter((id) => id && !document.getElementById(id))
+            .map((id) => `${el.getAttribute('name') || el.tagName}->${id}`),
+        ),
+    );
+    for (const item of bad) broken.push(`${path}: ${item}`);
+  }
+  check(
+    broken.length === 0,
+    'aria-describedby bağları var olan bir ögeyi gösteriyor',
+    broken.join(', '),
+  );
+  await fp.close();
+}
+
 // --- Konsol hataları -------------------------------------------------------
 const realErrors = consoleErrors.filter(
   (text) => !/favicon|Failed to load resource.*40[34]/i.test(text),

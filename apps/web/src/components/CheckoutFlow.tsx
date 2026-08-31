@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { checkoutSchema, formatMoney, toOrderPayload } from '@ohaaaa/shared';
 
+import { Field } from './Field';
 import { AlertIcon, CheckIcon, ShieldIcon, StoreIcon, TruckIcon } from './Icons';
 import { useCart, useCartSummary } from '@/store/cart';
 
@@ -127,20 +128,21 @@ export function CheckoutFlow() {
           <legend className="px-1 text-sm font-semibold">Teslimat bilgileri</legend>
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Field label="Ad Soyad" name="full_name" error={errors.full_name} autoComplete="name" />
-            <Field label="Telefon" name="phone" error={errors.phone} autoComplete="tel" placeholder="05XX XXX XX XX" />
-            <Field label="E-posta" name="email" type="email" error={errors.email} autoComplete="email" className="sm:col-span-2" />
-            <Field label="İl" name="city" error={errors.city} autoComplete="address-level1" />
-            <Field label="İlçe" name="district" error={errors.district} autoComplete="address-level2" />
+            <Field label="Ad Soyad" name="full_name" required error={errors.full_name} autoComplete="name" />
+            <Field label="Telefon" name="phone" required error={errors.phone} autoComplete="tel" placeholder="05XX XXX XX XX" />
+            <Field label="E-posta" name="email" required type="email" error={errors.email} autoComplete="email" wrapperClassName="sm:col-span-2" />
+            <Field label="İl" name="city" required error={errors.city} autoComplete="address-level1" />
+            <Field label="İlçe" name="district" required error={errors.district} autoComplete="address-level2" />
             <Field
               label="Açık adres"
               name="address_line"
+              required
               error={errors.address_line}
               autoComplete="street-address"
               multiline
-              className="sm:col-span-2"
+              wrapperClassName="sm:col-span-2"
             />
-            <Field label="Sipariş notu (isteğe bağlı)" name="notes" className="sm:col-span-2" multiline />
+            <Field label="Sipariş notu (isteğe bağlı)" name="notes" wrapperClassName="sm:col-span-2" multiline />
           </div>
         </fieldset>
 
@@ -157,8 +159,8 @@ export function CheckoutFlow() {
           </p>
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Field label="Kart üzerindeki isim" name="card_name" className="sm:col-span-2" defaultValue="ZEYNEP YILMAZ" />
-            <Field label="Kart numarası" name="card_number" className="sm:col-span-2" defaultValue="4242 4242 4242 4242" />
+            <Field label="Kart üzerindeki isim" name="card_name" wrapperClassName="sm:col-span-2" defaultValue="ZEYNEP YILMAZ" />
+            <Field label="Kart numarası" name="card_number" wrapperClassName="sm:col-span-2" defaultValue="4242 4242 4242 4242" />
             <Field label="Son kullanma" name="card_expiry" defaultValue="12/29" />
             <Field label="CVC" name="card_cvc" defaultValue="123" />
           </div>
@@ -260,47 +262,6 @@ export function CheckoutFlow() {
         </div>
       </aside>
     </form>
-  );
-}
-
-function Field({
-  label,
-  name,
-  error,
-  type = 'text',
-  multiline = false,
-  className = '',
-  ...rest
-}: {
-  label: string;
-  name: string;
-  error?: string;
-  type?: string;
-  multiline?: boolean;
-  className?: string;
-} & React.InputHTMLAttributes<HTMLInputElement>) {
-  const inputClass = `mt-1.5 w-full rounded-xl border bg-bg px-3.5 py-2.5 text-sm outline-none transition-colors placeholder:text-subtle focus:border-brand ${
-    error ? 'border-danger' : 'border-line'
-  }`;
-
-  return (
-    <div className={className}>
-      <label htmlFor={name} className="text-xs font-medium text-muted">
-        {label}
-      </label>
-
-      {multiline ? (
-        <textarea id={name} name={name} rows={3} className={inputClass} />
-      ) : (
-        <input id={name} name={name} type={type} className={inputClass} {...rest} />
-      )}
-
-      {error && (
-        <p className="mt-1 text-2xs text-danger" role="alert">
-          {error}
-        </p>
-      )}
-    </div>
   );
 }
 

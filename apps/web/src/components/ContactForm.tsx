@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { z } from 'zod';
 
+import { Field } from './Field';
 import { CheckIcon } from './Icons';
 
 /**
@@ -100,53 +101,38 @@ export function ContactForm() {
   return (
     <form onSubmit={handleSubmit} className="card space-y-4 p-5" noValidate>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Adınız" name="name" error={errors.name} autoComplete="name" />
+        <Field label="Adınız" name="name" required error={errors.name} autoComplete="name" />
         <Field
           label="E-posta"
           name="email"
           type="email"
+          required
           error={errors.email}
           autoComplete="email"
         />
       </div>
 
-      <div>
-        <label htmlFor="subject" className="text-xs font-medium text-muted">
-          Konu
-        </label>
-        <select
-          id="subject"
-          name="subject"
-          defaultValue="duzeltme"
-          className="mt-1.5 w-full rounded-xl border border-line bg-bg px-3.5 py-2.5 text-sm text-fg outline-none focus:border-brand"
-        >
-          {SUBJECTS.map((subject) => (
-            <option key={subject.value} value={subject.value}>
-              {subject.label}
-            </option>
-          ))}
-        </select>
-      </div>
+      <Field
+        label="Konu"
+        name="subject"
+        required
+        defaultValue="duzeltme"
+        options={SUBJECTS.map((subject) => (
+          <option key={subject.value} value={subject.value}>
+            {subject.label}
+          </option>
+        ))}
+      />
 
-      <div>
-        <label htmlFor="message" className="text-xs font-medium text-muted">
-          Mesajınız
-        </label>
-        <textarea
-          id="message"
-          name="message"
-          rows={5}
-          placeholder="Yanlış fiyat bildiriyorsanız ürün bağlantısını eklemeyi unutmayın."
-          className={`mt-1.5 w-full rounded-xl border bg-bg px-3.5 py-2.5 text-sm text-fg outline-none placeholder:text-subtle focus:border-brand ${
-            errors.message ? 'border-danger' : 'border-line'
-          }`}
-        />
-        {errors.message && (
-          <p className="mt-1 text-2xs text-danger" role="alert">
-            {errors.message}
-          </p>
-        )}
-      </div>
+      <Field
+        label="Mesajınız"
+        name="message"
+        multiline
+        required
+        rows={5}
+        error={errors.message}
+        placeholder="Yanlış fiyat bildiriyorsanız ürün bağlantısını eklemeyi unutmayın."
+      />
 
       {/* Honeypot — ekran okuyuculardan ve gözden gizli, DOM'da mevcut. */}
       <div aria-hidden="true" className="absolute left-[-9999px]">
@@ -176,40 +162,5 @@ export function ContactForm() {
         Gönderdiğiniz bilgiler yalnızca talebinizi yanıtlamak için kullanılır.
       </p>
     </form>
-  );
-}
-
-function Field({
-  label,
-  name,
-  error,
-  type = 'text',
-  ...rest
-}: {
-  label: string;
-  name: string;
-  error?: string;
-  type?: string;
-} & React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <div>
-      <label htmlFor={name} className="text-xs font-medium text-muted">
-        {label}
-      </label>
-      <input
-        id={name}
-        name={name}
-        type={type}
-        className={`mt-1.5 w-full rounded-xl border bg-bg px-3.5 py-2.5 text-sm text-fg outline-none focus:border-brand ${
-          error ? 'border-danger' : 'border-line'
-        }`}
-        {...rest}
-      />
-      {error && (
-        <p className="mt-1 text-2xs text-danger" role="alert">
-          {error}
-        </p>
-      )}
-    </div>
   );
 }

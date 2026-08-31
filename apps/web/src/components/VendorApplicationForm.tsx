@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 
+import { Field } from './Field';
 import { AlertIcon, CheckIcon } from './Icons';
 import { submitApplication, type ApplicationResult } from '@/app/tasoron/basvuru/actions';
 
@@ -201,108 +202,5 @@ function SubmitButton() {
     >
       {pending ? 'Gönderiliyor…' : 'Başvuruyu gönder'}
     </button>
-  );
-}
-
-function Field({
-  label,
-  name,
-  error,
-  hint,
-  prefix,
-  multiline = false,
-  type = 'text',
-  required = false,
-  ...rest
-}: {
-  label: string;
-  name: string;
-  error?: string;
-  hint?: string;
-  prefix?: string;
-  multiline?: boolean;
-  type?: string;
-  required?: boolean;
-} & React.InputHTMLAttributes<HTMLInputElement>) {
-  const base = `w-full bg-bg text-sm outline-none transition-colors placeholder:text-subtle ${
-    prefix ? 'rounded-r-xl px-3 py-2.5' : 'rounded-xl px-3.5 py-2.5'
-  }`;
-
-  /*
-   * HATA VE İPUCU METNİ ALANA BAĞLANIR.
-   *
-   * Önceden bağlanmıyordu. Sonuçları:
-   *   • Hata yalnızca KIRMIZI KENARLIKLA anlatılıyordu. Rengi ayırt
-   *     edemeyen bir kullanıcı için alan sağlamdan farksızdı (WCAG 1.4.1
-   *     ve 3.3.1).
-   *   • `role="alert"` metni belirdiği anda BİR KEZ okunur. Kullanıcı
-   *     sonradan alana geri sekerse hatayı bir daha duymaz.
-   *   • İpucu metni ("Fatura üzerindeki resmi unvan") ekran okuyucuya HİÇ
-   *     ulaşmıyordu; gözle görülüp kulakla duyulmayan bir yardım metniydi.
-   *
-   * `aria-describedby` ikisini de alana bağlar, `aria-invalid` durumu
-   * renkten bağımsız olarak bildirir.
-   */
-  const errorId = `${name}-hata`;
-  const hintId = `${name}-ipucu`;
-  const describedBy = error ? errorId : hint ? hintId : undefined;
-
-  /*
-   * Zorunluluk, sunucudaki zod şemasıyla aynı olmalı. İşaretlenmediğinde
-   * kullanıcı boş formu gönderip sunucudan dönmesini bekliyordu; ekran
-   * okuyucu kullanıcısı ise hangi alanın zorunlu olduğunu gönderene kadar
-   * hiç öğrenemiyordu.
-   */
-  const shared = {
-    id: name,
-    name,
-    required,
-    'aria-invalid': error ? (true as const) : undefined,
-    'aria-describedby': describedBy,
-    className: base,
-  };
-
-  return (
-    <div>
-      <label htmlFor={name} className="text-xs font-medium text-muted">
-        {label}
-      </label>
-
-      <div
-        className={`mt-1.5 flex overflow-hidden rounded-xl border transition-colors focus-within:border-brand ${
-          error ? 'border-danger' : 'border-line'
-        }`}
-      >
-        {prefix && (
-          <span className="shrink-0 bg-surface-2 px-3 py-2.5 font-mono text-xs text-subtle">
-            {prefix}
-          </span>
-        )}
-
-        {multiline ? (
-          /* `...rest` buraya da geçiriliyor. Önceden yalnızca `<input>`
-             dalına geçiyordu; çok satırlı bir alana verilen HİÇBİR öznitelik
-             (değer, olay, uzunluk sınırı) uygulanmıyor, sessizce
-             yutuluyordu. */
-          <textarea
-            {...shared}
-            rows={4}
-            {...(rest as unknown as React.TextareaHTMLAttributes<HTMLTextAreaElement>)}
-          />
-        ) : (
-          <input {...shared} type={type} {...rest} />
-        )}
-      </div>
-
-      {error ? (
-        <p id={errorId} className="mt-1 text-2xs text-danger" role="alert">
-          {error}
-        </p>
-      ) : hint ? (
-        <p id={hintId} className="mt-1 text-2xs text-subtle">
-          {hint}
-        </p>
-      ) : null}
-    </div>
   );
 }
