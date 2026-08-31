@@ -54,6 +54,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'monthly',
       priority: 0.5,
     },
+    /* Marka kiti sayfası: satıcı adayının başvurudan ÖNCE aradığı sayfa
+       ("karşılığında ne veriyorum?"). Yalnızca site içinden bağlantılıydı,
+       arama motoruna hiç bildirilmiyordu. */
+    {
+      url: `${siteUrl}/tasoron/marka`,
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.4,
+    },
+    /* Yasal sayfa: diğer üçü (gizlilik, koşullar, ortaklık) listedeyken
+       KVKK aydınlatma metni atlanmıştı. */
+    { url: `${siteUrl}/kvkk`, lastModified: now, changeFrequency: 'yearly', priority: 0.3 },
   ];
 
   try {

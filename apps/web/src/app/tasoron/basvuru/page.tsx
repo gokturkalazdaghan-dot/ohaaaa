@@ -5,6 +5,7 @@ import { VendorApplicationForm } from '@/components/VendorApplicationForm';
 export const metadata: Metadata = {
   title: 'Taşeron başvurusu',
   description: 'Ohaaaa’da satış yapmak için başvurun.',
+  alternates: { canonical: '/tasoron/basvuru' },
 };
 
 export default function VendorApplicationPage() {

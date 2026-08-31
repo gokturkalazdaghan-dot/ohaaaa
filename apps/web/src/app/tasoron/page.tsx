@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: 'Satıcı olun',
   description:
     'Ohaaaa’da listeleme ücretsiz. Karşılığı komisyon değil: gönderilerinizde markamızı taşıyorsunuz.',
+  alternates: { canonical: '/tasoron' },
 };
 
 /*

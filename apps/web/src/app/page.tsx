@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { FlashDeals } from '@/components/FlashDeals';
@@ -8,6 +9,23 @@ import { ProductCard } from '@/components/ProductCard';
 import { RecentlyViewed } from '@/components/RecentlyViewed';
 import { TrustSignals } from '@/components/TrustSignals';
 import { getCategories, getFlashDeals, getVendors, searchProducts } from '@/data/catalog';
+
+/*
+ * Ana sayfanın kendi meta verisi yoktu.
+ *
+ * Başlık ve açıklama yerleşimden (layout) düşüyordu — o kısım zaten
+ * doğruydu — ama CANONICAL hiç yayınlanmıyordu. Ana sayfa, aynı içeriğe
+ * en çok farklı adresten ulaşılan sayfadır: kök ile eğik çizgili hâli,
+ * `www` olan ve olmayan alan adı, kampanya bağlantılarındaki `?utm_*`
+ * kuyrukları. Canonical söylenmediğinde arama motoru bunları ayrı sayfa
+ * sayabilir ve sıralama sinyalleri bölünür.
+ *
+ * Başlık burada TEKRAR yazılmaz: yerleşimdeki `default` zaten doğru ve
+ * iki yere yazmak, birini değiştirip diğerini unutmanın davetidir.
+ */
+export const metadata: Metadata = {
+  alternates: { canonical: '/' },
+};
 
 export default async function HomePage() {
   const [deals, categories, vendors, trendingPage] = await Promise.all([

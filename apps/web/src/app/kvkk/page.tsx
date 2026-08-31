@@ -2,6 +2,10 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'KVKK aydınlatma metni',
+  description:
+    'Ohaaaa’da kişisel verilerin hangi amaçla işlendiği, kimlerle paylaşıldığı ve '
+    + 'haklarınızı nasıl kullanacağınız.',
+  alternates: { canonical: '/kvkk' },
 };
 
 export default function KvkkPage() {

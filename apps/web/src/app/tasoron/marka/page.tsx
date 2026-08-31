@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   title: 'Marka kullanım kılavuzu',
   description:
     'Ohaaaa satıcıları için koli bandı baskı dosyası, arma dosyaları ve kullanım kuralları.',
+  alternates: { canonical: '/tasoron/marka' },
 };
 
 /*

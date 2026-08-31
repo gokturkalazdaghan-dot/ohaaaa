@@ -540,6 +540,64 @@ for (const width of [375, 768, 1024, 1440]) {
   await tp.close();
 }
 
+/*
+ * SİTE HARİTASINDAKİ HER SAYFA CANONICAL BİLDİRMELİ.
+ *
+ * Site haritası arama motoruna "bunları indeksle" demektir. Canonical ise
+ * "bu içeriğin ASIL adresi budur". İlkini söyleyip ikincisini söylememek,
+ * aynı sayfanın kök/eğik çizgili hâli, `www`'li ve `www`'siz alan adı ve
+ * `?utm_*` kuyruklu bağlantıları ayrı sayfa sayılabilir hâle getirir;
+ * sıralama sinyalleri bölünür.
+ *
+ * Denetim liste tutmaz, SİTE HARİTASINI OKUR: yeni bir sayfa haritaya
+ * eklendiğinde canonical'ı da otomatik olarak zorunlu olur. Elle yazılmış
+ * bir liste, tam da yeni eklenen sayfayı kaçırırdı — nitekim /kvkk,
+ * /tasoron, /tasoron/api, /tasoron/basvuru, /tasoron/marka ve ana sayfanın
+ * canonical'ı böyle eksik kalmıştı.
+ */
+{
+  const sp = await browser.newPage();
+  await sp.goto(`${BASE}/sitemap.xml`, { waitUntil: 'domcontentloaded' });
+  const xml = await sp.content();
+  const urls = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+
+  check(urls.length > 0, 'Site haritası adres içeriyor', `${urls.length} adres`);
+
+  const missing = [];
+  const mismatched = [];
+
+  for (const url of urls) {
+    const path = new URL(url).pathname;
+    await sp.goto(`${BASE}${path}`, { waitUntil: 'domcontentloaded' });
+    const canonical = await sp
+      .locator('link[rel="canonical"]')
+      .first()
+      .getAttribute('href')
+      .catch(() => null);
+
+    if (!canonical) {
+      missing.push(path);
+      continue;
+    }
+    // Yol eşleşmeli; alan adı ortama göre değişir (yerelde 127.0.0.1).
+    if (new URL(canonical, BASE).pathname.replace(/\/$/, '') !== path.replace(/\/$/, '')) {
+      mismatched.push(`${path} -> ${canonical}`);
+    }
+  }
+
+  check(
+    missing.length === 0,
+    'Site haritasındaki her sayfa canonical bildiriyor',
+    missing.join(', '),
+  );
+  check(
+    mismatched.length === 0,
+    'Canonical adresi sayfanın kendi adresini gösteriyor',
+    mismatched.join(', '),
+  );
+  await sp.close();
+}
+
 // --- Konsol hataları -------------------------------------------------------
 const realErrors = consoleErrors.filter(
   (text) => !/favicon|Failed to load resource.*40[34]/i.test(text),

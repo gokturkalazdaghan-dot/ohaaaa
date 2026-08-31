@@ -7,6 +7,7 @@ import { apiBaseUrl } from '@/lib/env';
 export const metadata: Metadata = {
   title: 'API dokümantasyonu',
   description: 'Ohaaaa taşeron entegrasyon API’si: ürün beslemesi ve sipariş yönetimi.',
+  alternates: { canonical: '/tasoron/api' },
 };
 
 interface Endpoint {
