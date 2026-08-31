@@ -19,16 +19,9 @@
  * kontrollerin hepsini besleyecek kadar dolu.
  */
 
-import { chromium } from 'playwright-core';
+import { launchBrowser } from './lib/browser.mjs';
 
 const BASE = (process.argv[2] ?? 'http://127.0.0.1:3137').replace(/\/+$/, '');
-
-/*
- * Tarayıcı yolu ortamdan gelir. Sabit bir yol yazmak, bu betiği yalnızca tek
- * bir makinede çalışır hâle getirirdi; `PLAYWRIGHT_CHROMIUM` ile ya da
- * playwright'ın kendi indirdiği tarayıcıyla çalışır.
- */
-const EXEC = process.env.PLAYWRIGHT_CHROMIUM || undefined;
 
 const results = [];
 function check(ok, label, detail = '') {
@@ -36,7 +29,7 @@ function check(ok, label, detail = '') {
   console.log(`${ok ? '✓' : '✗'} ${label}${detail && !ok ? `  — ${detail}` : ''}`);
 }
 
-const browser = await chromium.launch(EXEC ? { executablePath: EXEC } : {});
+const browser = await launchBrowser();
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 
 const consoleErrors = [];
@@ -291,6 +284,88 @@ check(
   pressDuration > 0 && pressDuration <= 0.12,
   'Basma tepkisi 120ms altında',
   `${pressDuration}s`,
+);
+
+/*
+ * ÜZERİNE GELME DAVRANIŞI DOKUNMATİKTE KAPALI OLMALI.
+ *
+ * Dokunmatik ekranda `:hover` dokunuşla açılır ve başka bir yere dokunulana
+ * kadar üstte kalır. Yukarı kalkmış bir kart ya da "seçiliymiş gibi" duran
+ * bir filtre çipi böyle ortaya çıkar; kullanıcı hangi filtrenin açık
+ * olduğunu yanlış okur.
+ *
+ * Tailwind kendi `hover:` yardımcılarını bu kapının arkasına zaten alıyor.
+ * Sınanan şey ELLE yazılmış CSS kuralları: `globals.css` içindeki
+ * `.card-link`, `.chip`, `.page-btn` kuralları bir zamanlar kapısızdı.
+ *
+ * Ölçüm stil sayfası üzerinden yapılır, `:hover` taklit edilerek değil:
+ * CDP ile sahte üzerine-gelme durumu, medya sorgusunun hangi tarafta
+ * olduğunu göstermez.
+ */
+const hoverAudit = await page.evaluate(() => {
+  const gated = /\(hover\s*:\s*hover\)/;
+  const watched = /^\.(card-link|chip|chip-active|page-btn|page-btn-active):hover$/;
+  const ungated = [];
+  let seen = 0;
+
+  /*
+   * Seçici ÖNCE okunur, sonra içeri inilir.
+   *
+   * İç içe CSS'i destekleyen tarayıcılarda `CSSStyleRule.cssRules` null
+   * DEĞİLDİR — iç kural yoksa boş bir listedir, yani her zaman "doğru"
+   * sayılır. Sarmalayıcıları `rule.cssRules` varlığına bakarak ayırmak bu
+   * yüzden bütün stil kurallarını yutuyordu ve denetim hiçbir şey görmeden
+   * "kapısız kural yok" diyordu.
+   */
+  const walk = (rules, insideGate) => {
+    for (const rule of rules) {
+      const condition = rule.conditionText ?? rule.media?.mediaText ?? '';
+      const nowGated = insideGate || gated.test(condition);
+
+      if (rule.selectorText) {
+        for (const selector of rule.selectorText.split(',')) {
+          const trimmed = selector.trim();
+          if (!watched.test(trimmed)) continue;
+          seen += 1;
+          if (!nowGated) ungated.push(trimmed);
+        }
+      }
+
+      // @layer, @media, @supports ve iç içe kurallar
+      if (rule.cssRules?.length) walk(rule.cssRules, nowGated);
+    }
+  };
+
+  for (const sheet of document.styleSheets) {
+    try {
+      walk(sheet.cssRules ?? [], false);
+    } catch {
+      /* başka kaynaktan gelen stil sayfası okunamaz; bizimkiler aynı kaynakta */
+    }
+  }
+  return { ungated, seen };
+});
+
+/*
+ * ÖNCE KURALIN VAR OLDUĞU DOĞRULANIR.
+ *
+ * Bu kontrol ilk yazıldığında yalnızca "kapısız kural bulunamadı" diyordu.
+ * Stil sayfası hiç yüklenmediğinde de bulunamıyordu — yani CSS'in tamamen
+ * kaybolduğu bir derlemede kontrol YEŞİL yanıyordu. Hiç kontrol olmamasından
+ * kötü: kırık olan şeyi sağlam gösteriyordu.
+ *
+ * Bu yüzden önce sayılır: izlenen seçicilerden en az biri görülmediyse
+ * ölçülecek bir şey yok demektir ve bu bir başarısızlıktır.
+ */
+check(
+  hoverAudit.seen > 0,
+  'Üzerine gelme kuralları stil sayfasında bulundu',
+  `${hoverAudit.seen} kural`,
+);
+check(
+  hoverAudit.seen > 0 && hoverAudit.ungated.length === 0,
+  'Üzerine gelme etkileri (hover: hover) kapısının arkasında',
+  hoverAudit.ungated.join(', ') || 'kural bulunamadı',
 );
 
 // --- Hareket (motion) ------------------------------------------------------

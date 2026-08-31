@@ -21,18 +21,14 @@
  * değerlendirilmeleri gerekir.
  */
 
-import { chromium } from 'playwright-core';
+import { launchBrowser } from './lib/browser.mjs';
 import { readFileSync } from 'node:fs';
 
 const B = (process.argv[2] ?? 'http://127.0.0.1:3137').replace(/\/+$/, '');
 const axe = readFileSync('node_modules/axe-core/axe.min.js', 'utf8');
 const PAGES = ['/', '/arama', '/kategori/elektronik', '/urun/sony-wh-1000xm5', '/tasoron', '/favoriler', '/magaza/teknomarkt', '/odeme', '/giris'];
 
-/*
- * Tarayıcı yolu ortamdan gelir; sabit bir yol betiği tek makineye bağlardı.
- */
-const EXEC = process.env.PLAYWRIGHT_CHROMIUM || undefined;
-const browser = await chromium.launch(EXEC ? { executablePath: EXEC } : {});
+const browser = await launchBrowser();
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 
 const all = new Map();

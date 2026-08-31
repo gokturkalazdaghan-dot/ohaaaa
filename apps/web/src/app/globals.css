@@ -320,10 +320,23 @@
     transition: box-shadow 160ms ease, transform 160ms ease, border-color 160ms ease;
   }
 
-  .card-link:hover {
-    box-shadow: var(--shadow-md);
-    transform: translateY(-2px);
-    border-color: var(--line-strong);
+  /*
+   * ÜZERİNE GELME YALNIZCA GERÇEK İMLEÇLE.
+   *
+   * Dokunmatik ekranda `:hover` dokunuşla tetiklenir ve başka bir yere
+   * dokunulana kadar ÜSTTE KALIR. Kart burada 2px yukarı kalkıyor; geri
+   * dönen kullanıcı, dokunduğu kartı hâlâ havada bulur — hiçbir şey ifade
+   * etmeyen, silinmeyen bir durum.
+   *
+   * Tailwind kendi `hover:` yardımcılarını zaten bu kapının arkasına
+   * alıyor; elle yazılan bu kurallar tek istisnaydı.
+   */
+  @media (hover: hover) and (pointer: fine) {
+    .card-link:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+      border-color: var(--line-strong);
+    }
   }
 
   /* Hap seklinde etiket/filtre. */
@@ -358,9 +371,16 @@
     transition: background-color 140ms ease, border-color 140ms ease;
   }
 
-  .chip:hover {
-    background-color: var(--surface-hover);
-    border-color: var(--line-strong);
+  /*
+   * Dokunmatikte takılı kalan bir `.chip:hover`, seçili filtreyi gösteren
+   * `.chip-active` ile karıştırılır: kullanıcı hangi filtrenin açık
+   * olduğunu yanlış okur. Bu yüzden kapı yalnızca gerçek imleç için açılır.
+   */
+  @media (hover: hover) and (pointer: fine) {
+    .chip:hover {
+      background-color: var(--surface-hover);
+      border-color: var(--line-strong);
+    }
   }
 
   .chip-active {
@@ -370,9 +390,11 @@
     color: #fffaf5;
   }
 
-  .chip-active:hover {
-    background-color: var(--brand-strong);
-    border-color: var(--brand-strong);
+  @media (hover: hover) and (pointer: fine) {
+    .chip-active:hover {
+      background-color: var(--brand-strong);
+      border-color: var(--brand-strong);
+    }
   }
 
   /* Sayfalama dugmesi.
@@ -397,9 +419,13 @@
     transition: background-color 140ms ease, border-color 140ms ease;
   }
 
-  .page-btn:hover {
-    background-color: var(--surface-hover);
-    border-color: var(--line-strong);
+  /* Aynı gerekçe: dokunulan sayfa numarası, bulunulan sayfa gibi
+     görünmemeli. */
+  @media (hover: hover) and (pointer: fine) {
+    .page-btn:hover {
+      background-color: var(--surface-hover);
+      border-color: var(--line-strong);
+    }
   }
 
   .page-btn-active {
@@ -408,9 +434,11 @@
     color: #fffaf5;
   }
 
-  .page-btn-active:hover {
-    background-color: var(--brand-strong);
-    border-color: var(--brand-strong);
+  @media (hover: hover) and (pointer: fine) {
+    .page-btn-active:hover {
+      background-color: var(--brand-strong);
+      border-color: var(--brand-strong);
+    }
   }
 
   .skeleton {
@@ -452,10 +480,18 @@
     45%  { transform: scale(1.24); }
   }
 
-  .group:hover .oha-letter,
   .group:focus-visible .oha-letter,
   .oha-word-tap .oha-letter {
     animation: oha-harf 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  /* Dokunmatikte dalgayı `.oha-word-tap` başlatır; `:hover` de tetiklenirse
+     aynı dalga iki kez kurulur ve ikincisi birincinin ortasında sıfırdan
+     başlar. Gerçek imleç dışında kapalı. */
+  @media (hover: hover) and (pointer: fine) {
+    .group:hover .oha-letter {
+      animation: oha-harf 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    }
   }
 
   /*
