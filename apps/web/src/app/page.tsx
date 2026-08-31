@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 
 import { FlashDeals } from '@/components/FlashDeals';
+import { categoryIcon } from '@/components/Icons';
 import { SearchBar } from '@/components/SearchBar';
 import { ProductCard } from '@/components/ProductCard';
 import { RecentlyViewed } from '@/components/RecentlyViewed';
@@ -57,16 +58,33 @@ export default async function HomePage() {
           </Suspense>
         </div>
 
+        {/*
+          Kategori çipleri artık İKONLU.
+
+          İkonlar çizilmişti ve `categories.icon` alanı veritabanından ta
+          buraya kadar taşınıyordu — ama hiçbir yerde kullanılmıyordu; çipler
+          düz metindi. Bir ızgarada aranan kategoriyi bulmak, kelimeyi
+          okumaktan çok şekli tanımakla olur; ikon burada süs değil,
+          tarama hızıdır.
+
+          İkon `aria-hidden`: adı zaten yanında yazıyor, ekran okuyucuya iki
+          kez söylemek gürültüdür. İkonu olmayan kategori sorunsuz şekilde
+          yalnızca metinle çizilir.
+        */}
         {categories.length > 0 && (
           <nav aria-label="Kategoriler" className="mt-6">
             <ul className="flex flex-wrap gap-2">
-              {categories.map((category) => (
-                <li key={category.id}>
-                  <Link href={`/kategori/${category.slug}`} className="chip">
-                    {category.name}
-                  </Link>
-                </li>
-              ))}
+              {categories.map((category) => {
+                const Icon = categoryIcon(category);
+                return (
+                  <li key={category.id}>
+                    <Link href={`/kategori/${category.slug}`} className="chip">
+                      {Icon && <Icon className="h-4 w-4 text-brand" aria-hidden="true" />}
+                      {category.name}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </nav>
         )}

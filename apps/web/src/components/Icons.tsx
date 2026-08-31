@@ -230,8 +230,32 @@ export const BasketIcon = (p: IconProps) => (
   </Icon>
 );
 
-/** Kategori ikonlarını slug'a göre çözer. */
-export const categoryIcons: Record<string, (p: IconProps) => React.ReactElement> = {
+/*
+ * Kategori ikonları.
+ *
+ * Anahtar, veritabanındaki `categories.icon` ALANIDIR — slug değil.
+ * Önceki hali slug'a göre anahtarlanmıştı ve bu, veri modeliyle çelişiyordu:
+ * satırda `icon: 'cpu'` yazması hiçbir işe yaramıyor, ikon yalnızca slug
+ * tesadüfen listedeki adlardan biriyse çıkıyordu. Yani yeni bir kategori
+ * eklendiğinde, ikonunu doğru ayarlasa bile ikonsuz kalırdı.
+ *
+ * (Uygulamada hiç fark etmiyordu, çünkü harita hiçbir yerde kullanılmıyordu.)
+ */
+const iconsByName: Record<string, (p: IconProps) => React.ReactElement> = {
+  cpu: CpuIcon,
+  shirt: ShirtIcon,
+  sofa: SofaIcon,
+  dumbbell: DumbbellIcon,
+  sparkles: SparklesIcon,
+  basket: BasketIcon,
+};
+
+/*
+ * Slug yedeği: `icon` alanı boş bırakılmış eski satırlar için. Kategori
+ * taksonomisi elle kurulduğu için bu alanın dolu olması garanti değil ve
+ * ikonsuz bir çip, YANLIŞ ikonlu bir çipten iyidir ama doğru ikondan kötüdür.
+ */
+const iconsBySlug: Record<string, (p: IconProps) => React.ReactElement> = {
   elektronik: CpuIcon,
   moda: ShirtIcon,
   'ev-yasam': SofaIcon,
@@ -239,3 +263,22 @@ export const categoryIcons: Record<string, (p: IconProps) => React.ReactElement>
   kozmetik: SparklesIcon,
   supermarket: BasketIcon,
 };
+
+/**
+ * Bir kategorinin ikonunu çözer; tanınmayan kategoride `null` döner.
+ *
+ * `null` dönmesi bir hata değil, beklenen durumdur: taksonomi büyüdükçe
+ * ikonu olmayan kategoriler olacaktır ve çip metniyle zaten anlaşılır.
+ * Rastgele bir "genel" ikon koymak, kategoriler arasındaki ayrımı
+ * zayıflatmaktan başka bir işe yaramaz.
+ */
+export function categoryIcon(category: {
+  icon?: string | null;
+  slug: string;
+}): ((p: IconProps) => React.ReactElement) | null {
+  return (
+    (category.icon ? iconsByName[category.icon] : undefined) ??
+    iconsBySlug[category.slug] ??
+    null
+  );
+}

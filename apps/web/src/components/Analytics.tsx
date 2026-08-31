@@ -14,7 +14,7 @@
 
 import Script from 'next/script';
 
-import { readConsent, useConsent } from '@/lib/consent';
+import { useConsent } from '@/lib/consent';
 
 export function Analytics({ measurementId }: { measurementId: string }) {
   // Abonelik `useConsent` içinde: bu sekmedeki karar da, başka sekmede geri
@@ -49,29 +49,22 @@ export function Analytics({ measurementId }: { measurementId: string }) {
   );
 }
 
-/**
- * Ortaklık tıklamasını ölçümlemeye bildirir.
+/*
+ * NOT — ORTAKLIK TIKLAMASI BURADA ÖLÇÜLMEZ.
  *
- * Bu, sitenin en değerli olayıdır: hangi ürün ve hangi yerleşimin gerçekten
- * tıklandığını gösterir. Onay yoksa sessizce hiçbir şey yapmaz.
+ * Burada `trackOutboundClick` adında, tıklamayı GA'ya `select_promotion`
+ * olayı olarak bildiren bir işlev duruyordu. Hiçbir yerden çağrılmıyordu ve
+ * yorumu "sitenin en değerli olayı" diyordu — yani okuyana, ölçümlemenin
+ * buradan aktığını söyleyen YANLIŞ bir iz bırakıyordu.
+ *
+ * Tıklama gerçekte `GET /git/:offerId` içinde, `record_click` ile SUNUCUDA
+ * kaydediliyor. Atıf için doğrusu da odur:
+ *   • reklam engelleyiciler sunucu kaydını düşüremez,
+ *   • kayıt `subid` taşır; dönüşümü tıklamaya bağlayan tek bağ odur,
+ *   • para yolunun kaydı, ölçümleme onayına bağlı olamaz.
+ *
+ * GA'ya ikinci ve engellenebilir bir kopya göndermek atıfı iyileştirmezdi;
+ * yalnızca iki kaynağın birbirini tutmadığı bir rapor üretirdi. Ayrıca
+ * `select_promotion` bu iş için yanlış olaydı: GA4'te tanıtım
+ * görsellerine aittir, ürün seçimine değil.
  */
-export function trackOutboundClick(input: {
-  offerId: string;
-  merchantName: string;
-  priceCents: number;
-  placement: string;
-}): void {
-  if (typeof window === 'undefined') return;
-  if (readConsent() !== 'granted') return;
-
-  const gtag = (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag;
-  if (typeof gtag !== 'function') return;
-
-  gtag('event', 'select_promotion', {
-    promotion_id: input.offerId,
-    promotion_name: input.merchantName,
-    creative_slot: input.placement,
-    value: input.priceCents / 100,
-    currency: 'TRY',
-  });
-}
