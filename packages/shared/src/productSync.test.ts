@@ -18,7 +18,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 
-import { productSignature, syncProducts } from './productSync.js';
+import { describeSignatureError, productSignature, syncProducts } from './productSync.js';
 import type { ProductFeedItem } from './schemas.js';
 
 // ---------------------------------------------------------------------------
@@ -370,4 +370,32 @@ test('syncProducts: kategori slug kimliğe çevrilir, bilinmeyen slug ürünü d
   // Bilinmeyen kategori ürünü reddetmez: kategorisiz de olsa katalogda kalır.
   assert.equal(store.products.find((row) => row.external_id === 'B')?.category_id, null);
   assert.equal(store.products.length, 2);
+});
+
+// ---------------------------------------------------------------------------
+// Göç uygulanmadığında verilen tanı
+// ---------------------------------------------------------------------------
+/*
+ * `match_signature` sütunu bir göçle geliyor. Göç uygulanmadan ilk mağaza
+ * ürün göndermeye başlarsa, işletmecinin göreceği tek şey PostgREST'in ham
+ * mesajıdır. Teknik olarak doğru olması yetmez: ne yapması gerektiğini de
+ * söylemeli. Bu test, tanının mesajın içinde KALDIĞINI ve ilgisiz hataların
+ * bu tanıyla kirletilmediğini sabitler.
+ */
+test('describeSignatureError: eksik sütun hatası göç komutunu gösterir', () => {
+  const raw = 'column product_groups.match_signature does not exist';
+  const described = describeSignatureError(raw);
+
+  assert.ok(described.includes(raw), 'özgün mesaj korunmalı');
+  assert.ok(described.includes('apply-migrations.sh'), 'çözüm komutu adlandırılmalı');
+});
+
+test('describeSignatureError: PostgREST önbellek mesajı da tanınır', () => {
+  const raw = "Could not find the 'match_signature' column of 'product_groups' in the schema cache";
+  assert.ok(describeSignatureError(raw).includes('apply-migrations.sh'));
+});
+
+test('describeSignatureError: ilgisiz hata olduğu gibi bırakılır', () => {
+  const raw = 'duplicate key value violates unique constraint "product_groups_slug_key"';
+  assert.equal(describeSignatureError(raw), raw);
 });

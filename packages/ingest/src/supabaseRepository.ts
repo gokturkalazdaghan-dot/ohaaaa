@@ -7,6 +7,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { describeSignatureError } from '@ohaaaa/shared/product-sync';
 
 import type { IngestRepository } from './pipeline.js';
 import { canonicalSignature } from './pipeline.js';
@@ -61,7 +62,8 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
           .select('id, match_signature')
           .in('match_signature', batch);
 
-        if (error) throw new Error(`Kanonik ürün adayları alınamadı: ${error.message}`);
+        if (error)
+          throw new Error(`Kanonik ürün adayları alınamadı: ${describeSignatureError(error.message)}`);
 
         const wanted = new Set(signatures);
 

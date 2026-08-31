@@ -59,6 +59,33 @@ function normalize(value: string): string {
 }
 
 /**
+ * `match_signature` sütunu yoksa hatayı ANLAŞILIR hale getirir.
+ *
+ * Sütun `20260830150000_product_signature.sql` ile geliyor. Göç
+ * uygulanmadan bir mağaza ürün göndermeye başlarsa PostgREST'ten dönen
+ * ham mesaj ("column product_groups.match_signature does not exist")
+ * teknik olarak doğru ama işletmeciye ne yapması gerektiğini söylemez —
+ * ve bu, ilk mağaza bağlandığında görülecek hatadır.
+ *
+ * Yanlış eşleşmeye düşmek yerine yükseltilerek durulur: sütun olmadan
+ * imza eşleşmesi yapılamaz ve her teklif kendi kanonik ürününü açar,
+ * yani katalog sessizce ve KALICI olarak bozulur.
+ */
+export function describeSignatureError(message: string): string {
+  const missingColumn =
+    message.includes('match_signature') &&
+    (message.includes('does not exist') || message.includes('schema cache'));
+
+  if (!missingColumn) return message;
+
+  return (
+    `${message} — 'product_groups.match_signature' sütunu bulunamadı. ` +
+    `Veritabanı göçü uygulanmamış görünüyor: ` +
+    `SUPABASE_DB_URL='<bağlantı adresi>' ./scripts/apply-migrations.sh`
+  );
+}
+
+/**
  * Kanonik eşleştirme imzası: marka + sadeleştirilmiş, SIRALANMIŞ başlık.
  *
  * Aynı hesap veritabanında da `public.product_signature()` olarak vardır ve
@@ -256,7 +283,7 @@ async function resolveProductGroups(
       .select('id, match_signature')
       .in('match_signature', unmatchedSignatures);
 
-    if (error) throw new Error(`Kanonik ürün adayları okunamadı: ${error.message}`);
+    if (error) throw new Error(`Kanonik ürün adayları okunamadı: ${describeSignatureError(error.message)}`);
 
     for (const row of data ?? []) {
       if (row.match_signature) groupIdBySignature.set(String(row.match_signature), String(row.id));
@@ -307,7 +334,7 @@ async function resolveProductGroups(
       .insert(toCreate)
       .select('id, title, brand, gtin, match_signature');
 
-    if (error) throw new Error(`Kanonik ürün oluşturulamadı: ${error.message}`);
+    if (error) throw new Error(`Kanonik ürün oluşturulamadı: ${describeSignatureError(error.message)}`);
 
     for (const row of data ?? []) {
       const rowSignature = row.match_signature
