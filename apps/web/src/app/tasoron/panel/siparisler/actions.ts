@@ -111,7 +111,86 @@ export async function updateOrderStatus(
     return { error: 'Sipariş güncellenemedi.' };
   }
 
+  /*
+   * Kargoya verildi bildirimi.
+   *
+   * Alıcıya "kargonuz yola çıktı" YALNIZCA satıcı gerçekten kargoladığında
+   * gidiyor: bu satıra ancak takip numarası biçim denetiminden geçtikten
+   * sonra ulaşılıyor. Tahmini teslim tarihi yazılmıyor -- kargo firmasının
+   * API'si bağlı değil ve ölçmediğimiz bir tarihi söylemek olurdu.
+   *
+   * Bildirim gönderilemezse durum güncellemesi GERİ ALINMAZ: sipariş
+   * gerçekten kargoya verildi, e-posta bunu değiştirmez.
+   */
+  if (input.status === 'shipped') {
+    await notifyShipment(supabase, input.vendor_order_id).catch(() => undefined);
+  }
+
   revalidatePath('/tasoron/panel/siparisler');
   revalidatePath('/tasoron/panel');
   return { ok: true };
+}
+
+/**
+ * Alıcıya kargo bildirimi.
+ *
+ * Alıcının e-postası `orders.email` alanındadır (misafir siparişinde de
+ * dolu). Satıcının oturumu bu satırı `vendor_orders_customer_read` değil,
+ * kendi alt siparişi üzerinden görebiliyor; okuma yine RLS altında.
+ */
+async function notifyShipment(
+  supabase: NonNullable<Awaited<ReturnType<typeof createClient>>>,
+  vendorOrderId: string,
+): Promise<void> {
+  const { data } = await supabase
+    .from('vendor_orders')
+    .select(
+      `carrier, tracking_number,
+       order:orders!order_id ( order_number, email ),
+       vendor:vendors!vendor_id ( display_name )`,
+    )
+    .eq('id', vendorOrderId)
+    .maybeSingle();
+
+  if (!data) return;
+
+  const siparis = unwrap(data.order);
+  const magaza = unwrap(data.vendor);
+  const eposta = siparis?.email ? String(siparis.email) : null;
+  const takip = data.tracking_number ? String(data.tracking_number) : null;
+  const kod = data.carrier ? String(data.carrier) : null;
+
+  if (!eposta || !takip || !kod) return;
+
+  const { data: firma } = await supabase
+    .from('carriers')
+    .select('name, tracking_url')
+    .eq('code', kod)
+    .maybeSingle();
+
+  const { sendMail, shipmentMail } = await import('@/lib/mail');
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.ohaaaa.com').replace(
+    /\/+$/,
+    '',
+  );
+  const takipAdresi = firma?.tracking_url
+    ? String(firma.tracking_url).replace('{no}', encodeURIComponent(takip))
+    : null;
+
+  await sendMail({
+    to: eposta,
+    ...shipmentMail({
+      orderNumber: siparis?.order_number ? String(siparis.order_number) : '—',
+      vendorName: magaza?.display_name ? String(magaza.display_name) : 'Mağaza',
+      carrierName: firma?.name ? String(firma.name) : kod,
+      trackingNumber: takip,
+      trackingUrl: takipAdresi,
+      siteUrl,
+    }),
+  });
+}
+
+function unwrap(value: unknown): Record<string, unknown> | null {
+  const tek = Array.isArray(value) ? value[0] : value;
+  return tek && typeof tek === 'object' ? (tek as Record<string, unknown>) : null;
 }

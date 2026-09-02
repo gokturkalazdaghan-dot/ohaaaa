@@ -240,6 +240,43 @@ export async function POST(request: Request) {
     .select('items_subtotal_cents, shipping_cents, vendor:vendors ( display_name )')
     .eq('order_id', created.id);
 
+  const vendorRows = (vendorOrders ?? []).map((row: Record<string, unknown>) => {
+    const rawVendor = row.vendor;
+    const vendor = (Array.isArray(rawVendor) ? rawVendor[0] : rawVendor) as
+      | Record<string, unknown>
+      | null;
+    return {
+      name: vendor?.display_name ? String(vendor.display_name) : 'Mağaza',
+      subtotal: Number(row.items_subtotal_cents),
+      shipping: Number(row.shipping_cents),
+    };
+  });
+
+  /*
+   * Sipariş onayı e-postası.
+   *
+   * `await` ediliyor ama sonucu AKIŞI DÜŞÜRMÜYOR: sipariş oluştu ve ödendi;
+   * bildirim gitmediyse sipariş yine geçerlidir. Alıcıya "sipariş başarısız"
+   * demek, olmuş bir şeyi olmamış göstermek olurdu.
+   *
+   * Beklemeden (fire-and-forget) göndermek de doğru değil: sunucusuz bir
+   * ortamda yanıt döndükten sonra süreç sonlandırılabilir ve istek hiç
+   * gitmeyebilir. Sekiz saniyelik zaman aşımı bu yüzden gönderim katmanında.
+   */
+  const { orderConfirmationMail, sendMail } = await import('@/lib/mail');
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.ohaaaa.com').replace(/\/+$/, '');
+  const toplam = vendorRows.reduce((sum, v) => sum + v.subtotal + v.shipping, 0);
+
+  await sendMail({
+    to: input.email,
+    ...orderConfirmationMail({
+      orderNumber: created.order_number,
+      totalText: `${(toplam / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} TL`,
+      vendorNames: vendorRows.map((v) => v.name),
+      siteUrl,
+    }),
+  });
+
   return NextResponse.json({
     data: {
       order_number: created.order_number,
