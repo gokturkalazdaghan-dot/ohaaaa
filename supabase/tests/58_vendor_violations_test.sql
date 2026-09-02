@@ -78,6 +78,24 @@ begin
     raise exception 'BASARISIZ: taklit urun puani sozlesmeyle ayrismis';
   end if;
   raise notice '✓ kural tablosu sozlesmeyle birebir (7 ihlal, taklit = 100)';
+
+  -- 8) Ceza puani DISARIYA acik olmamali
+  --
+  -- Bu iddia bir hatanin ardindan yazildi: ihlal gocu fonksiyonlari
+  -- `grant ... to authenticated, service_role` ile aciyordu ama PostgreSQL'in
+  -- yeni fonksiyona verdigi PUBLIC yetkisini kaldirmiyordu. Sonuc: oturum
+  -- acmadan `/rest/v1/rpc/vendor_violation_score` cagrilabiliyor ve herhangi
+  -- bir saticinin ceza puani okunabiliyordu. SECURITY DEFINER oldugu icin RLS
+  -- de korumuyordu.
+  --
+  -- Puan, saticinin ticari itibarina iliskin bir veri; acik olmamali.
+  if has_function_privilege('anon', 'public.vendor_violation_score(uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.vendor_violation_score(uuid)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.vendor_violation_tier(uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.vendor_violation_tier(uuid)', 'EXECUTE') then
+    raise exception 'BASARISIZ: ceza puani istemci rolunden okunabiliyor';
+  end if;
+  raise notice '✓ ceza puani istemciye kapali (anon ve authenticated calistiramaz)';
 end $$;
 
 rollback;
