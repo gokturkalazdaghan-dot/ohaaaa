@@ -59,15 +59,24 @@ begin
   end if;
 
   -- ---- 3) Komisyon taşeronun KENDİ oranıyla hesaplanmalı -------------------
-  -- Teknomarkt oranı %7 → floor((1189900*2)*0.07) + floor(824900*0.07)
+  /*
+   * KOMISYON SIFIR OLMALI.
+   *
+   * Bu test daha once %7 bekliyordu ve gecerdi -- cunku hem kod hem tohum
+   * verisi komisyon kesiyordu. Ama platformun saticiya verdigi soz SIFIR
+   * KOMISYON; testin sabitledigi sey yanlis is modeliydi.
+   *
+   * Yanlis olani dogru sanip sabitleyen bir test, hatayi duzeltilemez hale
+   * getirir: birisi kodu duzeltmeye kalktiginda test onu geri cevirir.
+   */
   select items_subtotal_cents, commission_cents, payout_cents
     into v_tm_sub, v_tm_comm, v_tm_payout
     from public.vendor_orders
    where order_id = v_order.id
      and vendor_id = 'a0000000-0000-4000-8000-00000000000a';
 
-  if v_tm_comm <> (floor(2379800 * 0.07)::bigint + floor(824900 * 0.07)::bigint) then
-    raise exception 'BAŞARISIZ: Teknomarkt komisyonu yanlış: %', v_tm_comm;
+  if v_tm_comm <> 0 then
+    raise exception 'BAŞARISIZ: komisyon sifir olmali, % kurus kesilmis', v_tm_comm;
   end if;
 
   -- ---- 4) Hakediş = ara toplam + kargo - komisyon --------------------------

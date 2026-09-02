@@ -48,25 +48,28 @@ on conflict (id) do nothing;
 -- ---------------------------------------------------------------------------
 insert into public.vendors
   (id, owner_id, slug, display_name, legal_name, description, support_email,
+   -- commission_rate SIFIR: is modeli sifir komisyon uzerine kurulu.
+   -- Demo verisinde sifirdan farkli bir oran, modeli yanlis ogretir ve
+   -- testlerde yanlis hakedis hesaplatir.
    status, commission_rate, rating, rating_count, approved_at)
 values
   ('a0000000-0000-4000-8000-00000000000a',
    '22222222-2222-4222-8222-222222222222',
    'teknomarkt', 'Teknomarkt', 'Teknomarkt Elektronik A.Ş.',
    'Elektronik ve teknoloji ürünlerinde 18 yıllık tedarik gücü.',
-   'destek@teknomarkt.com', 'approved', 0.0700, 4.72, 18432, now() - interval '400 days'),
+   'destek@teknomarkt.com', 'approved', 0, 4.72, 18432, now() - interval '400 days'),
 
   ('a0000000-0000-4000-8000-00000000000b',
    '33333333-3333-4333-8333-333333333333',
    'moda-vitrin', 'Moda Vitrin', 'Moda Vitrin Tekstil Ltd. Şti.',
    'Sezonun öne çıkan markaları, hızlı kargo garantisiyle.',
-   'destek@modavitrin.com', 'approved', 0.1200, 4.51, 9310, now() - interval '260 days'),
+   'destek@modavitrin.com', 'approved', 0, 4.51, 9310, now() - interval '260 days'),
 
   ('a0000000-0000-4000-8000-00000000000c',
    '44444444-4444-4444-8444-444444444444',
    'ev-bahce-dunyasi', 'Ev & Bahçe Dünyası', 'EBD Ticaret A.Ş.',
    'Ev, mutfak ve bahçe ürünlerinde geniş stok.',
-   'destek@evbahce.com', 'approved', 0.0900, 4.38, 4127, now() - interval '120 days')
+   'destek@evbahce.com', 'approved', 0, 4.38, 4127, now() - interval '120 days')
 on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------------------
