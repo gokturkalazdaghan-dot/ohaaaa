@@ -7,6 +7,7 @@ import { checkoutSchema, formatMoney, toOrderPayload } from '@ohaaaa/shared';
 
 import { Field } from './Field';
 import { AlertIcon, CheckIcon, ShieldIcon, StoreIcon, TruckIcon } from './Icons';
+import type { SavedAddress } from '@/data/catalog';
 import { useCart, useCartSummary } from '@/store/cart';
 
 interface VendorOrderResult {
@@ -33,7 +34,7 @@ interface OrderResult {
  * GÖNDERİLMEZ — kart verisi hiçbir zaman bu sistemden geçmemelidir
  * (PCI-DSS kapsamı, ödeme sağlayıcısının barındırdığı alanlarla sınırlanır).
  */
-export function CheckoutFlow() {
+export function CheckoutFlow({ addresses = [] }: { addresses?: SavedAddress[] }) {
   const items = useCart((state) => state.items);
   const clear = useCart((state) => state.clear);
   const summary = useCartSummary();
@@ -42,6 +43,16 @@ export function CheckoutFlow() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [result, setResult] = useState<OrderResult | null>(null);
+
+  /*
+   * Seçili kayıtlı adres. Varsayılan adres ilk sırada geldiği için baştan o
+   * seçilidir: en sık kullanılan adresi elle seçtirmek, defterin varlık
+   * sebebini ortadan kaldırırdı. "yeni" değeri elle doldurmak demektir.
+   */
+  const [selectedAddressId, setSelectedAddressId] = useState<string>(
+    addresses[0]?.id ?? 'yeni',
+  );
+  const selected = addresses.find((address) => address.id === selectedAddressId) ?? null;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -127,12 +138,79 @@ export function CheckoutFlow() {
         <fieldset className="card p-5">
           <legend className="px-1 text-sm font-semibold">Teslimat bilgileri</legend>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Field label="Ad Soyad" name="full_name" required error={errors.full_name} autoComplete="name" />
-            <Field label="Telefon" name="phone" required error={errors.phone} autoComplete="tel" placeholder="05XX XXX XX XX" />
+          {addresses.length > 0 && (
+            <div className="mt-4">
+              {/*
+                Gerçek radyo düğmeleri kullanılıyor, tıklanabilir div'ler
+                değil: klavyeyle ok tuşları arasında gezinmek ve ekran
+                okuyucunun "3 seçenekten 1." demesi bedavaya gelir.
+              */}
+              <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
+                Kayıtlı adreslerim
+              </p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {addresses.map((address) => (
+                  <label
+                    key={address.id}
+                    className={`flex cursor-pointer gap-3 rounded-xl border p-3 text-sm transition-colors ${
+                      selectedAddressId === address.id
+                        ? 'border-brand bg-brand/6'
+                        : 'border-line hover:border-brand/40'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="kayitli_adres"
+                      value={address.id}
+                      checked={selectedAddressId === address.id}
+                      onChange={() => setSelectedAddressId(address.id)}
+                      className="mt-1 shrink-0 accent-[var(--color-brand)]"
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-semibold text-fg">
+                        {address.label ?? address.city}
+                      </span>
+                      <span className="block truncate text-xs text-muted">
+                        {address.fullName} · {address.district} / {address.city}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+
+                <label
+                  className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm transition-colors ${
+                    selectedAddressId === 'yeni'
+                      ? 'border-brand bg-brand/6'
+                      : 'border-line hover:border-brand/40'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="kayitli_adres"
+                    value="yeni"
+                    checked={selectedAddressId === 'yeni'}
+                    onChange={() => setSelectedAddressId('yeni')}
+                    className="shrink-0 accent-[var(--color-brand)]"
+                  />
+                  <span className="font-semibold text-fg">Yeni adres yaz</span>
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/*
+            `key` seçili adresle değişir ve alanlar yeniden kurulur.
+            Alanlar denetimsiz (FormData ile okunuyor); `defaultValue`
+            değişmesi tek başına yazılıyı güncellemez. Anahtar olmadan
+            başka bir adres seçmek, ekranda eski adresi bırakırdı --
+            yani yanlış yere gönderilen bir sipariş.
+          */}
+          <div key={selectedAddressId} className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Field label="Ad Soyad" name="full_name" required error={errors.full_name} autoComplete="name" defaultValue={selected?.fullName} />
+            <Field label="Telefon" name="phone" required error={errors.phone} autoComplete="tel" placeholder="05XX XXX XX XX" defaultValue={selected?.phone} />
             <Field label="E-posta" name="email" required type="email" error={errors.email} autoComplete="email" wrapperClassName="sm:col-span-2" />
-            <Field label="İl" name="city" required error={errors.city} autoComplete="address-level1" />
-            <Field label="İlçe" name="district" required error={errors.district} autoComplete="address-level2" />
+            <Field label="İl" name="city" required error={errors.city} autoComplete="address-level1" defaultValue={selected?.city} />
+            <Field label="İlçe" name="district" required error={errors.district} autoComplete="address-level2" defaultValue={selected?.district} />
             <Field
               label="Açık adres"
               name="address_line"
@@ -141,9 +219,20 @@ export function CheckoutFlow() {
               autoComplete="street-address"
               multiline
               wrapperClassName="sm:col-span-2"
+              defaultValue={selected?.addressLine}
             />
             <Field label="Sipariş notu (isteğe bağlı)" name="notes" wrapperClassName="sm:col-span-2" multiline />
           </div>
+
+          {addresses.length === 0 && (
+            <p className="mt-3 text-xs text-subtle">
+              Adreslerinizi{' '}
+              <Link href="/adreslerim" className="text-brand hover:underline">
+                adres defterine
+              </Link>{' '}
+              kaydederseniz bir dahaki sefere hazır gelir.
+            </p>
+          )}
         </fieldset>
 
         <fieldset className="card p-5">

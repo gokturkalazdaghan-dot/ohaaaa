@@ -43,6 +43,7 @@ export default function robots(): MetadataRoute.Robots {
     '/tasoron/panel',
     '/siparislerim',
     '/degerlendirmelerim',
+    '/adreslerim',
     '/api/',
   ];
   // Arama sonuçları yalnızca genel tarayıcılara kapalı: sonsuz sayıda

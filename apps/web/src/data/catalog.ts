@@ -1341,3 +1341,54 @@ export async function getCustomerOrders(limit = 20): Promise<CustomerOrder[]> {
     };
   });
 }
+
+/* ===========================================================================
+ * ADRES DEFTERİ
+ * ---------------------------------------------------------------------------
+ * Okuma da RLS altındadır (`addresses_own_all`): sorgu `user_id` ile
+ * süzmese bile kullanıcı yalnızca kendi satırlarını görür.
+ * =========================================================================== */
+
+export interface SavedAddress {
+  id: string;
+  label: string | null;
+  fullName: string;
+  phone: string;
+  city: string;
+  district: string;
+  addressLine: string;
+  postalCode: string | null;
+  isDefault: boolean;
+}
+
+export async function getSavedAddresses(): Promise<SavedAddress[]> {
+  const { createClient } = await import('@/lib/supabase/server');
+  const supabase = await createClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('addresses')
+    .select('id, label, full_name, phone, city, district, address_line, postal_code, is_default')
+    // Varsayılan en üstte: ödeme formunda ilk sırayı o almalı.
+    .order('is_default', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error(
+      JSON.stringify({ level: 'error', msg: 'Adresler alınamadı', error: error.message }),
+    );
+    return [];
+  }
+
+  return (data ?? []).map((row) => ({
+    id: String(row.id),
+    label: row.label ? String(row.label) : null,
+    fullName: String(row.full_name),
+    phone: String(row.phone),
+    city: String(row.city),
+    district: String(row.district),
+    addressLine: String(row.address_line),
+    postalCode: row.postal_code ? String(row.postal_code) : null,
+    isDefault: Boolean(row.is_default),
+  }));
+}

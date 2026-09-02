@@ -98,8 +98,11 @@ select is_empty(
        -- yazabildigine RLS karar verir (yalnizca teslim alinmis kendi
        -- siparisi); buradaki liste yalnizca yetkinin nereye kadar
        -- uzandigini sabitler.
-       and c.relname not in ('api_keys', 'vendors', 'products', 'reviews')$$,
-  'authenticated yalnizca api_keys/vendors/products/reviews tablolarina INSERT edebilir'
+       -- `addresses`: kullanici kendi adres defterini yonetir. `with check`
+       -- user_id = auth.uid() sartini koydugu icin baskasinin adina satir
+       -- yazilamaz; 61_addresses_test.sql bunu ayrica dogruluyor.
+       and c.relname not in ('api_keys', 'vendors', 'products', 'reviews', 'addresses')$$,
+  'authenticated yalnizca api_keys/vendors/products/reviews/addresses tablolarina INSERT edebilir'
 );
 
 select is_empty(
@@ -110,8 +113,9 @@ select is_empty(
        and c.relkind = 'r'
        and has_table_privilege('authenticated', c.oid, 'DELETE')
        -- `reviews`: kullanici kendi yorumunu silebilmeli.
-       and c.relname not in ('api_keys', 'vendors', 'products', 'reviews')$$,
-  'authenticated yalnizca api_keys/vendors/products/reviews tablolarindan DELETE edebilir'
+       -- `addresses`: kullanici kendi adresini silebilmeli.
+       and c.relname not in ('api_keys', 'vendors', 'products', 'reviews', 'addresses')$$,
+  'authenticated yalnizca api_keys/vendors/products/reviews/addresses tablolarindan DELETE edebilir'
 );
 
 select ok(

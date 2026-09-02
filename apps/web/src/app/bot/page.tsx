@@ -87,6 +87,7 @@ Disallow: /`}</code>
         <code>{`User-agent: OhaaaaBot
 Disallow: /siparislerim
 Disallow: /degerlendirmelerim
+Disallow: /adreslerim
 Disallow: /sepet
 Crawl-delay: 10`}</code>
       </pre>

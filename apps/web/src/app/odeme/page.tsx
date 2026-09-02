@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 import { CheckoutFlow } from '@/components/CheckoutFlow';
+import { getSavedAddresses } from '@/data/catalog';
 
 export const metadata: Metadata = {
   title: 'Ödeme',
@@ -8,7 +9,21 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function CheckoutPage() {
+/*
+ * Sayfa artık kullanıcının KAYITLI ADRESLERİNİ okuyor; bir an bile
+ * önbelleğe alınamaz. Next, `cookies()` görüldüğünde rotayı kendiliğinden
+ * dinamik yapar ama demo modunda Supabase istemcisi çerezlere hiç
+ * dokunmadan null döner ve o sinyal oluşmaz. Bir kullanıcının ev adresinin
+ * önbellekten başkasına servis edilme ihtimali, açık bir bildirimle
+ * kapatılacak kadar ciddidir.
+ */
+export const dynamic = 'force-dynamic';
+
+export default async function CheckoutPage() {
+  // Misafir alışverişi destekleniyor: giriş yoksa liste boş döner ve form
+  // eskisi gibi elle doldurulur.
+  const addresses = await getSavedAddresses();
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Ödeme</h1>
@@ -16,7 +31,7 @@ export default function CheckoutPage() {
         Siparişiniz mağaza bazında bölünür; her mağaza kendi kargosuyla gönderir.
       </p>
 
-      <CheckoutFlow />
+      <CheckoutFlow addresses={addresses} />
     </div>
   );
 }

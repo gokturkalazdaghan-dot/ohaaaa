@@ -83,7 +83,13 @@ function applyCsp(request: NextRequest, response: NextResponse, nonce: string): 
  * ve ekran "değerlendirilecek sipariş yok" diyordu. Yanlış teşhis: sorun
  * siparişin olmaması değil, oturumun olmamasıydı.
  */
-const PROTECTED_PREFIXES = ['/tasoron/panel', '/yonetim', '/siparislerim', '/degerlendirmelerim'];
+const PROTECTED_PREFIXES = [
+  '/tasoron/panel',
+  '/yonetim',
+  '/siparislerim',
+  '/degerlendirmelerim',
+  '/adreslerim',
+];
 
 /** Yalnızca admin rolünün girebileceği yollar. */
 const ADMIN_PREFIXES = ['/yonetim'];
