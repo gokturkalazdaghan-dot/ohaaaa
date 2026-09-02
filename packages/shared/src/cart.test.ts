@@ -14,6 +14,7 @@ import {
   allowedVendorOrderTransitions,
   canTransitionVendorOrder,
   nextVendorOrderStep,
+  safeInternalPath,
   VENDOR_ORDER_TRANSITIONS,
 } from './types.js';
 import { calculateCommission, discountPercent, formatMoney, parseMoneyToCents } from './money.js';
@@ -262,4 +263,26 @@ test('panelin sonraki adimi her zaman gecerli bir gecis', () => {
 test('teslim ve iptal durumlarinda sonraki adim yok', () => {
   assert.equal(nextVendorOrderStep('delivered'), null);
   assert.equal(nextVendorOrderStep('cancelled'), null);
+});
+
+/* Acik yonlendirme, girisin en sik istismar edilen yeridir: kullanici
+ * ohaaaa.com'da basladigi icin sondaki adrese guvenir. */
+test('devam parametresi yalnizca uygulama ici yol kabul eder', () => {
+  assert.equal(safeInternalPath('/siparislerim'), '/siparislerim');
+  assert.equal(safeInternalPath('/tasoron/panel/urunler'), '/tasoron/panel/urunler');
+
+  for (const kotu of [
+    'https://sahte-site.example',
+    '//sahte-site.example',
+    '/\\sahte-site.example',
+    'javascript:alert(1)',
+    '/arama?q=x',
+    '/urun#bolum',
+    'siparislerim',
+    '',
+    null,
+    undefined,
+  ]) {
+    assert.equal(safeInternalPath(kotu), null, `kabul edilmemeliydi: ${String(kotu)}`);
+  }
 });

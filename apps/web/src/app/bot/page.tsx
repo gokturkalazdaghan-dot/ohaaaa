@@ -85,7 +85,8 @@ Disallow: /`}</code>
       <p>Yalnızca belirli bölümleri kapatmak isterseniz:</p>
       <pre className="overflow-x-auto rounded-xl border border-line bg-bg p-4 font-mono text-xs text-muted">
         <code>{`User-agent: OhaaaaBot
-Disallow: /hesap
+Disallow: /siparislerim
+Disallow: /degerlendirmelerim
 Disallow: /sepet
 Crawl-delay: 10`}</code>
       </pre>

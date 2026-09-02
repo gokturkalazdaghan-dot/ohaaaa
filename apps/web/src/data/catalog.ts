@@ -1197,3 +1197,147 @@ export async function getReviewableItems(): Promise<ReviewableItem[]> {
     })
     .filter((item): item is ReviewableItem => item !== null);
 }
+
+/* ===========================================================================
+ * ALICININ SİPARİŞLERİ
+ * ---------------------------------------------------------------------------
+ * Sipariş verildikten sonra alıcının gidecek hiçbir yeri yoktu: sipariş
+ * geçmişi sayfası hiç yazılmamıştı. Sipariş numarası yalnızca ödeme
+ * ekranında bir kez görünüyor, sonra kayboluyordu. Kargo takip numarası
+ * veritabanında duruyor ve biçimi doğrulanıyor ama alıcıya gösterildiği bir
+ * yer yoktu — yani numarayı satıcı giriyor, alıcı göremiyordu.
+ *
+ * Sorgu RLS ALTINDA çalışır: `orders_customer_read` politikası kullanıcıyı
+ * kendi siparişlerine kilitler. Burada ayrıca `user_id` süzmüyorum; süzsem
+ * bile koruma politikadan gelir, koddan değil.
+ *
+ * Misafir siparişleri bu listede GÖRÜNMEZ: hesaba bağlı olmadıkları için
+ * kime ait olduklarını doğrulayacak bir yol yok. Bir sipariş numarasını
+ * bilenin o siparişi görebilmesi, numarayı tahmin eden herkese kapıyı
+ * açardı.
+ * =========================================================================== */
+
+export interface CustomerOrderItem {
+  title: string;
+  imageUrl: string | null;
+  quantity: number;
+  lineTotalCents: number;
+  productSlug: string | null;
+}
+
+export interface CustomerVendorOrder {
+  id: string;
+  vendorName: string;
+  vendorSlug: string | null;
+  status: 'awaiting_vendor' | 'accepted' | 'preparing' | 'shipped' | 'delivered' | 'cancelled';
+  carrierName: string | null;
+  trackingNumber: string | null;
+  /** Firma kendi takip sayfasını verdiyse hazır bağlantı; yoksa null. */
+  trackingUrl: string | null;
+  shippedAt: string | null;
+  deliveredAt: string | null;
+  items: CustomerOrderItem[];
+}
+
+export interface CustomerOrder {
+  id: string;
+  orderNumber: string;
+  createdAt: string;
+  grandTotalCents: number;
+  paidAt: string | null;
+  /** Aynı sipariş birden çok mağazaya bölünmüş olabilir. */
+  vendorOrders: CustomerVendorOrder[];
+}
+
+export async function getCustomerOrders(limit = 20): Promise<CustomerOrder[]> {
+  const { createClient } = await import('@/lib/supabase/server');
+  const supabase = await createClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('orders')
+    .select(
+      `id, order_number, created_at, grand_total_cents, paid_at,
+       vendor_orders:vendor_orders (
+         id, status, carrier, tracking_number, shipped_at, delivered_at,
+         vendor:vendors!vendor_id ( display_name, slug ),
+         items:order_items (
+           title_snapshot, image_url_snapshot, quantity, line_total_cents,
+           product:products!product_id ( group:product_groups!group_id ( slug ) )
+         )
+       )`,
+    )
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error(
+      JSON.stringify({ level: 'error', msg: 'Siparişler alınamadı', error: error.message }),
+    );
+    return [];
+  }
+
+  /*
+   * Kargo firmasının adı ve takip bağlantısı ayrı bir tablodan gelir.
+   * Sipariş sorgusuna gömmek yerine tek seferde okunur: bir alıcının 20
+   * siparişi için aynı yedi satırı yirmi kez getirmenin anlamı yok.
+   */
+  const carriers = new Map<string, { name: string; url: string | null }>();
+  const { data: carrierRows } = await supabase
+    .from('carriers')
+    .select('code, name, tracking_url');
+
+  for (const row of carrierRows ?? []) {
+    carriers.set(String(row.code), {
+      name: String(row.name),
+      url: row.tracking_url ? String(row.tracking_url) : null,
+    });
+  }
+
+  return (data ?? []).map((order: Record<string, unknown>): CustomerOrder => {
+    const vendorOrderRows = (order.vendor_orders as Array<Record<string, unknown>> | null) ?? [];
+
+    return {
+      id: String(order.id),
+      orderNumber: String(order.order_number),
+      createdAt: String(order.created_at),
+      grandTotalCents: Number(order.grand_total_cents ?? 0),
+      paidAt: order.paid_at ? String(order.paid_at) : null,
+      vendorOrders: vendorOrderRows.map((vo): CustomerVendorOrder => {
+        const vendor = unwrapRelation(vo.vendor);
+        const carrierCode = vo.carrier ? String(vo.carrier) : null;
+        const carrier = carrierCode ? (carriers.get(carrierCode) ?? null) : null;
+        const trackingNumber = vo.tracking_number ? String(vo.tracking_number) : null;
+
+        return {
+          id: String(vo.id),
+          vendorName: String(vendor?.display_name ?? 'Mağaza'),
+          vendorSlug: vendor?.slug ? String(vendor.slug) : null,
+          status: vo.status as CustomerVendorOrder['status'],
+          // Kod çözülemiyorsa ham kod gösterilir: "yurtici" demek, hiçbir şey
+          // dememekten iyidir.
+          carrierName: carrier?.name ?? carrierCode,
+          trackingNumber,
+          trackingUrl:
+            carrier?.url && trackingNumber
+              ? carrier.url.replace('{no}', encodeURIComponent(trackingNumber))
+              : null,
+          shippedAt: vo.shipped_at ? String(vo.shipped_at) : null,
+          deliveredAt: vo.delivered_at ? String(vo.delivered_at) : null,
+          items: ((vo.items as Array<Record<string, unknown>> | null) ?? []).map((item) => {
+            const product = unwrapRelation(item.product);
+            const group = product ? unwrapRelation(product.group) : null;
+
+            return {
+              title: String(item.title_snapshot),
+              imageUrl: item.image_url_snapshot ? String(item.image_url_snapshot) : null,
+              quantity: Number(item.quantity ?? 1),
+              lineTotalCents: Number(item.line_total_cents ?? 0),
+              productSlug: group?.slug ? String(group.slug) : null,
+            };
+          }),
+        };
+      }),
+    };
+  });
+}

@@ -302,5 +302,77 @@ begin
 end
 $$;
 
+-- ---------------------------------------------------------------------------
+-- 8) Sipariş gizliliği: müşteri, BAŞKA bir müşterinin siparişini göremez.
+-- ---------------------------------------------------------------------------
+-- Bu iddia "Siparişlerim" sayfasının dayandığı tek güvencedir. O sayfanın
+-- sorgusu `user_id` ile SÜZMEZ; kullanıcıyı kendi siparişlerine kilitleyen
+-- şey `orders_customer_read` politikasıdır. Politika gevşerse sayfa sessizce
+-- başkasının sipariş geçmişini, adresini ve aldığı ürünleri gösterirdi.
+--
+-- Olumlu kontrol de birlikte yapılır: yalnızca "kimse göremiyor" demek,
+-- her şeyi gizleyen bozuk bir politikayla da geçerdi. Asıl sahibinin
+-- GÖREBİLDİĞİ de doğrulanıyor.
+reset role;
+
+-- Profil, seed'deki gibi auth.users üzerinden açılır: public.users doğrudan
+-- yazılamaz (auth.users'a yabancı anahtarla bağlı) ve profil satırını zaten
+-- tetikleyici üretir.
+insert into auth.users (id, email, raw_user_meta_data)
+values ('66666666-6666-4666-8666-666666666666', 'baska@ornek.com',
+        '{"full_name":"Başka Müşteri"}'::jsonb)
+on conflict (id) do nothing;
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"66666666-6666-4666-8666-666666666666","role":"authenticated"}';
+
+do $$
+declare
+  v_order_id uuid := current_setting('ohaaaa.test_order_id')::uuid;
+begin
+  if exists (select 1 from public.orders where id = v_order_id) then
+    raise exception 'BAŞARISIZ: müşteri başkasının siparişini görebiliyor';
+  end if;
+
+  if exists (select 1 from public.vendor_orders where order_id = v_order_id) then
+    raise exception 'BAŞARISIZ: müşteri başkasının alt siparişlerini görebiliyor';
+  end if;
+
+  if exists (select 1 from public.order_items where order_id = v_order_id) then
+    raise exception 'BAŞARISIZ: müşteri başkasının sipariş kalemlerini görebiliyor';
+  end if;
+
+  raise notice '✓ siparişlerim: başka müşteriye hiçbir şey sızmıyor';
+end
+$$;
+
+-- Olumlu kontrol: siparişin sahibi kendi siparişini eksiksiz görebilmeli.
+set local request.jwt.claims = '{"sub":"55555555-5555-4555-8555-555555555555","role":"authenticated"}';
+
+do $$
+declare
+  v_order_id uuid := current_setting('ohaaaa.test_order_id')::uuid;
+  n int;
+begin
+  if not exists (select 1 from public.orders where id = v_order_id) then
+    raise exception 'BAŞARISIZ: müşteri KENDİ siparişini göremiyor';
+  end if;
+
+  -- Sipariş iki farklı taşerondan; sahibi ikisini de görmeli. Tek parçasını
+  -- gören bir sayfa, alışverişin yarısını kaybolmuş gösterirdi.
+  select count(*) into n from public.vendor_orders where order_id = v_order_id;
+  if n <> 2 then
+    raise exception 'BAŞARISIZ: sahibi alt siparişlerin hepsini görmüyor (% adet)', n;
+  end if;
+
+  select count(*) into n from public.order_items where order_id = v_order_id;
+  if n <> 2 then
+    raise exception 'BAŞARISIZ: sahibi kalemlerin hepsini görmüyor (% adet)', n;
+  end if;
+
+  raise notice '✓ siparişlerim: sahibi siparişinin tamamını görüyor (2 mağaza)';
+end
+$$;
+
 reset role;
 rollback;

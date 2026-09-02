@@ -14,6 +14,8 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { safeInternalPath } from '@ohaaaa/shared';
+
 /**
  * İçerik Güvenlik Politikası (CSP).
  *
@@ -71,8 +73,17 @@ function applyCsp(request: NextRequest, response: NextResponse, nonce: string): 
   response.headers.set('content-security-policy', buildCsp(nonce, supabaseUrl));
 }
 
-/** Oturum gerektiren yollar. Alt yolları da kapsar. */
-const PROTECTED_PREFIXES = ['/tasoron/panel', '/yonetim', '/hesap'];
+/*
+ * Oturum gerektiren yollar. Alt yolları da kapsar.
+ *
+ * `/hesap` yazıyordu ama öyle bir sayfa hiç yoktu -- sarkan bir koruma.
+ * Buna karşılık gerçekten kişiye özel olan iki sayfa korumasızdı:
+ * `/siparislerim` ve `/degerlendirmelerim`. Oturum açmamış biri
+ * `/degerlendirmelerim` adresine gittiğinde sorgu RLS altında boş dönüyor
+ * ve ekran "değerlendirilecek sipariş yok" diyordu. Yanlış teşhis: sorun
+ * siparişin olmaması değil, oturumun olmamasıydı.
+ */
+const PROTECTED_PREFIXES = ['/tasoron/panel', '/yonetim', '/siparislerim', '/degerlendirmelerim'];
 
 /** Yalnızca admin rolünün girebileceği yollar. */
 const ADMIN_PREFIXES = ['/yonetim'];
@@ -213,7 +224,29 @@ export async function middleware(request: NextRequest) {
 
   if (user && GUEST_ONLY.some((prefix) => pathname.startsWith(prefix))) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = '/tasoron/panel';
+
+    /*
+     * İki hata birden vardı.
+     *
+     * Birincisi: hedef koşulsuz `/tasoron/panel` idi. Varsayılan rol
+     * `customer`; yani sıradan bir alıcı, giriş sayfasına uğradığında
+     * satıcı paneline atılıyordu.
+     *
+     * İkincisi: `search` silindiği için `devam` parametresi de siliniyordu.
+     * Yukarıda (bkz. korumalı yol yönlendirmesi) kullanıcının gitmek
+     * istediği adres tam da bu parametreye yazılıyor -- burada silinince
+     * "girişten sonra kaldığın yere dön" hiç çalışmıyordu.
+     *
+     * Hedef yalnızca UYGULAMA İÇİ bir yol olabilir: `devam` adres
+     * çubuğundan gelir ve "https://baska-site" yazan biri, kullanıcıyı bizim
+     * giriş akışımızın sonunda oraya göndertebilirdi (açık yönlendirme).
+     * Denetim `@ohaaaa/shared` içinde ve testli -- burada satır içi bir
+     * düzenli ifade olsaydı, ne doğruladığı ancak gözle okunarak
+     * anlaşılabilirdi.
+     */
+    const safeNext = safeInternalPath(request.nextUrl.searchParams.get('devam'));
+
+    redirectUrl.pathname = safeNext ?? '/';
     redirectUrl.search = '';
     return NextResponse.redirect(redirectUrl);
   }

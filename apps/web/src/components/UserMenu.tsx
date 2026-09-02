@@ -57,10 +57,32 @@ export async function UserMenu() {
 
   const initial = (user.fullName ?? user.email).charAt(0).toUpperCase();
 
+  /*
+   * Hesap bağlantısı ROLE GÖRE gider.
+   *
+   * Eskiden yönetici olmayan HERKES `/tasoron/panel`e gönderiliyordu. Oysa
+   * varsayılan rol `customer`: sıradan bir alıcı kendi adına tıkladığında
+   * satıcı paneline düşüyor ve orada kendi mağazası olmadığı için boş bir
+   * ekranla karşılaşıyordu. Kullanıcının kendi adı, kendi sayfasına gitmeli.
+   */
+  const accountHref =
+    user.role === 'admin' ? '/yonetim' : user.role === 'vendor' ? '/tasoron/panel' : '/siparislerim';
+
   return (
     <div className="flex items-center gap-1.5 sm:gap-2">
+      {/*
+        Değerlendirme sayfası bir süre HİÇBİR yerden bağlı değildi: sayfa
+        çalışıyordu ama adresini bilmeyen bulamıyordu. Yazılmış ama
+        ulaşılamayan bir özellik, yazılmamış sayılır.
+      */}
       <Link
-        href={user.role === 'admin' ? '/yonetim' : '/tasoron/panel'}
+        href="/degerlendirmelerim"
+        className="hidden rounded-xl px-3 py-2 text-sm font-medium text-muted transition-colors hover:text-fg lg:block"
+      >
+        Değerlendirmelerim
+      </Link>
+      <Link
+        href={accountHref}
         className="flex items-center gap-2 rounded-xl border border-line bg-surface px-2 py-1.5 text-sm font-medium transition-colors hover:border-brand/40"
       >
         <span className="grid h-7 w-7 place-items-center rounded-lg press bg-brand-cta text-xs font-black text-white">

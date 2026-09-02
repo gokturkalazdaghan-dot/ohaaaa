@@ -31,19 +31,37 @@ export default function robots(): MetadataRoute.Robots {
     return { rules: [{ userAgent: '*', disallow: '/' }] };
   }
 
+  /*
+   * Kişiye özel sayfalar taranmaz. `/siparislerim` ve `/degerlendirmelerim`
+   * listede yoktu; ikisi de oturuma bağlı ve tarayıcı zaten girişe
+   * yönlendirilir, ama adresin robots.txt'te durması bir sipariş sayfasının
+   * kazayla dizine düşme ihtimalini tümden kapatır.
+   */
+  const PRIVATE_PATHS = [
+    '/git/',
+    '/odeme',
+    '/tasoron/panel',
+    '/siparislerim',
+    '/degerlendirmelerim',
+    '/api/',
+  ];
+  // Arama sonuçları yalnızca genel tarayıcılara kapalı: sonsuz sayıda
+  // parametreli adres üretir ve tarama bütçesini yer.
+  const PRIVATE_PATHS_WITH_SEARCH = ['/arama', ...PRIVATE_PATHS];
+
   return {
     rules: [
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/arama', '/git/', '/odeme', '/tasoron/panel', '/api/'],
+        disallow: PRIVATE_PATHS_WITH_SEARCH,
       },
       {
         // Yapay zekâ arama motorlarının ürün sayfalarımızı okumasını
         // istiyoruz: fiyat karşılaştırması sorulduğunda kaynak olabiliriz.
         userAgent: ['OAI-SearchBot', 'PerplexityBot', 'ClaudeBot'],
         allow: ['/', '/urun/'],
-        disallow: ['/git/', '/odeme', '/tasoron/panel', '/api/'],
+        disallow: PRIVATE_PATHS,
       },
     ],
     sitemap: `${siteUrl}/sitemap.xml`,

@@ -84,6 +84,27 @@ export function nextVendorOrderStep(
   return VENDOR_ORDER_NEXT_STEP[from] ?? null;
 }
 
+/**
+ * Girişten sonra dönülecek adresin güvenli olup olmadığı.
+ *
+ * Değer ADRES ÇUBUĞUNDAN gelir: korumalı bir sayfaya oturumsuz giren
+ * kullanıcı `/giris?devam=/siparislerim` adresine yönlendirilir. Parametreyi
+ * doğrulamadan kullanmak açık yönlendirme (open redirect) demektir: birine
+ * `/giris?devam=https://sahte-site` bağlantısı gönderen, kullanıcıyı BİZİM
+ * giriş akışımızın sonunda başka bir siteye düşürebilir. Kullanıcı adres
+ * çubuğunda ohaaaa.com görerek başladığı için bu, kimlik avında işe yarayan
+ * bir güven aktarımıdır.
+ *
+ * Kabul edilen: tek eğik çizgiyle başlayan, "//" ile başlamayan (protokole
+ * göreli adres yine dışarı çıkar) ve yalnızca yol karakterleri içeren
+ * değerler. "?" ve "#" da dışarıda: yönlendirmede yalnızca yol kullanılıyor,
+ * sorgu ve çapa taşımanın bir faydası yok ama kaçış yüzeyi açar.
+ */
+export function safeInternalPath(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return /^\/(?!\/)[A-Za-z0-9\-._~/%]*$/.test(value) ? value : null;
+}
+
 /** Taşeron API anahtarının verebileceği yetkiler. */
 export const API_SCOPES = [
   'products:read',
