@@ -5,6 +5,7 @@ import { Analytics } from '@/components/Analytics';
 import { ConsentBanner } from '@/components/ConsentBanner';
 import { Footer } from '@/components/Footer';
 import { Header } from '@/components/Header';
+import { CategoryNav } from '@/components/CategoryNav';
 import { FavoritesProvider } from '@/components/FavoritesProvider';
 import { UserMenu } from '@/components/UserMenu';
 import { CartDrawer } from '@/components/CartDrawer';
@@ -139,7 +140,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           listesini gösterirdi.
         */}
         <FavoritesProvider>
-          <Header userMenu={<UserMenu />} />
+          <Header userMenu={<UserMenu />} categoryNav={<CategoryNav />} />
           <main id="icerik">{children}</main>
           <Footer />
           <CartDrawer />

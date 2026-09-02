@@ -9,7 +9,14 @@ import { HeartIcon } from './Icons';
 import { useCart, useCartSummary } from '@/store/cart';
 import { useFavorites } from '@/lib/favorites';
 
-export function Header({ userMenu }: { userMenu?: React.ReactNode }) {
+export function Header({
+  userMenu,
+  categoryNav,
+}: {
+  userMenu?: React.ReactNode;
+  /** Kategori şeridi. Sunucuda çizilir; veri için istemciye tur atılmaz. */
+  categoryNav?: React.ReactNode;
+}) {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const isStuck = useStuck(sentinelRef);
 
@@ -45,6 +52,17 @@ export function Header({ userMenu }: { userMenu?: React.ReactNode }) {
           <SearchBar label="Üst çubukta ürün ara" />
         </Suspense>
       </div>
+
+      {/*
+        KATEGORİ ŞERİDİ HER SAYFADA.
+
+        Kategoriler yalnızca ana sayfada vardı: bir ürün sayfasından ya da
+        arama sonucundan başka bir kategoriye geçmenin tek yolu ana sayfaya
+        dönmekti. Kategoriye göre gezinmek bu tür sitelerde aramanın yanındaki
+        ikinci ana yol; üst çubukta olmaması, ziyaretçiyi her seferinde
+        başa döndürüyordu.
+      */}
+      {categoryNav}
       </header>
     </>
   );
