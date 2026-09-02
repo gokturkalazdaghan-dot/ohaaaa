@@ -4,7 +4,10 @@ import { formatMoney } from '@ohaaaa/shared';
 
 import { DataSourceNotice } from '@/components/DataSourceNotice';
 import { getOwnedVendor, getSessionUser } from '@/lib/auth';
+import { getCarriers } from '@/data/carriers';
 import { getVendorOrders } from '@/data/vendorStats';
+
+import { OrderActions } from './OrderActions';
 
 /*
  * Oturuma bağlı sayfalar ASLA önbelleğe alınmamalıdır. Next, `cookies()`
@@ -33,7 +36,10 @@ export default async function VendorOrdersPage() {
   const user = await getSessionUser();
   const vendor = user ? await getOwnedVendor(user.id) : null;
 
-  const { orders, isLive } = await getVendorOrders(vendor?.id ?? null);
+  const [{ orders, isLive }, carriers] = await Promise.all([
+    getVendorOrders(vendor?.id ?? null),
+    getCarriers(),
+  ]);
 
   return (
     <div className="space-y-5">
@@ -87,12 +93,19 @@ export default async function VendorOrdersPage() {
                       {formatMoney(order.itemsSubtotalCents)}
                     </dd>
                   </div>
-                  <div className="flex items-baseline justify-end gap-3">
-                    <dt className="text-muted">Komisyon %7</dt>
-                    <dd className="tabular w-24 text-danger">
-                      −{formatMoney(order.commissionCents)}
-                    </dd>
-                  </div>
+                  {/* Etikette "%7" sabit yaziliydi ve bu, komisyon almadigimiz
+                      soylenen bir platformda saticinin gordugu tek sayiydi.
+                      Oran artik satirin kendisinden okunur; sifirsa kesinti
+                      satiri hic cizilmez, cunku olmayan bir kesintiyi
+                      gostermek onu varmis gibi gosterir. */}
+                  {order.commissionCents > 0 && (
+                    <div className="flex items-baseline justify-end gap-3">
+                      <dt className="text-muted">Komisyon</dt>
+                      <dd className="tabular w-24 text-danger">
+                        −{formatMoney(order.commissionCents)}
+                      </dd>
+                    </div>
+                  )}
                   <div className="mt-1 flex items-baseline justify-end gap-3 border-t border-line pt-1">
                     <dt className="font-medium">Hakediş</dt>
                     <dd className="tabular w-24 text-base font-bold text-success">
@@ -102,25 +115,26 @@ export default async function VendorOrdersPage() {
                 </dl>
               </div>
 
-              {order.status === 'awaiting_vendor' && (
-                <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
-                  <button
-                    type="button"
-                    className="rounded-xl press bg-brand-cta px-4 py-2 text-xs font-semibold text-white"
-                  >
-                    Siparişi onayla
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-xl border border-line px-4 py-2 text-xs font-medium text-muted transition-colors hover:text-fg"
-                  >
-                    Reddet
-                  </button>
-                  <p className="ml-auto self-center text-2xs text-subtle">
-                    API: <code className="font-mono">PATCH /api/v1/orders/{'{id}'}</code>
-                  </p>
-                </div>
-              )}
+              {/*
+                Burada iki oluk dugme vardi: "Siparisi onayla" ve "Reddet".
+                Ikisi de hicbir seye bagli degildi -- type="button", olay
+                yok. Siparisi ilerletmenin tek gercek yolu API anahtari
+                uretip PATCH istegi yazmakti; gelistiricisi olmayan bir
+                magaza gelen siparisi GORUYOR ama yerine getiremiyordu.
+
+                "Reddet" geri konmadi: iptal, alicinin parasinin iadesi
+                demektir ve tahsilat henuz gercek degil. Para yolunu
+                kapatmadan iptal dugmesi koymak, alicinin parasini havada
+                birakan bir dugme koymak olurdu. Iptal, odeme saglayicisi
+                baglandiginda iade akisiyla birlikte gelir.
+              */}
+              <OrderActions
+                vendorOrderId={order.id}
+                status={order.status}
+                carriers={carriers}
+                carrier={order.carrier}
+                trackingNumber={order.trackingNumber}
+              />
             </li>
           );
         })}

@@ -84,6 +84,7 @@ export async function getVendorOrders(
     .from('vendor_orders')
     .select(
       `id, status, items_subtotal_cents, commission_cents, payout_cents, created_at,
+       carrier, tracking_number,
        order:orders ( order_number, shipping_address ),
        items:order_items ( title_snapshot, quantity, unit_price_cents )`,
     )
@@ -114,6 +115,8 @@ export async function getVendorOrders(
       commissionCents: Number(row.commission_cents ?? 0),
       payoutCents: Number(row.payout_cents ?? 0),
       createdAt: String(row.created_at),
+      carrier: row.carrier ? String(row.carrier) : null,
+      trackingNumber: row.tracking_number ? String(row.tracking_number) : null,
       items: items.map((item) => ({
         title: String(item.title_snapshot ?? ''),
         quantity: Number(item.quantity ?? 1),

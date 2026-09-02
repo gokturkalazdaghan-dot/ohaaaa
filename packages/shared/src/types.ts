@@ -58,6 +58,32 @@ export function allowedVendorOrderTransitions(from: string): readonly string[] {
   return VENDOR_ORDER_TRANSITIONS[from] ?? [];
 }
 
+/**
+ * Panelde gösterilecek TEK bir sonraki adım.
+ *
+ * Geçiş tablosu bir durumdan birden fazla çıkış tanımlayabilir
+ * (`awaiting_vendor` → `accepted` | `cancelled`). Panelde hepsini birden
+ * göstermek satıcıyı seçim yapmaya zorlar ve akışın normal yolunu belirsiz
+ * bırakır; burada normal yol seçilir, iptal ayrı bir iştir.
+ *
+ * Bu eşleme paylaşılan pakette ve testli, çünkü arayüzde tutulsaydı geçiş
+ * tablosu değiştiğinde sessizce ayrışırdı: panel, sunucunun reddedeceği bir
+ * düğme gösterirdi ve satıcı hatayı ancak bastıktan sonra görürdü.
+ */
+const VENDOR_ORDER_NEXT_STEP: Record<string, { status: string; label: string }> = {
+  awaiting_vendor: { status: 'accepted', label: 'Siparişi onayla' },
+  accepted: { status: 'preparing', label: 'Hazırlamaya başla' },
+  preparing: { status: 'shipped', label: 'Kargoya verdim' },
+  shipped: { status: 'delivered', label: 'Teslim edildi olarak işaretle' },
+};
+
+/** Bir durumun normal akıştaki sonraki adımı; son durumlarda `null`. */
+export function nextVendorOrderStep(
+  from: string,
+): { status: string; label: string } | null {
+  return VENDOR_ORDER_NEXT_STEP[from] ?? null;
+}
+
 /** Taşeron API anahtarının verebileceği yetkiler. */
 export const API_SCOPES = [
   'products:read',

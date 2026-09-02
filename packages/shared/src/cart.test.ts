@@ -10,7 +10,12 @@ import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 
 import { addToCart, summarizeCart, updateQuantity } from './cart.js';
-import { allowedVendorOrderTransitions, canTransitionVendorOrder } from './types.js';
+import {
+  allowedVendorOrderTransitions,
+  canTransitionVendorOrder,
+  nextVendorOrderStep,
+  VENDOR_ORDER_TRANSITIONS,
+} from './types.js';
 import { calculateCommission, discountPercent, formatMoney, parseMoneyToCents } from './money.js';
 import type { CartItem } from './types.js';
 
@@ -222,4 +227,39 @@ test('alt sipariş: bilinmeyen durum hiçbir geçişe izin vermez', () => {
   // "hiçbir şey yapılamaz"dır — sessizce her geçişe izin vermek değil.
   assert.deepEqual([...allowedVendorOrderTransitions('uydurma_durum')], []);
   assert.equal(canTransitionVendorOrder('uydurma_durum', 'shipped'), false);
+});
+
+/*
+ * Panelin gosterdigi "sonraki adim", gecis tablosunun izin verdigi bir gecis
+ * OLMAK ZORUNDA.
+ *
+ * Bu iddia bir ayrisma riskine karsi: panel bir zamanlar kendi eslemesini
+ * tutuyordu. Gecis tablosuna dokunan biri o eslemeyi guncellemeyi unutursa,
+ * panel sunucunun reddedecegi bir dugme gosterir ve satici hatayi ancak
+ * bastiktan sonra gorur. Burada tablo ile esleme birbirine baglaniyor.
+ */
+test('panelin sonraki adimi her zaman gecerli bir gecis', () => {
+  for (const from of Object.keys(VENDOR_ORDER_TRANSITIONS)) {
+    const step = nextVendorOrderStep(from);
+    if (step === null) {
+      assert.equal(
+        allowedVendorOrderTransitions(from).filter((to) => to !== 'cancelled').length,
+        0,
+        `${from} durumunda ilerleyecek yer var ama panel adim gostermiyor`,
+      );
+      continue;
+    }
+    assert.ok(
+      canTransitionVendorOrder(from, step.status),
+      `${from} -> ${step.status} gecis tablosunda yok`,
+    );
+    assert.ok(step.label.length > 0, `${from} adiminin etiketi bos`);
+  }
+});
+
+/* Son durumlar bir sonraki adim uretmemeli: teslim edilmis bir siparise
+ * "ilerlet" dugmesi koymak, geri donusu olmayan bir islemi tekrarlatir. */
+test('teslim ve iptal durumlarinda sonraki adim yok', () => {
+  assert.equal(nextVendorOrderStep('delivered'), null);
+  assert.equal(nextVendorOrderStep('cancelled'), null);
 });

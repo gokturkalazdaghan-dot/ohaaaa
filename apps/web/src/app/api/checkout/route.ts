@@ -49,6 +49,46 @@ export async function POST(request: Request) {
   const input = parsed.data;
   const supabase = await createClient();
 
+  /*
+   * GERÇEK VERİTABANINDA SAHTE ÖDEME ÇALIŞTIRILMAZ.
+   *
+   * Aşağıdaki akış `confirm_payment` çağırıp siparişi "ödendi" olarak
+   * işaretliyor, ama tahsilat bir SİMÜLASYON: para hareketi yok. Katalog
+   * boşken bunun bir bedeli yoktu. İlk gerçek satıcı ilk ürününü
+   * yayınladığı anda ise şu olurdu: alıcı sipariş verir, sipariş "ödendi"
+   * görünür, satıcıya "hazırla ve gönder" der — ve satıcı malı bedelsiz
+   * göndermiş olur. Zararı platform değil, sözleşmeye göre iadeden de
+   * sorumlu olan satıcı çeker.
+   *
+   * Bu yüzden gerçek Supabase projesine bağlı çalışırken ödeme sağlayıcısı
+   * tanımlı değilse istek REDDEDİLİR. Kapıyı açık tutup "sonra hallederiz"
+   * demek, hatanın parayla ölçülecek tek anını seçmek olurdu.
+   *
+   * Demo modu (Supabase yok) etkilenmez: orada zaten hiçbir şey kalıcı
+   * değil ve gösterilen ürünler gerçek değil.
+   *
+   * Sağlayıcı bağlandığında `OHAAAA_PAYMENT_PROVIDER` ayarlanır ve bu blok
+   * kendiliğinden devre dışı kalır. Sağlayıcısız bir ortamda uçtan uca
+   * deneme yapmak gerekiyorsa `OHAAAA_ALLOW_SIMULATED_PAYMENT=1` açıkça
+   * yazılır — kazayla değil, bilerek.
+   */
+  const paymentProvider = process.env.OHAAAA_PAYMENT_PROVIDER?.trim();
+  const simulationAllowed = process.env.OHAAAA_ALLOW_SIMULATED_PAYMENT === '1';
+
+  if (supabase && !paymentProvider && !simulationAllowed) {
+    return NextResponse.json(
+      {
+        error: {
+          code: 'payment_unavailable',
+          message:
+            'Ödeme altyapısı henüz bağlı değil, bu yüzden sipariş alamıyoruz. ' +
+            'Sepetiniz duruyor; ödeme açıldığında buradan tamamlayabilirsiniz.',
+        },
+      },
+      { status: 503 },
+    );
+  }
+
   // ---- Demo modu -----------------------------------------------------------
   if (!supabase) {
     const { demoProductGroups } = await import('@/data/demo');
@@ -178,8 +218,8 @@ export async function POST(request: Request) {
   const { getServiceClient } = await import('@/lib/supabase/service');
   const { error: paymentError } = await getServiceClient().rpc('confirm_payment', {
     p_order_id: created.id,
-    p_provider: 'simulated',
-    p_reference: `SIM-${Date.now()}`,
+    p_provider: paymentProvider ?? 'simulated',
+    p_reference: `${paymentProvider ? paymentProvider.toUpperCase() : 'SIM'}-${Date.now()}`,
   });
 
   if (paymentError) {

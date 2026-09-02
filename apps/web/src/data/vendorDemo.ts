@@ -84,6 +84,14 @@ export interface DemoVendorOrder {
   commissionCents: number;
   payoutCents: number;
   createdAt: string;
+  /*
+   * Kargo alanlari LISTEDE gerekli: satici, hangi siparise takip numarasi
+   * girdigini gormeden hangisine girmesi gerektigini bilemez. Bos birakip
+   * yalnizca durumu gostermek, "kargoda" yazan ama numarasi olmayan bir
+   * satir uretirdi.
+   */
+  carrier: string | null;
+  trackingNumber: string | null;
   items: Array<{ title: string; quantity: number; unitPriceCents: number }>;
 }
 
@@ -98,7 +106,13 @@ export function buildDemoOrders(): DemoVendorOrder[] {
   ];
 
   return rows.map(([orderNumber, city, status, itemCount, subtotal, titles], index) => {
-    const commission = Math.floor(subtotal * 0.07);
+    /*
+     * Komisyon SIFIR. Burada %7 yaziliyordu ve bu, saticinin panelde
+     * gordugu ILK sayiydi: hesabi onaylanana kadar ornek veri gosterilir.
+     * Yani satici, platformun sozunun tam tersini ogreniyordu. Ornek veri
+     * de gercek modeli anlatmak zorunda.
+     */
+    const commission = 0;
     const created = new Date();
     created.setHours(created.getHours() - index * 9);
 
@@ -112,6 +126,9 @@ export function buildDemoOrders(): DemoVendorOrder[] {
       commissionCents: commission,
       payoutCents: subtotal - commission,
       createdAt: created.toISOString(),
+      carrier: status === 'shipped' || status === 'delivered' ? 'yurtici' : null,
+      trackingNumber:
+        status === 'shipped' || status === 'delivered' ? '1234567890123' : null,
       items: titles.map((title) => ({
         title,
         quantity: 1,
