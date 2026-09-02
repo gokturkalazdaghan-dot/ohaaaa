@@ -87,3 +87,47 @@ grant usage on schema auth to anon, authenticated, service_role;
 grant execute on function auth.jwt(), auth.uid(), auth.role()
   to anon, authenticated, service_role;
 grant select on auth.users to service_role;
+
+-- ---------------------------------------------------------------------------
+-- storage şeması
+-- ---------------------------------------------------------------------------
+-- Gerçek Supabase'de dosyalar `storage.objects` satırlarıdır ve erişim yine
+-- RLS ile yönetilir. Yerelde bu şema hiç yoktu; belge yükleme kurallarını
+-- sınayan bir test yazılamıyordu.
+--
+-- Burada YALNIZCA test için gereken yüzey taklit edilir: kova listesi, nesne
+-- listesi ve yol parçalarını veren `foldername`. Depolama motorunun kendisi
+-- taklit edilmez — sınanan şey dosyanın nasıl saklandığı değil, KİMİN
+-- görebildiği.
+create schema if not exists storage;
+
+create table if not exists storage.buckets (
+  id     text primary key,
+  name   text not null,
+  public boolean not null default false
+);
+
+create table if not exists storage.objects (
+  id         uuid primary key default gen_random_uuid(),
+  bucket_id  text not null references storage.buckets (id) on delete cascade,
+  name       text not null,
+  owner      uuid,
+  created_at timestamptz not null default now()
+);
+
+alter table storage.objects enable row level security;
+
+-- Supabase'in kendi yardımcısı: "a/b/c.pdf" -> {a,b}
+create or replace function storage.foldername(name text)
+returns text[]
+language sql
+immutable
+as $$
+  select case
+    when position('/' in name) = 0 then array[]::text[]
+    else (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1]
+  end;
+$$;
+
+grant usage on schema storage to anon, authenticated, service_role;
+grant select on storage.buckets to anon, authenticated, service_role;

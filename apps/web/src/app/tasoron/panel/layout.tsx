@@ -1,13 +1,14 @@
 import Link from 'next/link';
 
 import { NavLink } from '@/components/NavLink';
-import { BoxIcon, ChartIcon, KeyIcon, StoreIcon } from '@/components/Icons';
+import { BoxIcon, ChartIcon, KeyIcon, ShieldIcon, StoreIcon } from '@/components/Icons';
 import { getOwnedVendor, getSessionUser } from '@/lib/auth';
 
 const NAV_ITEMS = [
   { href: '/tasoron/panel', label: 'Genel bakış', icon: ChartIcon, exact: true },
   { href: '/tasoron/panel/urunler', label: 'Ürünler', icon: BoxIcon },
   { href: '/tasoron/panel/siparisler', label: 'Siparişler', icon: StoreIcon },
+  { href: '/tasoron/panel/belgeler', label: 'Belgelerim', icon: ShieldIcon },
   { href: '/tasoron/panel/api-anahtarlari', label: 'API anahtarları', icon: KeyIcon },
 ];
 

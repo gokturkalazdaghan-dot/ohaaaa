@@ -127,3 +127,56 @@ export async function getVendorOrders(
 
   return { orders, isLive: true };
 }
+
+/* ===========================================================================
+ * SATICI BELGELERİ
+ * ---------------------------------------------------------------------------
+ * Okuma RLS altında: satıcı kendi belgelerini, yönetici hepsini görür.
+ * =========================================================================== */
+
+export interface VendorDocument {
+  id: string;
+  vendorId: string;
+  vendorName: string;
+  docType: 'vergi_levhasi' | 'imza_sirkuleri' | 'kimlik' | 'diger';
+  fileName: string;
+  storagePath: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewNote: string | null;
+  createdAt: string;
+}
+
+export async function getVendorDocuments(vendorId?: string): Promise<VendorDocument[]> {
+  const supabase = await createClient();
+  if (!supabase) return [];
+
+  let query = supabase
+    .from('vendor_documents')
+    .select(
+      'id, vendor_id, doc_type, file_name, storage_path, status, review_note, created_at, vendor:vendors!vendor_id ( display_name )',
+    )
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (vendorId) query = query.eq('vendor_id', vendorId);
+
+  const { data, error } = await query;
+  if (error || !data) return [];
+
+  return data.map((row: Record<string, unknown>) => {
+    const raw = row.vendor;
+    const vendor = (Array.isArray(raw) ? raw[0] : raw) as Record<string, unknown> | null;
+
+    return {
+      id: String(row.id),
+      vendorId: String(row.vendor_id),
+      vendorName: vendor?.display_name ? String(vendor.display_name) : 'Mağaza',
+      docType: row.doc_type as VendorDocument['docType'],
+      fileName: String(row.file_name),
+      storagePath: String(row.storage_path),
+      status: row.status as VendorDocument['status'],
+      reviewNote: row.review_note ? String(row.review_note) : null,
+      createdAt: String(row.created_at),
+    };
+  });
+}

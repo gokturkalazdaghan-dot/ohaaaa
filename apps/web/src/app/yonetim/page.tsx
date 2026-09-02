@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 
 import { formatMoney } from '@ohaaaa/shared';
 
-import { AlertIcon, ChartIcon, StoreIcon } from '@/components/Icons';
+import { AlertIcon, ChartIcon, ShieldIcon, StoreIcon } from '@/components/Icons';
 import { getSessionUser } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 
@@ -93,6 +93,21 @@ export default async function AdminOverviewPage() {
           </span>
         </a>
       )}
+
+      {/*
+        Belge sayfası buradan bağlanır. Bağlanmasaydı sayfa yazılmış ama
+        ulaşılamaz olurdu -- yönetici adresi ezberlemek zorunda kalırdı.
+      */}
+      <a
+        href="/yonetim/belgeler"
+        className="flex items-center gap-3 rounded-xl border border-line bg-surface p-4 text-sm transition-colors hover:border-brand/40"
+      >
+        <ShieldIcon className="h-5 w-5 shrink-0 text-brand" />
+        <span className="text-fg">
+          <strong className="font-semibold">Satıcı belgeleri</strong> — vergi levhası
+          ve imza sirkülerini inceleyin.
+        </span>
+      </a>
 
       <section className="card-glow p-6">
         <p className="text-xs text-muted">Son 30 günün onaylı komisyonu</p>

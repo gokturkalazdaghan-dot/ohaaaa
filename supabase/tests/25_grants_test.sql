@@ -105,9 +105,12 @@ select is_empty(
        -- VERILMEDI: kayit anindaki fiyat degistirilememeli.
        -- `product_questions`: soru sormak icin satin almis olmak gerekmez;
        -- hangi SUTUNA dokunulabildigini tg_questions_guard ayirir.
+       -- `vendor_documents`: satici kendi belgesini yukler. Karar alanlarini
+       -- (status, review_note, reviewed_*) yalnizca yonetici degistirebilir;
+       -- ayrimi tg_vendor_documents_guard yapar.
        and c.relname not in
          ('api_keys', 'vendors', 'products', 'reviews', 'addresses', 'favorites',
-          'product_questions')$$,
+          'product_questions', 'vendor_documents')$$,
   'authenticated yalnizca sayili tablolara INSERT edebilir'
 );
 
@@ -122,9 +125,11 @@ select is_empty(
        -- `addresses`: kullanici kendi adresini silebilmeli.
        -- `favorites`: kullanici favorisini cikarabilmeli.
        -- `product_questions`: kullanici kendi sorusunu silebilmeli.
+       -- `vendor_documents`: satici INCELENMEMIS belgesini geri cekebilmeli;
+       -- onaylanmis olani silemez (politikada `status = 'pending'` sarti).
        and c.relname not in
          ('api_keys', 'vendors', 'products', 'reviews', 'addresses', 'favorites',
-          'product_questions')$$,
+          'product_questions', 'vendor_documents')$$,
   'authenticated yalnizca sayili tablolardan DELETE edebilir'
 );
 
