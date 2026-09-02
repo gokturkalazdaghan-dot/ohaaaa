@@ -21,7 +21,8 @@
     "db:reset": "supabase db reset",
     "db:push": "supabase db push",
     "verify:browser": "node scripts/verify-browser.mjs",
-    "verify:a11y": "node scripts/verify-a11y.mjs"
+    "verify:a11y": "node scripts/verify-a11y.mjs",
+    "verify:routes": "node scripts/verify-routes.mjs"
   },
   "devDependencies": {
     "axe-core": "^4.10.0",

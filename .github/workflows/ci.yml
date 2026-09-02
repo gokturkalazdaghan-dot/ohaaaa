@@ -43,6 +43,13 @@ jobs:
       - name: Tip denetimi
         run: npm run typecheck
 
+      # Lint CI'da YOKTU ve bu bir kez gercek bir hatayi kacirdi: 'use server'
+      # dosyasindan nesne disa aktarilmisti; tsc temiz gecti, yakalayan derleme
+      # oldu. Bir baskasinda da efekt icinde setState uyarisi yalnizca lint'te
+      # gorundu.
+      - name: Lint
+        run: npm run lint
+
       - name: Birim testleri
         run: npm test
 
