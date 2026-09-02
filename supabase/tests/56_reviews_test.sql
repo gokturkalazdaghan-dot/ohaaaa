@@ -72,7 +72,12 @@ begin
 
   -- --- 4) Teslim EDİLMEMİŞ sipariş değerlendirilemez ------------------------
   reset role;
-  update public.vendor_orders set status = 'shipped' where id = v_vo;
+  -- Kargolama artik takip numarasi ISTIYOR (20260831160000_carrier_tracking).
+  -- Testin gercek akisi izlemesi gerekiyor; numarasiz kargolama zaten
+  -- uretimde de reddediliyor.
+  update public.vendor_orders
+     set status = 'shipped', carrier = 'yurtici', tracking_number = '1234567890123'
+   where id = v_vo;
   insert into public.order_items
     (id, order_id, vendor_order_id, vendor_id, product_id, title_snapshot,
      unit_price_cents, quantity, line_total_cents)

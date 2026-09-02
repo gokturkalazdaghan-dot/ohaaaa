@@ -88,7 +88,29 @@ export async function PATCH(request: Request, context: RouteContext): Promise<Re
       .select('id, status, carrier, tracking_number, shipped_at, delivered_at')
       .maybeSingle();
 
-    if (error) throw new Error(`Sipariş güncellenemedi: ${error.message}`);
+    if (error) {
+      /*
+       * Kargo takip denetimi veritabaninda calisiyor (tetikleyici) ve is
+       * kurali ihlallerini OHAAAA_ onekiyle firlatiyor. Bunlar sunucu
+       * hatasi DEGIL, istegin duzeltilebilir hatasidir: 500 dondurmek
+       * saticiya "bizde bir sorun var, bekle" der ve entegrasyon yeniden
+       * dener; oysa yapmasi gereken numarayi duzeltmek.
+       */
+      if (error.message.includes('OHAAAA_TRACKING_REQUIRED')) {
+        throw new ApiError(
+          'validation_failed',
+          'Siparişi kargolandı olarak işaretlemek için carrier ve tracking_number zorunludur.',
+        );
+      }
+      if (error.message.includes('OHAAAA_TRACKING_INVALID')) {
+        throw new ApiError(
+          'validation_failed',
+          'Takip numarası, seçtiğiniz kargo firmasının biçimine uymuyor. ' +
+            'Geçerli firma kodları /api/v1/carriers ile listelenir.',
+        );
+      }
+      throw new Error(`Sipariş güncellenemedi: ${error.message}`);
+    }
     if (!data) throw new ApiError('not_found', `Sipariş bulunamadı: ${vendorOrderId}`);
 
     const response = Response.json({ data }, { headers: rateHeaders });
