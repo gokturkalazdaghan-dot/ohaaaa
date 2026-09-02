@@ -3,9 +3,13 @@
 /**
  * Favoriler.
  *
- * Tarayıcıda tutulur. Oturum açmayı zorunlu kılmak, bir ürünü işaretlemek
- * gibi küçük bir eylem için fazla yüksek bir bariyer; oturum açmadan da
- * çalışması gerekiyor.
+ * Bu dosya TARAYICI deposudur. Oturum açmayı zorunlu kılmak, bir ürünü
+ * işaretlemek gibi küçük bir eylem için fazla yüksek bir bariyer; misafirin
+ * de listesi olmalı.
+ *
+ * Giriş yapıldığında yetkili depo HESAPTIR ve buradaki liste bir kez oraya
+ * taşınıp boşaltılır (bkz. FavoritesProvider). Favorilerin yalnızca cihazda
+ * durduğu dönemde liste telefonda işaretlenip bilgisayarda kayboluyordu.
  *
  * KAYDEDİLDİĞİ ANDAKİ FİYAT DA SAKLANIR. Bir fiyat karşılaştırma sitesinde
  * favori listesinin asıl değeri budur: kullanıcı "işaretlediğimden beri ne
@@ -14,6 +18,8 @@
  */
 
 import { useSyncExternalStore } from 'react';
+
+import { useFavoritesContext } from '@/components/FavoritesProvider';
 
 const STORAGE_KEY = 'ohaaaa-favoriler';
 
@@ -59,8 +65,32 @@ export function removeFavorite(slug: string): void {
   }
 }
 
+/**
+ * Görüntülenecek favori listesi.
+ *
+ * Giriş yapılmışsa HESAP listesi, değilse tarayıcıdaki liste. Karar
+ * sağlayıcıda veriliyor (bkz. FavoritesProvider); burada yalnızca hangisinin
+ * yetkili olduğu okunuyor. İkisini birleştirmek, bir cihazda çıkarılan
+ * favorinin diğerinde durmaya devam etmesi demek olurdu.
+ */
 export function useFavorites(): FavoriteProduct[] {
-  return useSyncExternalStore(subscribe, readCached, () => EMPTY);
+  const context = useFavoritesContext();
+  const local = useSyncExternalStore(subscribe, readCached, () => EMPTY);
+  return context?.accountList ?? local;
+}
+
+/** Tarayıcıdaki ham liste. Hesaba taşıma (merge) için okunur. */
+export function readLocalFavorites(): FavoriteProduct[] {
+  return readList();
+}
+
+/** Hesaba taşındıktan sonra tarayıcı listesini boşaltır. */
+export function clearLocalFavorites(): void {
+  try {
+    write([]);
+  } catch {
+    // Depolama kapalıysa yapacak bir şey yok.
+  }
 }
 
 const EMPTY: FavoriteProduct[] = [];

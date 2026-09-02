@@ -1,6 +1,7 @@
 'use client';
 
 import { HeartIcon } from './Icons';
+import { useFavoritesContext } from './FavoritesProvider';
 import { isFavorite, toggleFavorite, useFavorites } from '@/lib/favorites';
 
 /**
@@ -28,12 +29,18 @@ export function FavoriteButton({
   className?: string;
 }) {
   const favorites = useFavorites();
+  const context = useFavoritesContext();
   const active = isFavorite(favorites, slug);
+
+  // Sağlayıcı varsa yazma ondan geçer: giriş yapılmışsa hesaba, değilse
+  // tarayıcıya. Doğrudan `toggleFavorite` çağırmak, giriş yapmış kullanıcının
+  // işaretini yalnızca o cihaza yazardı.
+  const toggle = context?.toggle ?? toggleFavorite;
 
   return (
     <button
       type="button"
-      onClick={() => toggleFavorite({ slug, title, imageUrl, savedPriceCents: priceCents })}
+      onClick={() => toggle({ slug, title, imageUrl, savedPriceCents: priceCents })}
       aria-pressed={active}
       aria-label={active ? 'Favorilerden çıkar' : 'Favorilere ekle'}
       title={active ? 'Favorilerden çıkar' : 'Favorilere ekle'}

@@ -12,8 +12,8 @@ export const metadata: Metadata = {
 /**
  * Favoriler sayfası.
  *
- * İçerik tamamen istemcide (favori listesi tarayıcıda tutulur), bu yüzden
- * sunucu bileşeni yalnızca çerçeveyi çizer.
+ * Listeyi hangi deponun beslediğine sağlayıcı karar verir: giriş yapılmışsa
+ * hesap, değilse tarayıcı. Sunucu bileşeni yalnızca çerçeveyi çizer.
  */
 export default function FavoritesPage() {
   return (
@@ -21,7 +21,9 @@ export default function FavoritesPage() {
       <header>
         <h1 className="text-2xl font-bold tracking-tight text-fg">Favorilerim</h1>
         <p className="mt-1.5 text-sm text-muted">
-          Liste bu tarayıcıda saklanır; hesabınıza bağlı değildir.
+          Giriş yaptığınızda liste hesabınıza kaydedilir ve diğer
+          cihazlarınızda da görünür. Girmeden işaretlediğiniz ürünler,
+          giriş yaptığınızda hesabınıza taşınır.
         </p>
       </header>
 

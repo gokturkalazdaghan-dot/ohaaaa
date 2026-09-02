@@ -5,6 +5,7 @@ import { Analytics } from '@/components/Analytics';
 import { ConsentBanner } from '@/components/ConsentBanner';
 import { Footer } from '@/components/Footer';
 import { Header } from '@/components/Header';
+import { FavoritesProvider } from '@/components/FavoritesProvider';
 import { UserMenu } from '@/components/UserMenu';
 import { CartDrawer } from '@/components/CartDrawer';
 import { DemoBanner } from '@/components/DemoBanner';
@@ -131,10 +132,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           durumun tek görünür işareti de yoktu: canlıya geçtiğinizi sanıp
           haftalarca hiç indekslenmeyen bir siteyle yaşayabilirdiniz.
         */}
-        <Header userMenu={<UserMenu />} />
-        <main id="icerik">{children}</main>
-        <Footer />
-        <CartDrawer />
+        {/*
+          Favori sağlayıcısı Header'ı da SARAR: başlıktaki favori sayacı ve
+          ürün kartlarındaki kalpler aynı listeyi okumalı. Yalnızca `main`
+          sarılsaydı başlık kendi (tarayıcı) listesini, sayfa içeriği hesap
+          listesini gösterirdi.
+        */}
+        <FavoritesProvider>
+          <Header userMenu={<UserMenu />} />
+          <main id="icerik">{children}</main>
+          <Footer />
+          <CartDrawer />
+        </FavoritesProvider>
         <ConsentBanner />
         {gaMeasurementId && <Analytics measurementId={gaMeasurementId} />}
       </body>

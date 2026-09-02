@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { formatMoney } from '@ohaaaa/shared';
 
 import { ProductPlaceholder } from './ProductPlaceholder';
+import { useFavoritesContext } from './FavoritesProvider';
 import { removeFavorite, useFavorites } from '@/lib/favorites';
 
 interface CurrentPrice {
@@ -29,6 +30,10 @@ interface CurrentPrice {
  */
 export function FavoritesList() {
   const favorites = useFavorites();
+  const context = useFavoritesContext();
+  // Giriş yapılmışsa silme hesaptan yapılmalı; yalnızca tarayıcıdan silmek
+  // favoriyi diğer cihazlarda bırakırdı.
+  const remove = context?.remove ?? removeFavorite;
   const [prices, setPrices] = useState<Map<string, CurrentPrice>>(new Map());
   // Hangi liste için fiyat çekildiğini tutar. "Yükleniyor" durumu bundan
   // TÜRETİLİR; efekt içinde ayrı bir bayrak set etmek fazladan bir render
@@ -148,7 +153,7 @@ export function FavoritesList() {
 
             <button
               type="button"
-              onClick={() => removeFavorite(item.slug)}
+              onClick={() => remove(item.slug)}
               aria-label={`${item.title} ürününü favorilerden çıkar`}
               className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-muted transition-colors hover:bg-surface-2 hover:text-fg"
             >

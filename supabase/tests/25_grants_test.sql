@@ -101,8 +101,11 @@ select is_empty(
        -- `addresses`: kullanici kendi adres defterini yonetir. `with check`
        -- user_id = auth.uid() sartini koydugu icin baskasinin adina satir
        -- yazilamaz; 61_addresses_test.sql bunu ayrica dogruluyor.
-       and c.relname not in ('api_keys', 'vendors', 'products', 'reviews', 'addresses')$$,
-  'authenticated yalnizca api_keys/vendors/products/reviews/addresses tablolarina INSERT edebilir'
+       -- `favorites`: kullanici kendi listesini isaretler. UPDATE bilerek
+       -- VERILMEDI: kayit anindaki fiyat degistirilememeli.
+       and c.relname not in
+         ('api_keys', 'vendors', 'products', 'reviews', 'addresses', 'favorites')$$,
+  'authenticated yalnizca api_keys/vendors/products/reviews/addresses/favorites tablolarina INSERT edebilir'
 );
 
 select is_empty(
@@ -114,8 +117,10 @@ select is_empty(
        and has_table_privilege('authenticated', c.oid, 'DELETE')
        -- `reviews`: kullanici kendi yorumunu silebilmeli.
        -- `addresses`: kullanici kendi adresini silebilmeli.
-       and c.relname not in ('api_keys', 'vendors', 'products', 'reviews', 'addresses')$$,
-  'authenticated yalnizca api_keys/vendors/products/reviews/addresses tablolarindan DELETE edebilir'
+       -- `favorites`: kullanici favorisini cikarabilmeli.
+       and c.relname not in
+         ('api_keys', 'vendors', 'products', 'reviews', 'addresses', 'favorites')$$,
+  'authenticated yalnizca api_keys/vendors/products/reviews/addresses/favorites tablolarindan DELETE edebilir'
 );
 
 select ok(
