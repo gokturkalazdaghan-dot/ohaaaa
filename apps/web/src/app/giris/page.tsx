@@ -7,7 +7,7 @@ import { Logo } from '@/components/Logo';
 
 export const metadata: Metadata = {
   title: 'Giriş yap',
-  description: 'Ohaaaa satıcı paneline giriş yapın.',
+  description: 'Ohaaaa hesabınıza giriş yapın.',
   robots: { index: false, follow: false },
 };
 
@@ -18,6 +18,25 @@ export default async function SignInPage({
 }) {
   const { devam } = await searchParams;
 
+  /*
+   * Alt başlık NEREDEN GELİNDİĞİNE göre yazılır.
+   *
+   * Sayfa "Satıcı panelinize erişmek için hesabınıza girin" diyordu ve bu,
+   * giriş yapanların çoğu için yanlıştı: siparişini görmeye gelen bir alıcı,
+   * yanlış kapıya geldiğini sanıp geri dönebilir. `devam`, kullanıcının
+   * gitmek istediği yeri zaten taşıyor -- söylenecek doğru cümle orada.
+   */
+  const altyazi =
+    devam?.startsWith('/tasoron') || devam?.startsWith('/yonetim')
+      ? 'Satıcı panelinize erişmek için hesabınıza girin.'
+      : devam === '/siparislerim'
+        ? 'Siparişlerinizi görmek için hesabınıza girin.'
+        : devam === '/adreslerim'
+          ? 'Adres defterinize erişmek için hesabınıza girin.'
+          : devam === '/degerlendirmelerim'
+            ? 'Değerlendirme yazmak için hesabınıza girin.'
+            : 'Hesabınıza girin.';
+
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center px-4 py-12 sm:px-6">
       <div className="mb-8 flex justify-center">
@@ -25,9 +44,7 @@ export default async function SignInPage({
       </div>
 
       <h1 className="text-center text-2xl font-black tracking-tight">Giriş yap</h1>
-      <p className="mt-2 text-center text-sm text-muted">
-        Satıcı panelinize erişmek için hesabınıza girin.
-      </p>
+      <p className="mt-2 text-center text-sm text-muted">{altyazi}</p>
 
       <div className="mt-8">
         <Suspense fallback={<div className="h-72 rounded-2xl skeleton" />}>
