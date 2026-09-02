@@ -154,9 +154,14 @@ export async function mergeLocalFavorites(
  * bak" demek. İkisini aynı değere indirseydik, misafirin tarayıcıdaki
  * favorileri giriş yapmadan da boş görünürdü.
  */
-export async function listServerFavorites(): Promise<
-  Array<{ slug: string; title: string; imageUrl: string | null; savedPriceCents: number | null; savedAt: number }> | null
-> {
+export async function listServerFavorites(): Promise<Array<{
+  slug: string;
+  title: string;
+  imageUrl: string | null;
+  savedPriceCents: number | null;
+  savedAt: number;
+  notifyOnDrop: boolean;
+}> | null> {
   const supabase = await createClient();
   if (!supabase) return null;
 
@@ -167,7 +172,9 @@ export async function listServerFavorites(): Promise<
 
   const { data, error } = await supabase
     .from('favorites')
-    .select('saved_price_cents, created_at, group:product_groups!group_id ( slug, title, image_url )')
+    .select(
+      'saved_price_cents, created_at, notify_on_drop, group:product_groups!group_id ( slug, title, image_url )',
+    )
     .order('created_at', { ascending: false });
 
   if (error || !data) return [];
@@ -187,7 +194,42 @@ export async function listServerFavorites(): Promise<
             ? null
             : Number(row.saved_price_cents),
         savedAt: new Date(String(row.created_at)).getTime(),
+        notifyOnDrop: row.notify_on_drop !== false,
       };
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
+}
+
+/**
+ * Fiyat düşüş bildirimini açar/kapatır.
+ *
+ * Yalnızca `notify_on_drop` yazılır. Veritabanında yetki de SÜTUN BAZINDA
+ * verildi: bu eylem hatalı yazılmış olsa bile `saved_price_cents` ya da
+ * `last_alerted_at` değiştirilemez -- birincisi karşılaştırma noktasını
+ * bozardı, ikincisi aynı bildirimin tekrar tetiklenmesine izin verirdi.
+ */
+export async function setPriceAlertOnServer(
+  slug: string,
+  enable: boolean,
+): Promise<void> {
+  const supabase = await createClient();
+  if (!supabase) return;
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const temiz = String(slug ?? '').trim();
+  if (!temiz || temiz.length > 200) return;
+
+  const groupId = await groupIdForSlug(supabase, temiz);
+  if (!groupId) return;
+
+  await supabase
+    .from('favorites')
+    .update({ notify_on_drop: Boolean(enable) })
+    .eq('group_id', groupId);
+
+  revalidatePath('/favoriler');
 }

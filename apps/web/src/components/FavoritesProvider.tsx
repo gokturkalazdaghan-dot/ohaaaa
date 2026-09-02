@@ -31,6 +31,7 @@ import {
 import {
   listServerFavorites,
   mergeLocalFavorites,
+  setPriceAlertOnServer,
   toggleFavoriteOnServer,
 } from '@/app/favoriler/actions';
 import {
@@ -46,6 +47,8 @@ interface FavoritesContextValue {
   accountList: FavoriteProduct[] | null;
   toggle: (product: Omit<FavoriteProduct, 'savedAt'>) => void;
   remove: (slug: string) => void;
+  /** Fiyat düşüş bildirimini açar/kapatır. Misafirde işlevsizdir. */
+  setAlert: (slug: string, enable: boolean) => void;
 }
 
 const FavoritesContext = createContext<FavoritesContextValue | null>(null);
@@ -147,8 +150,31 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     [accountList],
   );
 
+  /*
+   * Bildirim anahtarı da İYİMSER güncellenir.
+   *
+   * İlk yazışta bu bir `<form action={sunucuEylemi}>` idi ve düğme
+   * GÖRÜNÜRDE HİÇBİR ŞEY YAPMIYORDU: sunucu eylemi `revalidatePath` çağırıyor
+   * ama liste sunucudan değil bu sağlayıcının istemci durumundan çiziliyor.
+   * Yani veri değişiyor, ekran değişmiyordu -- kullanıcı için "bozuk düğme".
+   */
+  const setAlert = useCallback(
+    (slug: string, enable: boolean) => {
+      if (accountList === null) return;
+
+      setAccountList(
+        accountList.map((item) =>
+          item.slug === slug ? { ...item, notifyOnDrop: enable } : item,
+        ),
+      );
+
+      void setPriceAlertOnServer(slug, enable).catch(() => undefined);
+    },
+    [accountList],
+  );
+
   return (
-    <FavoritesContext.Provider value={{ accountList, toggle, remove }}>
+    <FavoritesContext.Provider value={{ accountList, toggle, remove, setAlert }}>
       {children}
     </FavoritesContext.Provider>
   );

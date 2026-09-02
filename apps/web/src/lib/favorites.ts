@@ -34,6 +34,14 @@ export interface FavoriteProduct {
   savedPriceCents: number | null;
   /** Eklenme zamanı (ms). */
   savedAt: number;
+  /*
+   * Fiyat düşünce e-posta gönderilsin mi.
+   *
+   * Yalnızca hesap listesinde anlamlı: misafirin e-postası yok. Tarayıcı
+   * listesinde varsayılan `true` durur ki giriş yapıldığında tercih
+   * kaybolmuş gibi görünmesin.
+   */
+  notifyOnDrop?: boolean;
 }
 
 export function isFavorite(list: FavoriteProduct[], slug: string): boolean {

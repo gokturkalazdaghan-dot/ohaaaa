@@ -151,6 +151,27 @@ export function FavoritesList() {
               {change === 0 && <p className="text-xs text-subtle">değişmedi</p>}
             </div>
 
+            {/*
+              Fiyat düşünce haber verme, YALNIZCA hesap listesinde çıkar:
+              misafirin gönderilecek bir e-posta adresi yok. Misafire
+              çalışmayacak bir anahtar göstermek, basıp bekleyen bir kullanıcı
+              üretirdi.
+            */}
+            {context?.accountList !== null && item.savedPriceCents !== null && (
+              <button
+                type="button"
+                onClick={() => context?.setAlert(item.slug, item.notifyOnDrop === false)}
+                aria-pressed={item.notifyOnDrop !== false}
+                className={`shrink-0 self-center rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors ${
+                  item.notifyOnDrop === false
+                    ? 'border-line text-muted hover:border-brand/40'
+                    : 'border-brand/50 bg-brand/10 text-brand'
+                }`}
+              >
+                {item.notifyOnDrop === false ? 'Fiyat düşünce haber ver' : 'Haber verilecek'}
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => remove(item.slug)}
