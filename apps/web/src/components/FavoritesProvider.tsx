@@ -56,6 +56,27 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
 
+    /*
+     * OTURUM ÇEREZİ YOKSA SUNUCUYA HİÇ SORULMAZ.
+     *
+     * Bu sağlayıcı her sayfada var, yani soru da her sayfada sorulurdu --
+     * arama motoru botları ve giriş yapmamış ziyaretçiler dahil. Bir ürün
+     * sayfasına gelen anonim ziyaretçi için bu, hiçbir şey döndürmeyecek
+     * fazladan bir sunucu turu demek.
+     *
+     * Çerezin varlığı oturumun geçerli olduğunu KANITLAMAZ (süresi dolmuş
+     * olabilir) ve zaten kanıtlaması da gerekmiyor: yetkilendirmeyi sunucu
+     * yapıyor. Burada yalnızca "kesinlikle giriş yok" durumu eleniyor.
+     */
+    let cerezVar = false;
+    try {
+      cerezVar = document.cookie.split('; ').some((c) => c.startsWith('sb-'));
+    } catch {
+      // Çerezler okunamıyorsa sunucuya sormayı dene; kötü ihtimalde bir tur.
+      cerezVar = true;
+    }
+    if (!cerezVar) return;
+
     void (async () => {
       const server = await listServerFavorites().catch(() => null);
       if (cancelled || server === null) return;

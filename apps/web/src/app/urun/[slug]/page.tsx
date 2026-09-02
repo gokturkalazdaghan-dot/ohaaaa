@@ -13,8 +13,16 @@ import { ProductGallery } from '@/components/ProductGallery';
 import { RecentlyViewed, RecordProductView } from '@/components/RecentlyViewed';
 import { PriceHistory } from '@/components/PriceHistory';
 import { ProductCard, resolveProductImage } from '@/components/ProductCard';
+import { ProductQuestions } from '@/components/ProductQuestions';
 import { ProductReviews } from '@/components/ProductReviews';
-import { getPriceHistory, getProductGroup, getProductReviews, getRelatedGroups } from '@/data/catalog';
+import {
+  getAnswerVendorId,
+  getPriceHistory,
+  getProductGroup,
+  getProductQuestions,
+  getProductReviews,
+  getRelatedGroups,
+} from '@/data/catalog';
 import { siteUrl } from '@/lib/env';
 
 type ProductPageProps = { params: Promise<{ slug: string }> };
@@ -70,6 +78,14 @@ export default async function ProductPage({ params }: ProductPageProps) {
   // fiyat. Bağlam verilmezse bölüm katalog genelini gösterir ve her sayfada
   // aynı dört ürün çıkar.
   const reviews = await getProductReviews(group.id);
+
+  /*
+   * Sorular ve cevaplama yetkisi İKİNCİL bilgidir: alınamazsa ürün sayfası
+   * yine açılmalı. Bir soru-cevap sorgusu yüzünden ürünün kendisini
+   * gösterememek, sayfanın asıl işini kaybetmek olurdu.
+   */
+  const questions = await getProductQuestions(group.id).catch(() => []);
+  const answerVendorId = await getAnswerVendorId(group.id).catch(() => null);
   const related = await getRelatedGroups(slug, 4, {
     categoryId: group.categoryId,
     minPriceCents: group.minPriceCents,
@@ -382,6 +398,16 @@ export default async function ProductPage({ params }: ProductPageProps) {
         reviews={reviews}
         rating={group.rating}
         ratingCount={group.ratingCount}
+      />
+
+      {/* Sorular yorumlardan SONRA: yorum satın almış kişinin deneyimi,
+          soru ise henüz almamış kişinin tereddüdü. Karar sırası da bu. */}
+      <ProductQuestions
+        groupId={group.id}
+        slug={slug}
+        questions={questions}
+        canAnswer={answerVendorId !== null}
+        answerVendorId={answerVendorId}
       />
 
       {related.length > 0 && (

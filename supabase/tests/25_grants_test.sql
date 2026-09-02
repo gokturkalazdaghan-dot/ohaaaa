@@ -103,9 +103,12 @@ select is_empty(
        -- yazilamaz; 61_addresses_test.sql bunu ayrica dogruluyor.
        -- `favorites`: kullanici kendi listesini isaretler. UPDATE bilerek
        -- VERILMEDI: kayit anindaki fiyat degistirilememeli.
+       -- `product_questions`: soru sormak icin satin almis olmak gerekmez;
+       -- hangi SUTUNA dokunulabildigini tg_questions_guard ayirir.
        and c.relname not in
-         ('api_keys', 'vendors', 'products', 'reviews', 'addresses', 'favorites')$$,
-  'authenticated yalnizca api_keys/vendors/products/reviews/addresses/favorites tablolarina INSERT edebilir'
+         ('api_keys', 'vendors', 'products', 'reviews', 'addresses', 'favorites',
+          'product_questions')$$,
+  'authenticated yalnizca sayili tablolara INSERT edebilir'
 );
 
 select is_empty(
@@ -118,9 +121,11 @@ select is_empty(
        -- `reviews`: kullanici kendi yorumunu silebilmeli.
        -- `addresses`: kullanici kendi adresini silebilmeli.
        -- `favorites`: kullanici favorisini cikarabilmeli.
+       -- `product_questions`: kullanici kendi sorusunu silebilmeli.
        and c.relname not in
-         ('api_keys', 'vendors', 'products', 'reviews', 'addresses', 'favorites')$$,
-  'authenticated yalnizca api_keys/vendors/products/reviews/addresses/favorites tablolarindan DELETE edebilir'
+         ('api_keys', 'vendors', 'products', 'reviews', 'addresses', 'favorites',
+          'product_questions')$$,
+  'authenticated yalnizca sayili tablolardan DELETE edebilir'
 );
 
 select ok(

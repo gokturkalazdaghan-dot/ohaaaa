@@ -1392,3 +1392,102 @@ export async function getSavedAddresses(): Promise<SavedAddress[]> {
     isDefault: Boolean(row.is_default),
   }));
 }
+
+/* ===========================================================================
+ * ÜRÜN SORULARI
+ * =========================================================================== */
+
+export interface ProductQuestion {
+  id: string;
+  body: string;
+  askerName: string;
+  createdAt: string;
+  answer: string | null;
+  answerVendorName: string | null;
+  answeredAt: string | null;
+}
+
+export async function getProductQuestions(groupId: string): Promise<ProductQuestion[]> {
+  const { createClient } = await import('@/lib/supabase/server');
+  const supabase = await createClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('product_questions')
+    .select(
+      `id, body, created_at, answer, answered_at,
+       asker:users!user_id ( full_name ),
+       vendor:vendors!answer_vendor_id ( display_name )`,
+    )
+    .eq('group_id', groupId)
+    .eq('is_hidden', false)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error || !data) return [];
+
+  return data.map((row: Record<string, unknown>) => {
+    const asker = unwrapRelation(row.asker);
+    const vendor = unwrapRelation(row.vendor);
+
+    return {
+      id: String(row.id),
+      body: String(row.body),
+      // Soru soranın TAM ADI gösterilmez: alışveriş alışkanlığı kişisel bir
+      // veri ve soru herkese açık. Baş harf kimliği taşımadan sorular
+      // birbirinden ayırt edilebilsin diye yeter.
+      askerName: maskName(asker?.full_name ? String(asker.full_name) : null),
+      createdAt: String(row.created_at),
+      answer: row.answer ? String(row.answer) : null,
+      answerVendorName: vendor?.display_name ? String(vendor.display_name) : null,
+      answeredAt: row.answered_at ? String(row.answered_at) : null,
+    };
+  });
+}
+
+function maskName(fullName: string | null): string {
+  if (!fullName) return 'Ohaaaa kullanıcısı';
+  return fullName
+    .trim()
+    .split(/\s+/)
+    .map((part) => {
+      const ilk = part.charAt(0);
+      return ilk ? `${ilk.toLocaleUpperCase('tr-TR')}**` : '';
+    })
+    .join(' ')
+    .trim();
+}
+
+/**
+ * Oturum açmış kullanıcı bu ürünü satan onaylı bir mağazanın sahibi mi?
+ *
+ * Yetkinin KENDİSİ veritabanında (`can_answer_question` + tetikleyici);
+ * buradaki okuma yalnızca arayüzün cevap kutusunu gösterip göstermeyeceğine
+ * karar verir. Arayüzün yanılması bir yetki açığı üretmez: yetkisiz bir
+ * cevap denemesi veritabanında geri alınır.
+ */
+export async function getAnswerVendorId(groupId: string): Promise<string | null> {
+  const { createClient } = await import('@/lib/supabase/server');
+  const supabase = await createClient();
+  if (!supabase) return null;
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data } = await supabase
+    .from('products')
+    .select('vendor_id, vendor:vendors!vendor_id ( owner_id, status )')
+    .eq('group_id', groupId)
+    .limit(50);
+
+  for (const row of data ?? []) {
+    const vendor = unwrapRelation((row as Record<string, unknown>).vendor);
+    if (vendor?.owner_id === user.id && vendor?.status === 'approved') {
+      return String((row as Record<string, unknown>).vendor_id);
+    }
+  }
+
+  return null;
+}

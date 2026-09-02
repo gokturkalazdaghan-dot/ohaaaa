@@ -126,6 +126,13 @@ begin
 
   -- --- 7) Yorum gizlenince ortalama GÜNCELLENİYOR --------------------------
   -- Uygulama hesaplasaydi, gizleme yolunu guncellemeyi unutabilirdi.
+  --
+  -- JWT talebi de TEMIZLENIR. `reset role` tek basina yetmiyor: durum
+  -- korumasi artik `auth.uid()`e bakiyor ve o deger JWT talebinden geliyor.
+  -- Talep asili kalinca bu satir "oturum acmis kullanici kendi yorumunu
+  -- gizliyor" gibi gorunuyordu -- ki bu ENGELLENMESI gereken sey. Sunucu
+  -- tarafi moderasyonun gercek yolu, JWT'siz (service_role) yoldur.
+  perform set_config('request.jwt.claims', '', true);
   update public.reviews set status = 'hidden' where order_item_id = v_item;
   select rating_count into v_count from public.product_groups where id = v_group;
   if v_count <> 0 then
@@ -145,4 +152,52 @@ begin
   reset role;
 end $$;
 
+-- ---------------------------------------------------------------------------
+-- Yonetici karari, hakkinda karar verilen kisi tarafindan geri alinamaz.
+-- ---------------------------------------------------------------------------
+-- Bu iddia gercek bir acigin uzerine yazildi: koruma
+-- `current_user in ('anon','authenticated')` kosuluna dayaniyordu ve
+-- SECURITY DEFINER bir fonksiyon icinde `current_user` her zaman FONKSIYONUN
+-- SAHIBI (postgres) oldugu icin kosul hicbir zaman dogru olmuyordu. Yani
+-- gizlenen bir yorumu yazari geri yayina alabiliyordu.
+reset role;
+
+do $$
+declare
+  v_id uuid;
+begin
+  -- Yonetici/sunucu tarafi gizler (auth.uid() bos: service_role yolu).
+  select id into v_id from public.reviews limit 1;
+  if v_id is null then
+    raise exception 'BAŞARISIZ: sinanacak yorum yok';
+  end if;
+  update public.reviews set status = 'hidden' where id = v_id;
+  if (select status from public.reviews where id = v_id) <> 'hidden' then
+    raise exception 'BAŞARISIZ: sunucu tarafi yorumu gizleyemedi';
+  end if;
+  perform set_config('ohaaaa.gizli_yorum', v_id::text, true);
+  raise notice '✓ sunucu tarafi moderasyon gecebiliyor';
+end $$;
+
+-- Yorumun SAHIBI geri yayina almaya calisir.
+set local role authenticated;
+
+do $$
+declare
+  v_id uuid := current_setting('ohaaaa.gizli_yorum')::uuid;
+  v_sahip uuid;
+begin
+  select user_id into v_sahip from public.reviews where id = v_id;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', v_sahip, 'role', 'authenticated')::text, true);
+
+  update public.reviews set status = 'published' where id = v_id;
+
+  if (select status from public.reviews where id = v_id) <> 'hidden' then
+    raise exception 'BAŞARISIZ: yazar gizlenen yorumu geri yayina aldi';
+  end if;
+  raise notice '✓ yazar moderasyon kararini geri alamiyor';
+end $$;
+
+reset role;
 rollback;

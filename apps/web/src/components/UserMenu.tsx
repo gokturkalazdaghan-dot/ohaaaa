@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { AccountMenu } from './AccountMenu';
 import { StoreIcon } from './Icons';
 import { getSessionUser } from '@/lib/auth';
 import { isSupabaseConfigured } from '@/lib/env';
@@ -58,52 +59,32 @@ export async function UserMenu() {
   const initial = (user.fullName ?? user.email).charAt(0).toUpperCase();
 
   /*
-   * Hesap bağlantısı ROLE GÖRE gider.
+   * Menü içeriği ROLE GÖRE kurulur.
    *
-   * Eskiden yönetici olmayan HERKES `/tasoron/panel`e gönderiliyordu. Oysa
-   * varsayılan rol `customer`: sıradan bir alıcı kendi adına tıkladığında
-   * satıcı paneline düşüyor ve orada kendi mağazası olmadığı için boş bir
-   * ekranla karşılaşıyordu. Kullanıcının kendi adı, kendi sayfasına gitmeli.
+   * Eskiden yönetici olmayan HERKES tek bir bağlantıyla /tasoron/panel'e
+   * gönderiliyordu. Varsayılan rol `customer`: sıradan bir alıcı kendi adına
+   * tıkladığında satıcı paneline düşüyor ve orada kendi mağazası olmadığı
+   * için boş bir ekranla karşılaşıyordu. Alıcının kendi sayfaları
+   * (siparişler, adresler, değerlendirmeler) ise hiçbir yerden bağlı
+   * değildi.
    */
-  const accountHref =
-    user.role === 'admin' ? '/yonetim' : user.role === 'vendor' ? '/tasoron/panel' : '/siparislerim';
+  const links = [
+    { href: '/siparislerim', label: 'Siparişlerim' },
+    { href: '/favoriler', label: 'Favorilerim' },
+    { href: '/adreslerim', label: 'Adreslerim' },
+    { href: '/degerlendirmelerim', label: 'Değerlendirmelerim' },
+  ];
+
+  if (user.role === 'vendor') {
+    links.push({ href: '/tasoron/panel', label: 'Mağaza panelim' });
+  }
+  if (user.role === 'admin') {
+    links.push({ href: '/yonetim', label: 'Yönetim' });
+  }
 
   return (
     <div className="flex items-center gap-1.5 sm:gap-2">
-      {/*
-        Değerlendirme sayfası bir süre HİÇBİR yerden bağlı değildi: sayfa
-        çalışıyordu ama adresini bilmeyen bulamıyordu. Yazılmış ama
-        ulaşılamayan bir özellik, yazılmamış sayılır.
-      */}
-      <Link
-        href="/degerlendirmelerim"
-        className="hidden rounded-xl px-3 py-2 text-sm font-medium text-muted transition-colors hover:text-fg lg:block"
-      >
-        Değerlendirmelerim
-      </Link>
-      <Link
-        href={accountHref}
-        className="flex items-center gap-2 rounded-xl border border-line bg-surface px-2 py-1.5 text-sm font-medium transition-colors hover:border-brand/40"
-      >
-        <span className="grid h-7 w-7 place-items-center rounded-lg press bg-brand-cta text-xs font-black text-white">
-          {initial}
-        </span>
-        <span className="hidden max-w-28 truncate sm:inline">{user.fullName ?? user.email}</span>
-      </Link>
-
-      {/*
-        Çıkış bir FORM'dur, bağlantı değil: GET ile çıkış yaptıran bir uç
-        nokta, üçüncü taraf bir sayfanın kullanıcıyı istem dışı çıkarmasına
-        izin verir.
-      */}
-      <form action="/auth/cikis" method="post">
-        <button
-          type="submit"
-          className="hidden rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:text-fg sm:block"
-        >
-          Çıkış
-        </button>
-      </form>
+      <AccountMenu label={user.fullName ?? user.email} initial={initial} links={links} />
     </div>
   );
 }
