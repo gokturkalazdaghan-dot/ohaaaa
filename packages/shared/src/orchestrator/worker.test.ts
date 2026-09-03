@@ -162,3 +162,123 @@ test('telemetri her işin sonucunu kaydeder', async () => {
   assert.ok(olaylar.includes('job_failed'));
   assert.ok(olaylar.includes('worker_run_completed'));
 });
+
+// --- Eşzamanlılık ---------------------------------------------------------
+
+/*
+ * Varsayılan eşzamanlılık 1 ve bu KASITLI: paralel istek, kaynağın
+ * nezaket ayarlarını (requests_per_minute) anlamsız kılabilir.
+ */
+test('varsayılan olarak işler SIRAYLA işlenir', async () => {
+  const { repository } = sahteDepo([is({ id: 'j1' }), is({ id: 'j2' }), is({ id: 'j3' })]);
+  let esZamanli = 0;
+  let enYuksek = 0;
+
+  await runWorkerOnce({
+    repository,
+    handlers: {
+      yenile: async () => {
+        esZamanli += 1;
+        enYuksek = Math.max(enYuksek, esZamanli);
+        await new Promise((r) => setTimeout(r, 10));
+        esZamanli -= 1;
+      },
+    },
+  });
+
+  assert.equal(enYuksek, 1);
+});
+
+test('eşzamanlılık havuzu sınırı AŞMIYOR', async () => {
+  const { repository } = sahteDepo(
+    Array.from({ length: 6 }, (_, i) => is({ id: `j${i}` })),
+  );
+  let esZamanli = 0;
+  let enYuksek = 0;
+
+  const ozet = await runWorkerOnce({
+    repository,
+    concurrency: 2,
+    handlers: {
+      yenile: async () => {
+        esZamanli += 1;
+        enYuksek = Math.max(enYuksek, esZamanli);
+        await new Promise((r) => setTimeout(r, 10));
+        esZamanli -= 1;
+      },
+    },
+  });
+
+  assert.equal(ozet.completed, 6);
+  // Hepsini birden başlatmak 6 paralel istek demek olurdu.
+  assert.equal(enYuksek, 2);
+});
+
+// --- Düzgün kapanma -------------------------------------------------------
+
+test('kapanma sinyali varken YENİ iş alınmaz', async () => {
+  const { repository, cagrilar } = sahteDepo([is({ id: 'j1' })]);
+  let calisti = false;
+
+  const ozet = await runWorkerOnce({
+    repository,
+    shouldStop: () => true,
+    handlers: {
+      yenile: async () => {
+        calisti = true;
+      },
+    },
+  });
+
+  assert.equal(ozet.claimed, 0);
+  assert.equal(calisti, false);
+  assert.equal(cagrilar.completed.length, 0);
+});
+
+// --- Kira uzatma ----------------------------------------------------------
+
+test('uzun süren iş sırasında kira uzatılır', async () => {
+  const uzatmalar: string[] = [];
+  const { repository } = sahteDepo([is({ id: 'j1' })]);
+  repository.extendLease = async (id) => {
+    uzatmalar.push(id);
+  };
+
+  await runWorkerOnce({
+    repository,
+    leaseRenewMs: 10,
+    leaseSeconds: 60,
+    handlers: {
+      yenile: async () => {
+        await new Promise((r) => setTimeout(r, 45));
+      },
+    },
+  });
+
+  assert.ok(uzatmalar.length >= 2, `beklenen >=2 uzatma, gelen ${uzatmalar.length}`);
+  assert.ok(uzatmalar.every((id) => id === 'j1'));
+});
+
+/*
+ * Uzatma başarısızlığı işi DÜŞÜRMEZ: kira dolarsa iş zaten kurtarılır.
+ * Burada patlamak, çalışan bir işi boşuna iptal etmek olurdu.
+ */
+test('kira uzatma hatası çalışan işi düşürmez', async () => {
+  const { repository, cagrilar } = sahteDepo([is({ id: 'j1' })]);
+  repository.extendLease = async () => {
+    throw new Error('ag hatasi');
+  };
+
+  const ozet = await runWorkerOnce({
+    repository,
+    leaseRenewMs: 5,
+    handlers: {
+      yenile: async () => {
+        await new Promise((r) => setTimeout(r, 30));
+      },
+    },
+  });
+
+  assert.equal(ozet.completed, 1);
+  assert.deepEqual(cagrilar.completed, ['j1']);
+});

@@ -33,6 +33,15 @@ export interface QueueRepository {
   claim(limit: number, kind?: string): Promise<QueueJob[]>;
   complete(jobId: string): Promise<void>;
   fail(jobId: string, error: string, permanent: boolean): Promise<void>;
+  /**
+   * Kirayı uzatır — "hâlâ hayattayım".
+   *
+   * Uzun süren bir iş sırasında worker ölürse kira dolar ve iş başka bir
+   * worker tarafından kurtarılır. Uzatma olmasaydı kira ya çok kısa
+   * (canlı işler haksız yere kurtarılır) ya çok uzun (ölü worker'ın işi
+   * saatlerce asılı kalır) olmak zorundaydı.
+   */
+  extendLease?(jobId: string, seconds: number): Promise<void>;
 }
 
 /**
@@ -59,6 +68,26 @@ export interface WorkerOptions {
   batchSize?: number;
   /** Tek bir iş için üst süre sınırı. */
   jobTimeoutMs?: number;
+  /**
+   * Aynı anda kaç iş işlenecek.
+   *
+   * Varsayılan 1 ve bu KASITLI: eşzamanlılık, aynı kaynağa paralel istek
+   * demek olabilir ve nezaket ayarlarını (requests_per_minute) anlamsız
+   * kılabilir. Artırmak bilinçli bir karar olmalı.
+   */
+  concurrency?: number;
+  /** Kira uzatma aralığı; 0 verilirse uzatma yapılmaz. */
+  leaseRenewMs?: number;
+  /** Kira uzatma süresi (saniye). */
+  leaseSeconds?: number;
+  /**
+   * Düzgün kapanma sinyali.
+   *
+   * Tetiklendiğinde YENİ iş alınmaz ama ÇALIŞAN işler bitirilir. Yarım
+   * bırakılan bir iş, kirası dolana kadar kuyrukta asılı kalırdı --
+   * gereksiz bir gecikme.
+   */
+  shouldStop?: () => boolean;
   log?: (event: string, data: Record<string, unknown>) => void;
 }
 
@@ -99,6 +128,9 @@ export async function runWorkerOnce(options: WorkerOptions): Promise<WorkerRunSu
     handlers,
     batchSize = 10,
     jobTimeoutMs = 30_000,
+    concurrency = 1,
+    leaseRenewMs = 0,
+    leaseSeconds = 300,
     log = () => {},
   } = options;
 
@@ -112,10 +144,45 @@ export async function runWorkerOnce(options: WorkerOptions): Promise<WorkerRunSu
     durationMs: 0,
   };
 
+  if (options.shouldStop?.()) {
+    log('worker_stopped_before_claim', {});
+    ozet.durationMs = Date.now() - basladi;
+    return ozet;
+  }
+
   const isler = await repository.claim(batchSize);
   ozet.claimed = isler.length;
 
-  for (const is of isler) {
+  /*
+   * EŞZAMANLILIK BİR HAVUZLA SINIRLANIR.
+   *
+   * Hepsini birden `Promise.all` ile başlatmak, `batchSize` kadar
+   * paralel istek demek olurdu -- kaynağa aynı anda 10 istek. Havuz,
+   * aynı anda en fazla `concurrency` kadar işin çalışmasını sağlıyor.
+   */
+  const sira = [...isler];
+  const calisanlar: Promise<void>[] = [];
+  const esZamanli = Math.max(1, concurrency);
+
+  for (let i = 0; i < Math.min(esZamanli, sira.length); i += 1) {
+    calisanlar.push(
+      (async () => {
+        for (;;) {
+          const is = sira.shift();
+          if (!is) return;
+          await isiIsle(is);
+        }
+      })(),
+    );
+  }
+
+  await Promise.all(calisanlar);
+
+  ozet.durationMs = Date.now() - basladi;
+  log('worker_run_completed', { ...ozet });
+  return ozet;
+
+  async function isiIsle(is: QueueJob): Promise<void> {
     const handler = handlers[is.kind];
 
     if (!handler) {
@@ -131,7 +198,25 @@ export async function runWorkerOnce(options: WorkerOptions): Promise<WorkerRunSu
       ozet.permanentlyFailed += 1;
       log('job_unhandled', { jobId: is.id, kind: is.kind });
       await repository.fail(is.id, `Bu tur icin isleyici yok: ${is.kind}`, true);
-      continue;
+      return;
+    }
+
+    /*
+     * KİRA UZATMA, İŞ ÇALIŞIRKEN ARKA PLANDA.
+     *
+     * Zamanlayıcı her hâlükârda temizlenir (`finally`): temizlenmezse
+     * Node süreci iş bittiği hâlde canlı kalır ve worker hiç çıkmaz.
+     */
+    let yenileyici: ReturnType<typeof setInterval> | undefined;
+    if (leaseRenewMs > 0 && repository.extendLease) {
+      yenileyici = setInterval(() => {
+        void repository.extendLease?.(is.id, leaseSeconds).catch(() => {
+          // Uzatma başarısızlığı işi düşürmez: kira dolarsa iş zaten
+          // kurtarılır. Burada patlamak, çalışan bir işi boşuna iptal
+          // etmek olurdu.
+          log('lease_renew_failed', { jobId: is.id });
+        });
+      }, leaseRenewMs);
     }
 
     try {
@@ -155,10 +240,8 @@ export async function runWorkerOnce(options: WorkerOptions): Promise<WorkerRunSu
       });
 
       await repository.fail(is.id, mesaj, kalici);
+    } finally {
+      if (yenileyici) clearInterval(yenileyici);
     }
   }
-
-  ozet.durationMs = Date.now() - basladi;
-  log('worker_run_completed', { ...ozet });
-  return ozet;
 }

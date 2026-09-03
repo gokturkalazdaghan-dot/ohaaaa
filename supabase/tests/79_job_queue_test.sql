@@ -167,7 +167,11 @@ select ok(
   not exists (
     select 1 from unnest(array['anon','authenticated']) as r(rol)
      where has_table_privilege(r.rol, 'public.jobs', 'SELECT')
-        or has_function_privilege(r.rol, 'public.claim_jobs(integer,text)', 'EXECUTE')
+        -- İmza kiralama parametreleriyle genişledi (20260903240000).
+        -- Test bunu yakaladı: davranış çağrıları varsayılanlarla çalışmaya
+        -- devam ediyordu, kırılan yalnızca buradaki imza dizesiydi.
+        or has_function_privilege(
+             r.rol, 'public.claim_jobs(integer,text,integer,text)', 'EXECUTE')
   ),
   '16) jobs tablosu ve alim fonksiyonu istemci rollerine kapali'
 );
