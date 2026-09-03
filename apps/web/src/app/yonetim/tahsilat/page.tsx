@@ -4,7 +4,13 @@ import { redirect } from 'next/navigation';
 import { formatMoney, type Currency } from '@ohaaaa/shared';
 
 import { getSessionUser } from '@/lib/auth';
-import { getPayouts, getRevenueSummary, type RevenueRow } from '@/data/revenue';
+import {
+  getPayouts,
+  getRevenueSummary,
+  getRevenueTargets,
+  type RevenueRow,
+  type RevenueTarget,
+} from '@/data/revenue';
 
 /**
  * TAHSİLAT — sahibin baktığı tek sayı.
@@ -35,9 +41,6 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-/** Direktifin 3. maddesindeki aylık işletme hedefi. */
-const AYLIK_HEDEF_USD = 50_000;
-
 const DURUM_ETIKET: Record<string, string> = {
   beklemede: 'Ödeme bekleniyor',
   beyan_edildi: 'Ağ beyan etti',
@@ -49,7 +52,11 @@ export default async function CashReceivedPage() {
   const user = await getSessionUser();
   if (!user || user.role !== 'admin') redirect('/');
 
-  const [ozet, odemeler] = await Promise.all([getRevenueSummary(30), getPayouts(50)]);
+  const [ozet, odemeler, hedefler] = await Promise.all([
+    getRevenueSummary(30),
+    getPayouts(50),
+    getRevenueTargets('haftalik'),
+  ]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
@@ -77,7 +84,7 @@ export default async function CashReceivedPage() {
           {ozet.map((satir) => (
             <ParaBirimiKarti key={satir.currency} satir={satir} />
           ))}
-          <HedefNotu ozet={ozet} />
+          <HedefNotu ozet={ozet} hedefler={hedefler} />
         </>
       )}
 
@@ -254,37 +261,106 @@ function Kalem({ etiket, deger, not }: { etiket: string; deger: string; not: str
  * Bu yüzden yüzde YALNIZCA USD satırı varsa ve yalnızca o satır için
  * hesaplanır; diğer para birimleri için ne eksik olduğu yazılır.
  */
-function HedefNotu({ ozet }: { ozet: RevenueRow[] }) {
-  const usd = ozet.find((satir) => satir.currency === 'USD');
-  const digerBirimler = ozet.filter((satir) => satir.currency !== 'USD').map((s) => s.currency);
+function HedefNotu({
+  ozet,
+  hedefler,
+}: {
+  ozet: RevenueRow[];
+  hedefler: RevenueTarget[] | null;
+}) {
+  /*
+   * HEDEF ARTIK KODDA DEĞİL.
+   *
+   * Önce `AYLIK_HEDEF_USD = 50_000` diye gömülüydü: hedefi değiştirmek kod
+   * değişikliği ve yeni bir dağıtım gerektiriyordu, üstelik tek bir para
+   * birimine sabitlenmişti. Birden çok pazarda çalışan bir sistemde bu
+   * anlamsız -- Türkiye hedefi ile Almanya hedefi aynı sayı olamaz.
+   *
+   * ÜÇ AYRI DURUM, ÜÇ AYRI MESAJ:
+   *   null       → tablo okunamadı (hedef "yok" DEĞİL, bilinmiyor)
+   *   boş dizi   → hedef henüz tanımlanmamış
+   *   dolu dizi  → para birimi başına ilerleme
+   */
+  if (hedefler === null) {
+    return (
+      <section className="mt-8 rounded-2xl border border-line bg-surface-2 p-6">
+        <h2 className="text-sm font-semibold">Hedef</h2>
+        <p className="mt-2 text-sm text-muted">
+          Hedef tablosu okunamadı. Bu, hedefin tanımlanmadığı anlamına gelmez —
+          ilerleme yüzdesi göstermiyoruz çünkü neye göre hesaplayacağımızı
+          bilmiyoruz.
+        </p>
+      </section>
+    );
+  }
 
-  const yuzde = usd ? Math.floor((usd.receivedCents / 100 / AYLIK_HEDEF_USD) * 100) : null;
+  if (hedefler.length === 0) {
+    return (
+      <section className="mt-8 rounded-2xl border border-line bg-surface-2 p-6">
+        <h2 className="text-sm font-semibold">Hedef</h2>
+        <p className="mt-2 text-sm leading-relaxed text-muted">
+          Haftalık hedef tanımlanmamış.{' '}
+          <code className="font-mono text-xs">revenue_targets</code> tablosuna
+          para birimi ve tutar eklendiğinde ilerleme burada görünür.
+        </p>
+      </section>
+    );
+  }
+
+  /*
+   * Hedefi olmayan para birimi için ilerleme gösterilmez ve tahsilatı
+   * başka bir para biriminin hedefine SAYILMAZ. Kur kaynağı bağlı değil;
+   * uydurma bir çevrim hedefi olduğundan yakın ya da uzak gösterirdi.
+   */
+  const hedefliBirimler = new Set(hedefler.map((h) => h.currency));
+  const hedefsizTahsilat = ozet
+    .filter((satir) => satir.receivedCents > 0 && !hedefliBirimler.has(satir.currency))
+    .map((satir) => satir.currency);
 
   return (
     <section className="mt-8 rounded-2xl border border-line bg-surface-2 p-6">
-      <h2 className="text-sm font-semibold">Aylık hedef</h2>
-      <p className="mt-2 text-sm leading-relaxed text-muted">
-        İşletme hedefi: <strong className="text-fg">{AYLIK_HEDEF_USD.toLocaleString('tr-TR')} USD</strong>{' '}
-        tahsil edilen gelir.
-      </p>
+      <h2 className="text-sm font-semibold">Haftalık hedef</h2>
 
-      {yuzde !== null ? (
-        <p className="mt-3 text-sm">
-          USD tahsilatı: <strong className="text-fg">%{yuzde}</strong> — kalan{' '}
-          <strong className="text-fg">
-            {Math.max(0, AYLIK_HEDEF_USD - usd!.receivedCents / 100).toLocaleString('tr-TR')} USD
-          </strong>
-        </p>
-      ) : (
-        <p className="mt-3 text-sm text-muted">USD cinsinden tahsilat yok.</p>
-      )}
+      <ul className="mt-3 space-y-3">
+        {hedefler.map((hedef) => {
+          const satir = ozet.find((s) => s.currency === hedef.currency);
+          const tahsilat = satir?.receivedCents ?? 0;
+          const yuzde = Math.floor((tahsilat / hedef.amountCents) * 100);
+          const kalan = Math.max(0, hedef.amountCents - tahsilat);
 
-      {digerBirimler.length > 0 && (
-        <p className="mt-3 text-xs leading-relaxed text-subtle">
-          {digerBirimler.join(', ')} cinsindeki tahsilat bu yüzdeye{' '}
-          <strong>dahil edilmedi</strong>: çevrim için kaynağı ve zaman damgası kayıtlı
-          bir kur gerekiyor ve şu an bağlı bir kur kaynağı yok. Uydurma bir çevrim, hedefi
-          olduğundan yakın ya da uzak gösterirdi.
+          return (
+            <li key={hedef.currency} className="text-sm">
+              <span className="text-muted">Hedef: </span>
+              <strong className="text-fg">
+                {formatMoney(hedef.amountCents, hedef.currency as Currency)}
+              </strong>{' '}
+              <span className="text-muted">tahsil edilen gelir.</span>
+              <br />
+              <span className="text-muted">İlerleme: </span>
+              <strong className="text-fg">%{yuzde}</strong>
+              {kalan > 0 && (
+                <>
+                  {' '}
+                  <span className="text-muted">— kalan </span>
+                  <strong className="text-fg">
+                    {formatMoney(kalan, hedef.currency as Currency)}
+                  </strong>
+                </>
+              )}
+              {hedef.note && (
+                <span className="block text-xs text-subtle">{hedef.note}</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      {hedefsizTahsilat.length > 0 && (
+        <p className="mt-4 text-xs leading-relaxed text-subtle">
+          {hedefsizTahsilat.join(', ')} cinsindeki tahsilat yukarıdaki
+          yüzdelere <strong>dahil edilmedi</strong>: o para birimleri için
+          tanımlı bir hedef yok ve çevrim yapmak için kaynağı ve zaman damgası
+          kayıtlı bir kur gerekiyor. Şu an bağlı bir kur kaynağı yok.
         </p>
       )}
     </section>

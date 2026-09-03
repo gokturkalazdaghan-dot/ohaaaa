@@ -139,3 +139,80 @@ export async function getPayouts(limit = 50): Promise<PayoutRow[] | null> {
     };
   });
 }
+
+/**
+ * Yapılandırılabilir gelir hedefi.
+ *
+ * Hedef ÖNCEDEN KODA GÖMÜLÜYDU (`AYLIK_HEDEF_USD = 50_000`). İki sorunu
+ * vardı: hedefi değiştirmek kod değişikliği ve yeni bir dağıtım
+ * gerektiriyordu, ve tek bir para birimine sabitlenmişti -- birden çok
+ * pazarda çalışan bir sistemde anlamsız.
+ *
+ * Artık `revenue_targets` tablosundan okunuyor. Hedef bir iş kararıdır;
+ * sabit değil.
+ */
+export interface RevenueTarget {
+  period: 'haftalik' | 'aylik' | 'yillik';
+  currency: string;
+  amountCents: number;
+  note: string | null;
+}
+
+/**
+ * Bir dönem için geçerli hedefleri okur.
+ *
+ * `null` döner: tablo okunamadı. Boş dizi döner: hedef TANIMLANMAMIŞ.
+ * İkisi farklı şeyler ve arayüz farklı davranmalı -- okunamayan bir tablo
+ * için "hedef yok" demek, sahibine yanlış bilgi vermektir.
+ */
+export async function getRevenueTargets(
+  period: RevenueTarget['period'] = 'haftalik',
+): Promise<RevenueTarget[] | null> {
+  let supabase: ReturnType<typeof getServiceClient>;
+
+  try {
+    supabase = getServiceClient();
+  } catch {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('revenue_targets')
+    .select('period, currency, amount_cents, note, effective_from')
+    // Bugünden sonrası için tanımlanmış bir hedef HENÜZ geçerli değil.
+    .lte('effective_from', new Date().toISOString().slice(0, 10))
+    .eq('period', period)
+    .order('effective_from', { ascending: false });
+
+  if (error) {
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        msg: 'Gelir hedefleri okunamadı',
+        error: error.message,
+      }),
+    );
+    return null;
+  }
+
+  /*
+   * Para birimi başına EN GÜNCEL hedef.
+   *
+   * Tablo geçmişi saklıyor (hedef değişince eski satır silinmiyor), bu
+   * yüzden aynı para birimi için birden çok satır olabilir. Sıralama
+   * tarihe göre azalan; her para biriminde ilk görülen kazanır.
+   */
+  const enGuncel = new Map<string, RevenueTarget>();
+  for (const row of data ?? []) {
+    const currency = String(row.currency);
+    if (enGuncel.has(currency)) continue;
+    enGuncel.set(currency, {
+      period: row.period as RevenueTarget['period'],
+      currency,
+      amountCents: Number(row.amount_cents),
+      note: row.note === null ? null : String(row.note),
+    });
+  }
+
+  return [...enGuncel.values()];
+}
