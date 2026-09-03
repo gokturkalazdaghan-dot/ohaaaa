@@ -87,13 +87,31 @@ export interface IngestSummary {
   itemsCreated: number;
   itemsUpdated: number;
   /**
+   * Delta sınıflandırmasının ham sonucu.
+   *
+   * `itemsCreated`/`itemsUpdated` veritabanına NE YAPTIĞIMIZI söyler;
+   * bunlar KAYNAĞIN NE YAPTIĞINI. İki soru farklı ve ikisi de gerekli:
+   * `created=0, updated=0` tek başına "hiçbir şey değişmedi" (sağlıklı)
+   * ile "hepsi elendi" (arıza) durumlarını aynı gösterir.
+   */
+  itemsNew: number;
+  itemsChanged: number;
+  /**
    * Parmak izi değişmediği için HİÇ YAZILMAYAN kalemler.
    *
-   * Bu sayı, delta tespitinin ne kadar iş elediğinin ölçüsü. Sağlıklı bir
-   * feed'de çoğunluk burada olmalı: 50.000 üründen üçü değiştiyse 49.997
-   * yazma, tetikleyici ve yeniden indeksleme yapılmamış demektir.
+   * Delta tespitinin ne kadar iş elediğinin ölçüsü. Sağlıklı bir feed'de
+   * çoğunluk burada olmalı: 50.000 üründen üçü değiştiyse 49.997 yazma,
+   * tetikleyici ve yeniden indeksleme yapılmamış demektir.
    */
   itemsUnchanged: number;
+  /**
+   * Kaynakta artık bulunmayan kalemler.
+   *
+   * `snapshotComplete` false iken bu HER ZAMAN 0'dır -- ve o sıfır
+   * "silinmedi" değil "bakılmadı" anlamına gelir. İkisini ayırmak için
+   * `snapshotComplete` ayrıca taşınıyor.
+   */
+  itemsDeleted: number;
   itemsSkipped: number;
   itemsFailed: number;
   durationMs: number;

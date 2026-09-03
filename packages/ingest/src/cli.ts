@@ -153,6 +153,9 @@ function dryRunRepository() {
     async getFingerprints() {
       return new Map<string, string>();
     },
+    async touchSeen() {
+      // Kuru çalışma hiçbir şey yazmaz.
+    },
     async findGroupsByGtin() {
       return new Map<string, string>();
     },

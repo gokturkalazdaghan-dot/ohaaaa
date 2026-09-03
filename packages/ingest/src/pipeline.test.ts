@@ -40,6 +40,8 @@ const CSV = [
 function fakeRepository(overrides: Partial<IngestRepository> = {}) {
   const calls = {
     markStale: 0,
+    /** touchSeen'e geçen dış kimlikler — bayatlatma regresyonunun kanıtı. */
+    touched: [] as string[],
     upserted: [] as Array<NormalizedOffer & { groupId: string | null; fingerprint: string }>,
     /** upsertOffers'a hangi pazarın geçtiği — pazar izolasyonunun kanıtı. */
     upsertMarkets: [] as Array<SourceConfig['market']>,
@@ -50,6 +52,9 @@ function fakeRepository(overrides: Partial<IngestRepository> = {}) {
   const repository: IngestRepository = {
     async getFingerprints() {
       return new Map<string, string>();
+    },
+    async touchSeen(_sourceId, externalIds) {
+      calls.touched.push(...externalIds);
     },
     async findGroupsByGtin() {
       return new Map();
@@ -504,4 +509,160 @@ test('DELTA: KIRPILMIŞ feed bayatlatma yapmaz', async () => {
   // Katalog korundu.
   assert.equal(calls.markStale, 0);
   assert.equal(summary.status, 'partial');
+});
+
+/*
+ * BU TEST BİR REGRESYONUN ANITIDIR.
+ *
+ * Delta entegrasyonu yalnızca NEW/CHANGED'i yazmaya başlayınca, DEĞİŞMEYEN
+ * tekliflerin `last_seen_at`'i eski turda kaldı. `markStale` "bu turda
+ * görülmeyeni stoksuz işaretle" dediği için, ikinci turdan itibaren
+ * DEĞİŞMEYEN HER ÜRÜN katalogdan düşecekti -- yani delta, kataloğu
+ * boşaltan bir yan etki üretiyordu.
+ *
+ * Testler yakalamamıştı çünkü sahte `markStale` yalnızca çağrı sayıyor.
+ * Bu test, görülen HER teklifin damgalandığını doğruluyor.
+ */
+test('DELTA: değişmeyen teklifler de "görüldü" damgası alır', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  const ikinci = deltaRepository(bilinen);
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ikinci.repository });
+
+  // Hiçbir şey YAZILMADI...
+  assert.equal(ikinci.calls.upserted.length, 0);
+  // ...ama her teklif GÖRÜLDÜ olarak damgalandı.
+  assert.deepEqual(ikinci.calls.touched.sort(), ['SKU-1', 'SKU-2']);
+});
+
+test('DELTA: kısmen değişen turda da TÜM görülenler damgalanır', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  const ikinci = deltaRepository(bilinen);
+  await runSource(SOURCE, {
+    fetcher: fakeFetcher(CSV.replace('11899.00', '7777.00')),
+    repository: ikinci.repository,
+  });
+
+  // Yalnızca biri yazıldı...
+  assert.equal(ikinci.calls.upserted.length, 1);
+  // ...ama ikisi de görüldü.
+  assert.equal(ikinci.calls.touched.length, 2);
+});
+
+// --- §13'ün istediği kalan entegrasyon testleri ---------------------------
+
+test('DELTA: yalnızca stok değişimi CHANGED üretir', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  // CSV'de stok sütunu yok; normalize varsayılan stok veriyor. Stok
+  // durumunu değiştirmek için alan haritasına stok ekleyip 0 veriyoruz.
+  const stokluCsv = [
+    'id,title,price,link,gtin,brand,stock',
+    'SKU-1,Sony WH-1000XM5 Kulaklık,11899.00,https://magaza.example/p/1,4548736134546,Sony,0',
+    'SKU-2,Apple iPhone 15 128GB,53499.00,https://magaza.example/p/2,0195949038204,Apple,5',
+  ].join('\n');
+
+  const ikinci = deltaRepository(bilinen);
+  const summary = await runSource(
+    { ...SOURCE, fieldMapping: { ...SOURCE.fieldMapping, stock: 'stock' } },
+    { fetcher: fakeFetcher(stokluCsv), repository: ikinci.repository },
+  );
+
+  // SKU-1 stoksuz kaldı → CHANGED.
+  assert.ok(summary.itemsChanged >= 1, `beklenen >=1 CHANGED, gelen ${summary.itemsChanged}`);
+  assert.ok(ikinci.calls.upserted.some((r) => r.externalId === 'SKU-1'));
+});
+
+/*
+ * SATIR SIRASI SONUCU DEĞİŞTİRMEZ.
+ *
+ * Bir feed aynı ürünleri farklı sırada verebilir (sunucu tarafı sıralama
+ * değişir). Sıra parmak izini etkileseydi, hiçbir şey değişmediği hâlde
+ * tüm katalog "değişmiş" görünürdü.
+ */
+test('DELTA: feed satır sırası değişse de sonuç aynı', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  const satirlar = CSV.split('\n');
+  const tersCsv = [satirlar[0]!, satirlar[2]!, satirlar[1]!].join('\n');
+
+  const ikinci = deltaRepository(bilinen);
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher(tersCsv),
+    repository: ikinci.repository,
+  });
+
+  assert.equal(ikinci.calls.upserted.length, 0);
+  assert.equal(summary.itemsUnchanged, 2);
+});
+
+/*
+ * TAM ANLIK GÖRÜNTÜDE EKSİLEN KAYIT DELETED SAYILIR.
+ *
+ * Sayı `ingest_runs`'a yazılıyor ve bir kaynağın sessizce ürün
+ * kaybetmeye başladığını gösteren tek sinyal bu.
+ */
+test('DELTA: tam görüntüde eksilen kayıt DELETED sayılır', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  // İkinci turda SKU-2 feed'de yok.
+  const satirlar = CSV.split('\n');
+  const eksikCsv = [satirlar[0]!, satirlar[1]!].join('\n');
+
+  const ikinci = deltaRepository(bilinen);
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher(eksikCsv),
+    repository: ikinci.repository,
+  });
+
+  assert.equal(summary.snapshotComplete, true);
+  assert.equal(summary.itemsDeleted, 1);
+});
+
+test('DELTA: kısmi görüntüde itemsDeleted 0 kalır ("bakılmadı")', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  // Geçiş oranını düşürerek görüntüyü eksik yapıyoruz.
+  const bozukCsv = [
+    'id,title,price,link,gtin,brand',
+    'SKU-1,Sony WH-1000XM5 Kulaklık,11899.00,https://magaza.example/p/1,4548736134546,Sony',
+    'SKU-9,Bozuk,100.00,https://baska.gecersiz/p/9,,X',
+    'SKU-8,Bozuk,100.00,https://baska.gecersiz/p/8,,X',
+    'SKU-7,Bozuk,100.00,https://baska.gecersiz/p/7,,X',
+  ].join('\n');
+
+  const ikinci = deltaRepository(bilinen);
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher(bozukCsv),
+    repository: ikinci.repository,
+  });
+
+  assert.equal(summary.snapshotComplete, false);
+  // 0 burada "silinmedi" değil "bakılmadı" demek.
+  assert.equal(summary.itemsDeleted, 0);
+});
+
+test('DELTA: özet sayaçları görülen kalemi aşmaz', async () => {
+  const { repository } = deltaRepository(new Map());
+  const summary = await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository });
+
+  const toplam = summary.itemsNew + summary.itemsChanged + summary.itemsUnchanged;
+  assert.ok(
+    toplam <= summary.itemsSeen,
+    `${toplam} > ${summary.itemsSeen} — sayaçlar iki kez artıyor olabilir`,
+  );
+  assert.equal(summary.itemsNew, 2);
 });

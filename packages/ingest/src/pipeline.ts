@@ -75,6 +75,21 @@ export interface IngestRepository {
    * yazılarak parmak izi kazanırlar.
    */
   getFingerprints(sourceId: string): Promise<Map<string, string>>;
+  /**
+   * Bu turda GÖRÜLEN tüm teklifleri damgalar: `last_seen_at` ve tazelik
+   * damgaları (`price_checked_at`, `stock_checked_at`, `offer_checked_at`).
+   *
+   * DEĞİŞMEYEN TEKLİFLER DE DAMGALANIR ve bu zorunlu.
+   *
+   * Delta yalnızca NEW/CHANGED'i yazdığı için, UNCHANGED tekliflerin
+   * `last_seen_at`'i eski turda kalır. `markStale` "bu turda görülmeyeni
+   * stoksuz işaretle" dediğinden, damgalanmasalardı DEĞİŞMEYEN HER ÜRÜN
+   * katalogdan düşerdi -- delta'nın yan etkisi olarak.
+   *
+   * Kavramsal olarak da doğru: bir teklifi GÖRDÜK ve DOĞRULADIK, ama
+   * DEĞİŞMEDİ. "Kontrol ettik" ile "değişti" ayrı olaylar.
+   */
+  touchSeen(sourceId: string, externalIds: string[], checkedAt: Date): Promise<void>;
   /** Bu çalışmada görülmeyen teklifleri stoksuz işaretler. */
   markStale(sourceId: string, runStartedAt: Date): Promise<number>;
   /** Çalışma kaydını açar/kapatır. */
@@ -113,7 +128,10 @@ export async function runSource(
     itemsSeen: 0,
     itemsCreated: 0,
     itemsUpdated: 0,
+    itemsNew: 0,
+    itemsChanged: 0,
     itemsUnchanged: 0,
+    itemsDeleted: 0,
     itemsSkipped: 0,
     itemsFailed: 0,
     durationMs: 0,
@@ -241,7 +259,17 @@ export async function runSource(
       snapshotComplete: summary.snapshotComplete,
     });
 
+    /*
+     * DÖRT SAYAÇ DA KAYDEDİLİR.
+     *
+     * Önce yalnızca UNCHANGED taşınıyordu; NEW/CHANGED/DELETED hesaplanıp
+     * atılıyordu. DELETED özellikle önemli: bir kaynağın sessizce ürün
+     * kaybetmeye başladığını gösteren tek sinyal o.
+     */
+    summary.itemsNew = delta.counts.NEW;
+    summary.itemsChanged = delta.counts.CHANGED;
     summary.itemsUnchanged = delta.counts.UNCHANGED;
+    summary.itemsDeleted = delta.counts.DELETED;
 
     const yazilacakKimlikler = new Set(
       needsWrite(delta).map((e) => e.externalId),
@@ -251,7 +279,21 @@ export async function runSource(
       .filter((k) => yazilacakKimlikler.has(k.offer.externalId))
       .map((k) => ({ ...k.offer, fingerprint: k.fingerprint }));
 
-    // --- 6) Yaz (yalnızca değişenler) ---------------------------------------
+    // --- 6) GÖRÜLEN HER TEKLİFİ DAMGALA -------------------------------------
+    /*
+     * Yazmadan ÖNCE ve delta sınıfından BAĞIMSIZ.
+     *
+     * Bu çağrı olmadan delta bir regresyon üretiyordu: değişmeyen
+     * teklifler yazılmadığı için `last_seen_at`'leri eskide kalıyor,
+     * ardından `markStale` hepsini stoksuz işaretliyordu.
+     */
+    await deps.repository.touchSeen(
+      source.id,
+      izli.map((k) => k.offer.externalId),
+      startedAt,
+    );
+
+    // --- 7) Yaz (yalnızca değişenler) ---------------------------------------
     if (yazilacaklar.length > 0) {
       const { created, updated } = await deps.repository.upsertOffers(
         source.merchantId,
@@ -263,7 +305,7 @@ export async function runSource(
       summary.itemsUpdated = updated;
     }
 
-    // --- 7) Bayatları işaretle — YALNIZCA TAM ANLIK GÖRÜNTÜDE ---------------
+    // --- 8) Bayatları işaretle — YALNIZCA TAM ANLIK GÖRÜNTÜDE ---------------
     /*
      * `markStale` "bu turda görülmeyeni stoksuz işaretle" demek. Eksik
      * bir anlık görüntüde bu, ağ hatası yüzünden kataloğun bir kısmını
