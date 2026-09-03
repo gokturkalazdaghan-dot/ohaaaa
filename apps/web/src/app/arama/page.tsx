@@ -2,7 +2,10 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 
-import { formatMoney } from '@ohaaaa/shared';
+import { formatMoney, intentToSearchParams, looksLikeNaturalLanguage } from '@ohaaaa/shared';
+
+import { logAgentDecision, recordAgentOutcome } from '@/lib/agentLog';
+import { MODEL, PROMPT_VERSION, parseSearchIntent } from '@/lib/searchIntent';
 
 import { DataUnavailable } from '@/components/DataUnavailable';
 import { Pagination } from '@/components/Pagination';
@@ -40,6 +43,10 @@ type SearchPageProps = {
     marka?: string;
     /** 'bedava' ise yalnızca ücretsiz kargolu teklifler. */
     kargo?: string;
+    /** '1' ise adres doğal dil çözümünden geldi; tekrar modele sorulmaz. */
+    ai?: string;
+    /** Doğal dil kararının kimliği; sonucu ölçmek için taşınır. */
+    karar?: string;
   }>;
 };
 
@@ -98,6 +105,74 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
    * Tam eşleşme bulunursa doğrudan ürün sayfasına gidilir — kullanıcı
    * telefonu kutuya tutup tek sonucu gördüğünde bir adım daha atmamalı.
    */
+  /*
+   * DOĞAL DİL YOLU.
+   *
+   * "5 bin liraya kadar oyuncu kulaklığı bul" gibi bir cümle geldiğinde
+   * filtreler çıkarılır ve NORMAL arama adresine yönlendirilir. Ayrı bir
+   * sonuç yolu YAZILMADI: o adres zaten paylaşılabilir, geri tuşuyla
+   * uyumlu, önbelleklenebilir ve mevcut filtre arayüzüyle çalışıyor. İkinci
+   * bir yol yazmak, aynı özelliği iki kez uygulamak ve er geç ikisinin
+   * farklı sonuç vermesi demekti.
+   *
+   * `ai=1` işareti döngüyü keser: yönlendirilen adres tekrar modele
+   * sorulmaz.
+   */
+  const aiDenendi = params.ai === '1';
+  if (q && !aiDenendi && !params.barkod && looksLikeNaturalLanguage(q)) {
+    const sonuc = await parseSearchIntent(q).catch(() => null);
+
+    if (sonuc?.ok && sonuc.intent.understood && sonuc.intent.query) {
+      const hedef = intentToSearchParams(sonuc.intent);
+      // Kullanıcının kendi yazdığı kategori/sayfa gibi parametreler korunur:
+      // AI yalnızca cümleyi çözer, kullanıcının seçimini ezmez.
+      if (kategori) hedef.set('kategori', kategori);
+
+      /*
+       * KARAR KAYDEDİLİR — ölçüm burada başlar.
+       *
+       * Karar anında yalnızca BEKLENEN sonuç yazılabilir ("bu filtreyle
+       * sonuç çıkmalı"). Gerçekte ne olduğu bir sonraki sayfa yüklemesinde,
+       * arama gerçekten çalıştıktan sonra işlenir; kimliği adreste taşınır.
+       *
+       * `await` ediliyor: sunucusuz bir ortamda yanıt döndükten sonra süreç
+       * sonlandırılabilir ve bekletilmeyen yazma hiç gitmeyebilir.
+       */
+      const kararId = await logAgentDecision({
+        agent: 'search_intent',
+        model: MODEL,
+        promptVersion: PROMPT_VERSION,
+        input: q,
+        decision: {
+          query: sonuc.intent.query,
+          minPriceTl: sonuc.intent.minPriceTl,
+          maxPriceTl: sonuc.intent.maxPriceTl,
+          brands: sonuc.intent.brands,
+          freeShipping: sonuc.intent.freeShipping,
+          sort: sonuc.intent.sort,
+        },
+        /*
+         * Güven UYDURULMAZ. Model bize sayısal bir güven vermiyor; yalnızca
+         * "anladım / anlamadım" diyor. Buraya uydurma bir 0.87 yazmak, madde
+         * 55.4'ün yasakladığı sahte güvenin ta kendisi olurdu. Ölçüm
+         * biriktikçe güven, geçmiş isabetten TÜRETİLEBİLİR -- o zaman
+         * gerçek olur.
+         */
+        confidence: null,
+        evidence: { kaynak: 'yapisal_cikti', ozet: sonuc.intent.summary },
+        expectedOutcome: { sonuc_bekleniyor: true },
+      });
+
+      if (kararId) hedef.set('karar', kararId);
+      redirect(`/arama?${hedef.toString()}`);
+    }
+    /*
+     * Model anlamadıysa ya da erişilemediyse HİÇBİR ŞEY OLMAZ: kullanıcının
+     * yazdığı metin olduğu gibi aranır. Uydurulmuş bir filtre uygulamak,
+     * anlamadığını gizlemek olurdu.
+     */
+  }
+
   const gtin = readGtin(params.barkod);
   let barcodeMiss: string | null = null;
 
@@ -182,6 +257,24 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       }),
     );
     return <DataUnavailable title="Arama şu an çalışmıyor" />;
+  }
+
+  /*
+   * ÖLÇÜM: karar gerçekte ne üretti?
+   *
+   * Beklenen "bu filtreyle sonuç çıkmalı" idi. Gerçekleşen, aramanın
+   * döndürdüğü sayıdır. İkisini karşılaştırmak öğrenmenin ilk adımı --
+   * ve bu satır olmadan "ajan öğreniyor" cümlesi ölçüye dayanmazdı.
+   *
+   * Yalnızca İLK sayfada ölçülür: ikinci sayfaya geçmek yeni bir karar
+   * değil, aynı kararın devamı. Her sayfada yazmak aynı kararı defalarca
+   * ölçülmüş gösterirdi.
+   */
+  if (params.karar && page === 1) {
+    await recordAgentOutcome(params.karar, {
+      success: results.totalCount > 0,
+      sonuc_sayisi: results.totalCount,
+    });
   }
 
   const totalPages = Math.max(1, Math.ceil(results.totalCount / PAGE_SIZE));

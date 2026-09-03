@@ -7,3 +7,4 @@ export * from './feedFields.js';
 export * from './zodTurkish.js';
 export * from './cart.js';
 export * from './priceHistory.js';
+export * from './searchIntent.js';
