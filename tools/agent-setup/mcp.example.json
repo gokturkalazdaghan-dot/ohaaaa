@@ -1,0 +1,31 @@
+{
+  "_comment": "Örnek MCP sunucu yapılandırması. `claude mcp add` bunları sizin için yazar; bu dosya elle kurulum veya .mcp.json'a kopyalama içindir. GERÇEK anahtarları buraya yazmayın — ortam değişkeni kullanın.",
+  "mcpServers": {
+    "context7-remote": {
+      "_note": "Yüksek limit için API anahtarlı remote sunucu.",
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${CONTEXT7_API_KEY}"
+      }
+    },
+    "context7-local": {
+      "_note": "Anahtarsız yerel alternatif. Yalnızca birini kullanın (remote VEYA local).",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
+    },
+    "supabase": {
+      "_note": "Supabase MCP; kişisel erişim token'ı gerekir. Bu Claude Code oturumu zaten yönetilen bir Supabase MCP'sine bağlıysa buna gerek yoktur.",
+      "command": "npx",
+      "args": ["-y", "@supabase/mcp-server-supabase@latest"],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}"
+      }
+    },
+    "codebase-memory": {
+      "_note": "Kod tabanı bilgi grafiği; yerel tek binary, anahtar/DB gerekmez. Kurucu bunu otomatik yazar; binary PATH'te (örn. ~/.local/bin) olmalı.",
+      "command": "codebase-memory-mcp",
+      "args": []
+    }
+  }
+}
