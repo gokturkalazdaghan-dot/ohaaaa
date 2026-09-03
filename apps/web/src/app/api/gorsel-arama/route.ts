@@ -11,6 +11,7 @@ import {
   describeProductImage,
   isVisualSearchConfigured,
 } from '@/lib/visualSearch';
+import { tuketAiButcesi } from '@/lib/aiBudget';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +23,10 @@ export const dynamic = 'force-dynamic';
  */
 const REASON_MESSAGE: Record<string, string> = {
   not_configured: 'Görselle arama şu an kapalı. Ürün adını yazarak arayabilirsiniz.',
+  rate_limited:
+    'Görselle arama için saatlik hakkınız doldu. Bir süre sonra tekrar deneyin ya da ürün adını yazın.',
+  budget_exhausted:
+    'Görselle arama bugünlük kapandı. Yarın tekrar açılacak; bu arada ürün adını yazarak arayabilirsiniz.',
   unsupported_type: 'Bu dosya türü desteklenmiyor. JPEG, PNG veya WebP gönderin.',
   too_large: 'Fotoğraf çok büyük. 5 MB altında bir görsel gönderin.',
   no_match: 'Fotoğrafta tanıyabildiğimiz bir ürün yok. Ürün adını yazmayı deneyin.',
@@ -30,6 +35,8 @@ const REASON_MESSAGE: Record<string, string> = {
 
 const REASON_STATUS: Record<string, number> = {
   not_configured: 503,
+  rate_limited: 429,
+  budget_exhausted: 503,
   unsupported_type: 415,
   too_large: 413,
   no_match: 404,
@@ -42,6 +49,30 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json(
       { error: { code: 'not_configured', message: REASON_MESSAGE.not_configured } },
       { status: 503 },
+    );
+  }
+
+  /*
+   * BÜTÇE KAPISI — dosya okunmadan ÖNCE.
+   *
+   * Bu uç nokta kimliksizdir ve her istek bir görme modeli çağrısına
+   * dönüşür; tavan olmadan tek bir betik bütün model bütçesini tüketebilir.
+   * Kontrol formData'dan önce yapılıyor: reddedilecek bir isteğin 5 MB'ını
+   * belleğe almanın anlamı yok.
+   */
+  const butce = await tuketAiButcesi('gorsel', new Headers(request.headers));
+
+  if (!butce.izin) {
+    const kod =
+      butce.sebep === 'kisi_basi'
+        ? 'rate_limited'
+        : butce.sebep === 'kuresel'
+          ? 'budget_exhausted'
+          : 'failed';
+
+    return Response.json(
+      { error: { code: kod, message: REASON_MESSAGE[kod] ?? REASON_MESSAGE.failed } },
+      { status: REASON_STATUS[kod] ?? 502 },
     );
   }
 

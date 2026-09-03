@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 
 import { formatMoney, intentToSearchParams, looksLikeNaturalLanguage } from '@ohaaaa/shared';
 
+import { tuketAiButcesi } from '@/lib/aiBudget';
 import { logAgentDecision, recordAgentOutcome } from '@/lib/agentLog';
 import { MODEL, PROMPT_VERSION, parseSearchIntent } from '@/lib/searchIntent';
 
@@ -120,7 +121,18 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
    */
   const aiDenendi = params.ai === '1';
   if (q && !aiDenendi && !params.barkod && looksLikeNaturalLanguage(q)) {
-    const sonuc = await parseSearchIntent(q).catch(() => null);
+    /*
+     * BÜTÇE KAPISI — model çağrısından ÖNCE.
+     *
+     * Bu sayfa kimlik doğrulaması istemiyor ve adres çubuğundan tetiklenir;
+     * yani tavan olmadan her ziyaretçi (ve her bot) sınırsız model çağrısı
+     * yaptırabilirdi. Tavan aşıldığında arama BOZULMAZ: doğal dil çözümü
+     * atlanır ve kullanıcının yazdığı metin olduğu gibi aranır.
+     */
+    const { headers } = await import('next/headers');
+    const butce = await tuketAiButcesi('arama', new Headers(await headers()));
+
+    const sonuc = butce.izin ? await parseSearchIntent(q).catch(() => null) : null;
 
     if (sonuc?.ok && sonuc.intent.understood && sonuc.intent.query) {
       const hedef = intentToSearchParams(sonuc.intent);

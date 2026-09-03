@@ -50,6 +50,13 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Marka yazimi gozle yakalanmaz: uc a ile dort a arasindaki fark tek
+      # harf ve okurken beyin dogrusunu gorur. Bir kez yanlis yazilip
+      # kopyalandiginda sessizce yayilir -- e-postaya, bildirime, meta
+      # etiketine. Sayan makine olmali. Dogrusu: O + dort a.
+      - name: Marka yazimi
+        run: npm run verify:brand
+
       - name: Birim testleri
         run: npm test
 

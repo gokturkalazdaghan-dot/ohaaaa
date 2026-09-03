@@ -29,7 +29,27 @@ export const metadata: Metadata = {
 
 export default async function HomePage() {
   const [deals, categories, vendors, trendingPage] = await Promise.all([
-    getFlashDeals(3),
+    /*
+     * Kampanya şeridi vitrinin SÜSÜ, gövdesi değil.
+     *
+     * Veri katmanı artık kesintide demo veriye düşmüyor (uydurma indirim
+     * göstermemek için) ve hata fırlatıyor. O hatanın buradan yukarı
+     * çıkması ana sayfanın tamamını 500'e düşürürdü -- kampanya şeridi
+     * yüzünden ürün listesini de kaybetmek yanlış takas.
+     *
+     * Bu yüzden hata BURADA yutulur ve şerit hiç çizilmez: ne uydurma
+     * fiyat, ne çöken ana sayfa.
+     */
+    getFlashDeals(3).catch((error: unknown) => {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          msg: 'Kampanya şeridi çizilemedi; ana sayfa şeritsiz sunuluyor',
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      return [];
+    }),
     getCategories(),
     getVendors(),
     searchProducts({ sort: 'offers', limit: 8 }),
