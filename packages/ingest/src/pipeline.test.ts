@@ -42,6 +42,13 @@ function fakeRepository(overrides: Partial<IngestRepository> = {}) {
     markStale: 0,
     /** touchSeen'e geçen dış kimlikler — bayatlatma regresyonunun kanıtı. */
     touched: [] as string[],
+    /** Kaynağa yazılan yenileme planları. */
+    refreshPlans: [] as Array<{
+      sourceId: string;
+      nextRefreshAt: Date;
+      freshnessClass: string;
+      reasons: readonly string[];
+    }>,
     upserted: [] as Array<NormalizedOffer & { groupId: string | null; fingerprint: string }>,
     /** upsertOffers'a hangi pazarın geçtiği — pazar izolasyonunun kanıtı. */
     upsertMarkets: [] as Array<SourceConfig['market']>,
@@ -55,6 +62,9 @@ function fakeRepository(overrides: Partial<IngestRepository> = {}) {
     },
     async touchSeen(_sourceId, externalIds) {
       calls.touched.push(...externalIds);
+    },
+    async saveRefreshPlan(sourceId, plan) {
+      calls.refreshPlans.push({ sourceId, ...plan });
     },
     async findGroupsByGtin() {
       return new Map();
@@ -665,4 +675,194 @@ test('DELTA: özet sayaçları görülen kalemi aşmaz', async () => {
     `${toplam} > ${summary.itemsSeen} — sayaçlar iki kez artıyor olabilir`,
   );
   assert.equal(summary.itemsNew, 2);
+});
+
+/* =========================================================================
+ * UYARLANABİLİR YOKLAMA — GERÇEK HAT ENTEGRASYONU (§46)
+ * -------------------------------------------------------------------------
+ * Testlerin hiçbiri `computeRefreshPlan`'ı DOĞRUDAN çağırmıyor. Hepsi
+ * `runSource` üzerinden geçiyor ve kaynağa YAZILAN planı denetliyor --
+ * yani planın gerçek yürütme yolunda üretildiğini kanıtlıyorlar.
+ * ========================================================================= */
+
+test('YOKLAMA: her alım turu kaynağa bir plan yazar', async () => {
+  const { repository, calls } = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository });
+
+  assert.equal(calls.refreshPlans.length, 1);
+  const plan = calls.refreshPlans[0]!;
+  assert.equal(plan.sourceId, SOURCE.id);
+  assert.ok(plan.nextRefreshAt.getTime() > Date.now(), 'plan GELECEĞE bakmalı');
+  assert.ok(plan.reasons.length > 0, 'karar sebebini taşımalı');
+});
+
+/*
+ * YÜKSEK DEĞİŞİM → DAHA KISA ARALIK.
+ *
+ * İlk turda her kalem NEW (değişim oranı 1,0); ikinci turda hiçbiri
+ * değişmiyor (oran 0). Plan bunu görmeli.
+ */
+test('YOKLAMA: yüksek değişim, değişimsiz turdan DAHA KISA aralık üretir', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  const ikinci = deltaRepository(bilinen);
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ikinci.repository });
+
+  const degisimli = ilk.calls.refreshPlans[0]!;
+  const degisimsiz = ikinci.calls.refreshPlans[0]!;
+
+  assert.ok(
+    degisimli.nextRefreshAt.getTime() < degisimsiz.nextRefreshAt.getTime(),
+    `değişimli tur (${degisimli.freshnessClass}) değişimsizden ` +
+      `(${degisimsiz.freshnessClass}) daha erken yoklanmalı`,
+  );
+});
+
+test('YOKLAMA: hiç değişim olmayan tur en soğuk sınıfa düşer', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  const ikinci = deltaRepository(bilinen);
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ikinci.repository });
+
+  assert.equal(ikinci.calls.refreshPlans[0]!.freshnessClass, 'COLD');
+});
+
+/*
+ * TRAFİK VERİSİ OLMADAN VERY_HOT/HOT ÜRETİLMEZ.
+ *
+ * Bir feed'in her turda değişmesi tek başına onu 2 dakikada bir
+ * yoklamayı haklı çıkarmaz -- kimsenin bakmadığı bir ürünün bayat olması
+ * kimseyi yanıltmaz. Bu bir eksiklik değil, kasıtlı bir tavan; test onu
+ * kilitliyor ki biri "daha agresif olsun" diye trafik sinyalini
+ * uydurmasın.
+ */
+test('YOKLAMA: trafik verisi yokken en fazla ACTIVE olunur', async () => {
+  const { repository, calls } = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository });
+
+  const sinif = calls.refreshPlans[0]!.freshnessClass;
+  assert.ok(
+    sinif !== 'VERY_HOT' && sinif !== 'HOT',
+    `trafik ölçülmeden ${sinif} üretilmemeli`,
+  );
+});
+
+/*
+ * BAŞARISIZ ALIM DA PLAN ÜRETİR.
+ *
+ * Yalnızca başarı yolunda yazılsaydı, çöken bir kaynağın
+ * `next_refresh_at`'i eski değerinde donar ve zamanlayıcı onu ya hiç
+ * denemez ya da eski plana göre döverdi.
+ */
+test('YOKLAMA: alım başarısız olsa da plan yazılır ve geri çekilir', async () => {
+  const { repository, calls } = deltaRepository(new Map());
+
+  const summary = await runSource(SOURCE, {
+    fetcher: {
+      get: async () => {
+        throw new Error('ag hatasi');
+      },
+    },
+    repository,
+  });
+
+  assert.equal(summary.status, 'failed');
+  assert.equal(calls.refreshPlans.length, 1);
+
+  const plan = calls.refreshPlans[0]!;
+  assert.equal(plan.freshnessClass, 'COLD');
+  assert.ok(plan.reasons.some((r) => r.includes('basarisiz')));
+});
+
+/*
+ * KISMİ GÖRÜNTÜ AGRESİFLEŞTİRMEZ VE SEYRELTMEZ.
+ *
+ * Kırpılmış ya da büyük ölçüde elenen bir turda değişim oranı
+ * güvenilmez: eksik kalemler "değişmedi" gibi görünür. Sağlıklı saymak,
+ * eksik bir ölçüme dayanarak yoklamayı seyrekleştirmek -- yani arızayı
+ * ödüllendirmek olurdu.
+ */
+test('YOKLAMA: kısmi anlık görüntü geri çekilme uygular', async () => {
+  const bozukCsv = [
+    'id,title,price,link,gtin,brand',
+    'SKU-1,Gecerli,100.00,https://magaza.example/p/1,4548736134546,Sony',
+    'SKU-2,Bozuk,100.00,https://baska.gecersiz/p/2,,X',
+    'SKU-3,Bozuk,100.00,https://baska.gecersiz/p/3,,X',
+    'SKU-4,Bozuk,100.00,https://baska.gecersiz/p/4,,X',
+  ].join('\n');
+
+  const { repository, calls } = deltaRepository(new Map());
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher(bozukCsv),
+    repository,
+  });
+
+  assert.equal(summary.snapshotComplete, false);
+  const plan = calls.refreshPlans[0]!;
+  // Sağlıklı sayılmadığı için geri çekilme gerekçesi görünmeli.
+  assert.ok(plan.reasons.some((r) => r.includes('yavas')), plan.reasons.join(','));
+});
+
+/*
+ * PAZAR İZOLASYONU: bir kaynağın alımı YALNIZCA kendi kaynağına yazar.
+ *
+ * `saveRefreshPlan` kaynak kimliğiyle çağrılıyor; başka pazardaki bir
+ * kaynağın planına dokunması mimari olarak mümkün değil ve test bunu
+ * kaynak kimliği üzerinden doğruluyor.
+ */
+test('YOKLAMA: TR alımı yalnızca TR kaynağının planını yazar', async () => {
+  const tr = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: tr.repository });
+
+  const de = deltaRepository(new Map());
+  await runSource(
+    { ...SOURCE, id: 'src-de', slug: 'de-feed', market: 'DE', currency: 'EUR' },
+    { fetcher: fakeFetcher(CSV), repository: de.repository },
+  );
+
+  assert.deepEqual(tr.calls.refreshPlans.map((p) => p.sourceId), ['src-1']);
+  assert.deepEqual(de.calls.refreshPlans.map((p) => p.sourceId), ['src-de']);
+});
+
+/*
+ * DETERMİNİZM: aynı girdi aynı sınıfı üretir.
+ *
+ * Rastgelelik olsaydı aynı kaynak iki turda farklı sıklığa düşer ve
+ * "neden şimdi yoklandı" sorusu cevaplanamazdı.
+ */
+test('YOKLAMA: aynı girdi aynı sınıfı üretir', async () => {
+  const a = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: a.repository });
+
+  const b = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: b.repository });
+
+  assert.equal(
+    a.calls.refreshPlans[0]!.freshnessClass,
+    b.calls.refreshPlans[0]!.freshnessClass,
+  );
+});
+
+/*
+ * PLAN YAZILAMAZSA ALIM BAŞARISIZ SAYILMAZ.
+ *
+ * Veri zaten yazıldı; turu başarısız ilan etmek daha büyük zarar olurdu.
+ * Sorun görünür kalıyor: örnek hatalara ekleniyor.
+ */
+test('YOKLAMA: plan yazımı çökerse alım yine başarılı sayılır', async () => {
+  const { repository } = deltaRepository(new Map());
+  repository.saveRefreshPlan = async () => {
+    throw new Error('plan yazilamadi');
+  };
+
+  const summary = await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository });
+
+  assert.equal(summary.status, 'success');
+  assert.ok(
+    summary.sampleErrors.some((e) => e.reason.includes('Yenileme planı yazılamadı')),
+  );
 });

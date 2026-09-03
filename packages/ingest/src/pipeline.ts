@@ -39,6 +39,7 @@ import { parseCsv } from './adapters/csv.js';
 import { parseJson } from './adapters/json.js';
 import { parseXml } from './adapters/xml.js';
 import { normalizeRecords } from './normalize.js';
+import { planNextRefresh } from './refreshSignals.js';
 
 /**
  * Veritabanı işlemleri. Arayüz olarak tanımlıdır: hattın tamamı gerçek bir
@@ -92,6 +93,20 @@ export interface IngestRepository {
   touchSeen(sourceId: string, externalIds: string[], checkedAt: Date): Promise<void>;
   /** Bu çalışmada görülmeyen teklifleri stoksuz işaretler. */
   markStale(sourceId: string, runStartedAt: Date): Promise<number>;
+  /**
+   * Bir sonraki yoklama planını kaynağa yazar.
+   *
+   * Plan yalnızca bellekte kalsaydı zamanlayıcı onu göremezdi;
+   * uyarlanabilir yoklamanın tek anlamlı çıktısı bu kalıcı yazma.
+   */
+  saveRefreshPlan(
+    sourceId: string,
+    plan: {
+      nextRefreshAt: Date;
+      freshnessClass: string;
+      reasons: readonly string[];
+    },
+  ): Promise<void>;
   /** Çalışma kaydını açar/kapatır. */
   startRun(sourceId: string): Promise<string>;
   finishRun(runId: string, summary: IngestSummary): Promise<void>;
@@ -339,6 +354,42 @@ export async function runSource(
   } finally {
     summary.durationMs = now().getTime() - startedMs;
     summary.sampleErrors = summary.sampleErrors.slice(0, MAX_SAMPLE_ERRORS);
+
+    /*
+     * YENİLEME PLANI — BAŞARIDA DA BAŞARISIZLIKTA DA.
+     *
+     * `finally` içinde ve bu kasıtlı: alım başarısız olduğunda da bir
+     * sonraki deneme zamanı belirlenmeli. Yalnızca başarı yolunda
+     * yazılsaydı, çöken bir kaynağın `next_refresh_at`'i eski değerinde
+     * donar ve zamanlayıcı onu ya hiç denemez ya da eski plana göre
+     * döverdi.
+     *
+     * Hesap özetin TAMAMLANMIŞ hâlini kullanıyor: durum, delta sayaçları
+     * ve anlık görüntü tamlığı bu noktada belli.
+     */
+    try {
+      const refresh = planNextRefresh(summary, now());
+      await deps.repository.saveRefreshPlan(source.id, {
+        nextRefreshAt: refresh.nextRefreshAt,
+        freshnessClass: refresh.plan.freshnessClass,
+        reasons: refresh.plan.reasons,
+      });
+    } catch (error) {
+      /*
+       * PLAN YAZILAMAZSA ALIM BAŞARISIZ SAYILMAZ.
+       *
+       * Veri zaten yazıldı; turu başarısız ilan etmek daha büyük zarar
+       * olurdu. Sorun görünür kalıyor: örnek hatalara ekleniyor ve
+       * çalışma kaydında duruyor.
+       */
+      summary.sampleErrors.push({
+        externalId: null,
+        reason:
+          'Yenileme planı yazılamadı: ' +
+          (error instanceof Error ? error.message : String(error)),
+      });
+    }
+
     await deps.repository.finishRun(runId, summary);
   }
 

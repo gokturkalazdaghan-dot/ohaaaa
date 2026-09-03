@@ -258,6 +258,21 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
       return data?.length ?? 0;
     },
 
+    async saveRefreshPlan(sourceId, plan) {
+      const { error } = await supabase
+        .from('sources')
+        .update({
+          next_refresh_at: plan.nextRefreshAt.toISOString(),
+          refresh_class: plan.freshnessClass,
+          // Gerekçeler saklanıyor: sebebini taşımayan bir zamanlama
+          // kararı hata ayıklanamaz.
+          refresh_reasons: plan.reasons,
+          refresh_planned_at: new Date().toISOString(),
+        })
+        .eq('id', sourceId);
+
+      if (error) throw new Error(`Yenileme planı yazılamadı: ${error.message}`);
+    },
     async startRun(sourceId) {
       const { data, error } = await supabase
         .from('ingest_runs')

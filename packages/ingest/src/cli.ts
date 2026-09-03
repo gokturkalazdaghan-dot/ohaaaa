@@ -156,6 +156,9 @@ function dryRunRepository() {
     async touchSeen() {
       // Kuru çalışma hiçbir şey yazmaz.
     },
+    async saveRefreshPlan() {
+      // Kuru çalışma zamanlamayı da değiştirmez.
+    },
     async findGroupsByGtin() {
       return new Map<string, string>();
     },
