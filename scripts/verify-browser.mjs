@@ -797,6 +797,24 @@ check(
   `${onizleme?.status()} ${onizleme?.headers()['content-type']}`,
 );
 
+// --- Skor paneli: sayı varsa dayanağı da var ------------------------------
+/*
+ * Demo katalogunda ölçüm yok, bu yüzden panel çizilmiyor -- ve bu doğru
+ * davranış. Kontrol, panelin VARLIĞINI değil, var olduğunda eksiksiz
+ * olduğunu sınıyor: bir skor sayısı gösterilip ölçüt dökümü gösterilmiyorsa,
+ * sayı olduğundan güçlü görünür.
+ */
+await page.goto(`${BASE}/urun/sony-wh-1000xm5`, { waitUntil: 'networkidle' });
+
+const skorPaneli = page.getByRole('region', { name: 'Ohaaaa Skoru' });
+const skorVar = (await skorPaneli.count()) > 0;
+check(
+  !skorVar || (await skorPaneli.getByRole('listitem').count()) > 0,
+  skorVar
+    ? 'Skor paneli ölçüt dökümünü gösteriyor'
+    : 'Ölçüm yokken skor paneli çizilmiyor (uydurulmuyor)',
+);
+
 await browser.close();
 
 const failed = results.filter((r) => !r.ok);

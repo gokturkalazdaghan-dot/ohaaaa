@@ -368,3 +368,48 @@ export interface PriceDrop {
   observedDays: number;
   offerCount: number;
 }
+
+/** Skor bileşeninin kaynağı: bizim ölçümümüz mü, mağazanın beyanı mı. */
+export type ScoreSource = 'olcum' | 'beyan';
+
+/**
+ * Ohaaaa skorunun tek bir bileşeni.
+ *
+ * `available` false ise `points` YOKTUR — sıfır değil, yok. Ölçemediğimiz
+ * bir ölçüte sıfır vermek "kötü" demek olurdu; `reason` neden ölçemediğimizi
+ * söyler ve arayüz onu yazmak zorundadır.
+ */
+export type ScoreComponent =
+  | {
+      key: string;
+      available: true;
+      source: ScoreSource;
+      weight: number;
+      points: number;
+      detail: Record<string, unknown>;
+    }
+  | {
+      key: string;
+      available: false;
+      source: ScoreSource;
+      weight: number;
+      reason: string;
+      detail: Record<string, unknown>;
+    };
+
+/**
+ * Bir teklifin Ohaaaa skoru.
+ *
+ * `score` null olabilir: ölçülebilen ağırlık eşiğin altındaysa sayı
+ * üretilmez. `measuredWeight` / `totalWeight` oranı, sayının ne kadarlık bir
+ * ölçüme dayandığını gösterir ve arayüzde sayının yanında durmalıdır.
+ */
+export interface OhaaaaScore {
+  score: number | null;
+  maxScore: number;
+  measuredWeight: number;
+  totalWeight: number;
+  confidence: 'yuksek' | 'orta' | 'dusuk' | 'yetersiz';
+  windowDays: number;
+  components: ScoreComponent[];
+}

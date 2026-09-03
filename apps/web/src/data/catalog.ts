@@ -17,9 +17,11 @@ import type {
   Category,
   FlashDeal,
   Offer,
+  OhaaaaScore,
   PriceDrop,
   PricePoint,
   ProductGroupWithOffers,
+  ScoreComponent,
   SearchResult,
   Vendor,
 } from '@ohaaaa/shared';
@@ -1551,4 +1553,56 @@ export async function getPriceDrops(options?: {
     observedDays: Number(row.observed_days),
     offerCount: Number(row.offer_count),
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Ohaaaa skoru
+// ---------------------------------------------------------------------------
+/**
+ * Bir teklifin Ohaaaa skoru.
+ *
+ * Hesabın tamamı veritabanındaki `ohaaaa_score()` fonksiyonunda. Burada
+ * ikinci bir formül YOK: iki kopya zamanla ayrışır ve aynı ürün için iki
+ * farklı sayı üretmeye başlar.
+ *
+ * DEMO MODUNDA NULL DÖNER. Demo katalogunda fiyat geçmişi yok; skorun en ağır
+ * bileşeni ölçülemez. Eksik veriyle bir sayı uydurmaktansa arayüz "bu teklif
+ * için skor üretemedik" der.
+ */
+export async function getOhaaaaScore(productId: string): Promise<OhaaaaScore | null> {
+  const supabase = createAnonClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase.rpc('ohaaaa_score', {
+    p_product_id: productId,
+    p_days: 90,
+  });
+
+  if (error) {
+    // Skor ürün sayfasının yardımcı bilgisi; okunamazsa sayfa skorsuz
+    // çizilir. Hatayı yukarı fırlatıp bütün ürün sayfasını düşürmek,
+    // eksik bir rozet için fazla ağır bir bedel.
+    console.error(
+      JSON.stringify({ level: 'error', msg: 'Ohaaaa skoru okunamadı', error: error.message }),
+    );
+    return null;
+  }
+
+  const row = data as Record<string, unknown> | null;
+  if (!row || row.available === false) {
+    // `available:false` iki sebeple gelir: ürün yok, ya da ölçülebilen
+    // ağırlık eşiğin altında. İkincisinde bileşenler yine dolu gelir ve
+    // arayüz NEYİ ölçemediğimizi gösterebilir.
+    if (!row || !Array.isArray(row.components)) return null;
+  }
+
+  return {
+    score: row.score === null || row.score === undefined ? null : Number(row.score),
+    maxScore: Number(row.max_score ?? 100),
+    measuredWeight: Number(row.measured_weight ?? 0),
+    totalWeight: Number(row.total_weight ?? 100),
+    confidence: (row.confidence as OhaaaaScore['confidence']) ?? 'yetersiz',
+    windowDays: Number(row.window_days ?? 90),
+    components: (row.components as ScoreComponent[]) ?? [],
+  };
 }
