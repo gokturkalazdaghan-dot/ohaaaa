@@ -144,6 +144,15 @@ function statusIcon(status: IngestSummary['status']): string {
 /** Yazma yapmayan sahte depo — alan haritası doğrulamak için. */
 function dryRunRepository() {
   return {
+    /*
+     * Kuru çalışmada BOŞ harita dönüyor ve bu kasıtlı: her kalem NEW
+     * görünür, yani operatör "bu feed'de ne var" sorusunun tam cevabını
+     * alır. Gerçek parmak izlerini okusaydık kuru çalışma yalnızca
+     * değişenleri gösterir ve feed'in tamamını denetlemek imkânsız olurdu.
+     */
+    async getFingerprints() {
+      return new Map<string, string>();
+    },
     async findGroupsByGtin() {
       return new Map<string, string>();
     },

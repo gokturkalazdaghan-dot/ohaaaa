@@ -144,6 +144,8 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
         // pazar ile para biriminin uyumunu zorunlu kılıyor
         // (products_market_currency_uyumlu).
         market,
+        // Bir sonraki turda "değişti mi" sorusunu yanıtlayacak olan özet.
+        fingerprint: row.fingerprint,
         stock: row.stock,
         shipping_fee_cents: row.shippingFeeCents,
         // Stok yoksa vitrine çıkmaz; feed 'active' dese bile.
@@ -163,6 +165,44 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
       return { created, updated: rows.length - created };
     },
 
+    /**
+     * Bu kaynağın bilinen parmak izleri.
+     *
+     * Parmak izi NULL olan satırlar haritaya girmez: onlar delta ile hiç
+     * işlenmemiş eski kayıtlardır ve NEW sayılıp bir kez yazılarak
+     * parmak izi kazanmaları doğru davranış -- "değişmedi" diyip
+     * atlamak, onları sonsuza dek izsiz bırakırdı.
+     */
+    async getFingerprints(sourceId) {
+      const harita = new Map<string, string>();
+      const SAYFA = 1000;
+
+      /*
+       * SAYFALAMA ZORUNLU. PostgREST varsayılan olarak sonuçları
+       * sınırlıyor; tek çağrı bir kaynağın on binlerce teklifini
+       * döndürmez ve sessizce eksik bir "önceki durum" haritası,
+       * değişmemiş ürünleri NEW gibi gösterirdi.
+       */
+      for (let offset = 0; ; offset += SAYFA) {
+        const { data, error } = await supabase
+          .from('products')
+          .select('external_id, fingerprint')
+          .eq('source_id', sourceId)
+          .not('fingerprint', 'is', null)
+          .range(offset, offset + SAYFA - 1);
+
+        if (error) throw new Error(`Parmak izleri okunamadı: ${error.message}`);
+        if (!data || data.length === 0) break;
+
+        for (const row of data) {
+          harita.set(String(row.external_id), String(row.fingerprint));
+        }
+
+        if (data.length < SAYFA) break;
+      }
+
+      return harita;
+    },
     async markStale(sourceId, runStartedAt) {
       /*
        * Bu çalışmada görülmeyen teklifler stoksuz işaretlenir — SİLİNMEZ.

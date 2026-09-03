@@ -40,7 +40,7 @@ const CSV = [
 function fakeRepository(overrides: Partial<IngestRepository> = {}) {
   const calls = {
     markStale: 0,
-    upserted: [] as Array<NormalizedOffer & { groupId: string | null }>,
+    upserted: [] as Array<NormalizedOffer & { groupId: string | null; fingerprint: string }>,
     /** upsertOffers'a hangi pazarın geçtiği — pazar izolasyonunun kanıtı. */
     upsertMarkets: [] as Array<SourceConfig['market']>,
     createdGroups: [] as string[],
@@ -48,6 +48,9 @@ function fakeRepository(overrides: Partial<IngestRepository> = {}) {
   };
 
   const repository: IngestRepository = {
+    async getFingerprints() {
+      return new Map<string, string>();
+    },
     async findGroupsByGtin() {
       return new Map();
     },
@@ -276,4 +279,229 @@ test('farklı pazardaki kaynak kendi pazarını taşır', async () => {
   assert.deepEqual(calls.upsertMarkets, ['DE']);
   // Pazar değişti diye teklifler kaybolmamalı.
   assert.equal(calls.upserted.length, 2);
+});
+
+/* =========================================================================
+ * DELTA SYNC — GERÇEK HAT ENTEGRASYONU
+ * -------------------------------------------------------------------------
+ * Buradaki testler `classifyDelta`'yı doğrudan çağırmıyor. Hepsi
+ * `runSource` üzerinden geçiyor -- yani delta'nın gerçek yürütme yolunda
+ * olduğunu sınıyorlar. İzole fonksiyonun doğru çalışması, hatta bağlı
+ * olduğunu KANITLAMAZ.
+ * ========================================================================= */
+
+/** İlk turdan sonraki "bilinen durum"u taklit eden depo. */
+function deltaRepository(onceki: Map<string, string>) {
+  const { repository, calls } = fakeRepository({
+    async getFingerprints() {
+      return onceki;
+    },
+  });
+  return { repository, calls };
+}
+
+test('DELTA: bilinmeyen kalemler yazılır (NEW)', async () => {
+  const { repository, calls } = deltaRepository(new Map());
+
+  const summary = await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository });
+
+  assert.equal(calls.upserted.length, 2);
+  assert.equal(summary.itemsUnchanged, 0);
+  // Her yazılan satır bir sonraki tur için parmak izi taşımalı.
+  assert.ok(calls.upserted.every((r) => typeof r.fingerprint === 'string' && r.fingerprint.length > 0));
+});
+
+/*
+ * AYNI ANLIK GÖRÜNTÜ İKİ KEZ → İKİNCİSİNDE HİÇ YAZMA.
+ *
+ * Bu, delta'nın varlık sebebi. 50.000 üründe hiçbiri değişmediyse
+ * 50.000 yazma, tetikleyici ve yeniden indeksleme yapılmamalı.
+ */
+test('DELTA: aynı feed ikinci kez alınırsa hiçbir şey yazılmaz (UNCHANGED)', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+
+  // İlk turun yazdığı parmak izleri artık "bilinen durum".
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  const ikinci = deltaRepository(bilinen);
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher(CSV),
+    repository: ikinci.repository,
+  });
+
+  assert.equal(ikinci.calls.upserted.length, 0);
+  assert.equal(summary.itemsUnchanged, 2);
+  assert.equal(summary.itemsCreated, 0);
+  assert.equal(summary.itemsUpdated, 0);
+});
+
+test('DELTA: yalnızca fiyatı değişen kalem yazılır (CHANGED)', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  // SKU-1'in fiyatı düştü; SKU-2 aynı.
+  const degisenCsv = CSV.replace('11899.00', '9999.00');
+
+  const ikinci = deltaRepository(bilinen);
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher(degisenCsv),
+    repository: ikinci.repository,
+  });
+
+  assert.equal(ikinci.calls.upserted.length, 1);
+  assert.equal(ikinci.calls.upserted[0]!.externalId, 'SKU-1');
+  assert.equal(summary.itemsUnchanged, 1);
+});
+
+/*
+ * KIRPILMIŞ FEED BAYATLATMA YAPMAZ.
+ *
+ * ÖLÇÜLEN GERÇEK ARIZA: bu bayrak eklenmeden önce `markStale` kırpılmış
+ * bir turdan sonra da çalışıyordu. 60.000 kalemlik bir feed'de sınırın
+ * ötesindeki teklifler HER TURDA "görülmedi" sayılıp stoksuz
+ * işaretleniyordu -- kısmi anlık görüntüden toplu geçersizleştirme.
+ */
+test('DELTA: geçiş oranı düşükse anlık görüntü EKSİK sayılır ve bayatlatma atlanır', async () => {
+  // Dört satırın üçü geçersiz adres taşıyor: geçiş oranı %25.
+  const bozukCsv = [
+    'id,title,price,link,gtin,brand',
+    'SKU-1,Gecerli Urun,100.00,https://magaza.example/p/1,4548736134546,Sony',
+    'SKU-2,Bozuk Urun,100.00,https://baska-site.gecersiz/p/2,,Marka',
+    'SKU-3,Bozuk Urun,100.00,https://baska-site.gecersiz/p/3,,Marka',
+    'SKU-4,Bozuk Urun,100.00,https://baska-site.gecersiz/p/4,,Marka',
+  ].join('\n');
+
+  const { repository, calls } = deltaRepository(new Map());
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher(bozukCsv),
+    repository,
+  });
+
+  assert.equal(summary.snapshotComplete, false);
+  // Katalog korundu: bayatlatma HİÇ çağrılmadı.
+  assert.equal(calls.markStale, 0);
+  assert.equal(summary.status, 'partial');
+});
+
+test('DELTA: tam anlık görüntüde bayatlatma çalışır', async () => {
+  const { repository, calls } = deltaRepository(new Map());
+  const summary = await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository });
+
+  assert.equal(summary.snapshotComplete, true);
+  assert.equal(calls.markStale, 1);
+});
+
+/*
+ * Feed hiç indirilemezse anlık görüntü asla "tam" olmamalı. Güvenli
+ * varsayılan sayesinde hata yolunda buraya hiç gelinmese bile
+ * bayatlatma yapılmaz.
+ */
+test('DELTA: alım başarısız olursa anlık görüntü tam sayılmaz', async () => {
+  const { repository, calls } = deltaRepository(new Map());
+
+  const summary = await runSource(SOURCE, {
+    fetcher: {
+      get: async () => {
+        throw new Error('ag hatasi');
+      },
+    },
+    repository,
+  });
+
+  assert.equal(summary.status, 'failed');
+  assert.equal(summary.snapshotComplete, false);
+  assert.equal(calls.markStale, 0);
+});
+
+test('DELTA: boş feed bayatlatma yapmaz ve hata verir', async () => {
+  const { repository, calls } = deltaRepository(new Map());
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher('id,title,price,link\n'),
+    repository,
+  });
+
+  assert.equal(summary.status, 'failed');
+  assert.equal(calls.markStale, 0);
+});
+
+/*
+ * PAZAR PARMAK İZİNE GİRER.
+ *
+ * Aynı dış kimliğe sahip TR ve DE teklifi aynı entity gibi
+ * karşılaştırılmamalı; aksi halde Alman feed'i Türk kataloğunu
+ * "değişmedi" diye atlatabilirdi.
+ */
+test('DELTA: pazar değişince aynı kalem CHANGED sayılır', async () => {
+  const tr = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: tr.repository });
+  const trIzler = new Map(tr.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  // Aynı dış kimlikler, farklı pazar.
+  const de = deltaRepository(trIzler);
+  await runSource(
+    { ...SOURCE, market: 'DE', currency: 'EUR' },
+    { fetcher: fakeFetcher(CSV), repository: de.repository },
+  );
+
+  // TR parmak izleri DE turunda eşleşmemeli.
+  assert.equal(de.calls.upserted.length, 2);
+});
+
+test('DELTA: parmak izi aynı girdi için kararlı', async () => {
+  const a = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: a.repository });
+
+  const b = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: b.repository });
+
+  const izlerA = a.calls.upserted.map((r) => r.fingerprint).sort();
+  const izlerB = b.calls.upserted.map((r) => r.fingerprint).sort();
+  assert.deepEqual(izlerA, izlerB);
+});
+
+test('DELTA: özet sayaçları tutarlı', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  const ikinci = deltaRepository(bilinen);
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher(CSV.replace('11899.00', '8888.00')),
+    repository: ikinci.repository,
+  });
+
+  assert.equal(summary.itemsSeen, 2);
+  assert.equal(summary.itemsUnchanged + summary.itemsCreated, 2);
+});
+
+/*
+ * KIRPMA YOLU DOĞRUDAN SINANIYOR.
+ *
+ * Bulunan asıl arıza buydu: 50.000 sınırında kırpılan bir feed'de
+ * `markStale` yine de çalışıyor ve sınırın ötesindeki HER teklif
+ * "bu beslemede görülmedi" sayılıp stoksuz işaretleniyordu. Sıralama
+ * değişirse her turda başka bir dilim gidip geliyordu.
+ *
+ * Test 50.001 satır üretiyor -- pahalı ama bu kapının gerçekten
+ * kapandığını başka türlü kanıtlamak mümkün değil.
+ */
+test('DELTA: KIRPILMIŞ feed bayatlatma yapmaz', async () => {
+  const satirlar = ['id,title,price,link,gtin,brand'];
+  for (let i = 0; i < 50_001; i += 1) {
+    satirlar.push(`SKU-${i},Urun ${i},100.00,https://magaza.example/p/${i},,Marka`);
+  }
+
+  const { repository, calls } = deltaRepository(new Map());
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher(satirlar.join('\n')),
+    repository,
+  });
+
+  assert.equal(summary.itemsSeen, 50_000, 'kırpma gerçekten uygulandı');
+  assert.equal(summary.snapshotComplete, false, 'kırpılmış görüntü tam sayılmamalı');
+  // Katalog korundu.
+  assert.equal(calls.markStale, 0);
+  assert.equal(summary.status, 'partial');
 });

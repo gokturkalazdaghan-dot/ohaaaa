@@ -86,9 +86,25 @@ export interface IngestSummary {
   itemsSeen: number;
   itemsCreated: number;
   itemsUpdated: number;
+  /**
+   * Parmak izi değişmediği için HİÇ YAZILMAYAN kalemler.
+   *
+   * Bu sayı, delta tespitinin ne kadar iş elediğinin ölçüsü. Sağlıklı bir
+   * feed'de çoğunluk burada olmalı: 50.000 üründen üçü değiştiyse 49.997
+   * yazma, tetikleyici ve yeniden indeksleme yapılmamış demektir.
+   */
+  itemsUnchanged: number;
   itemsSkipped: number;
   itemsFailed: number;
   durationMs: number;
+  /**
+   * Anlık görüntü TAM mıydı?
+   *
+   * `false` ise bu turda SİLME/BAYATLATMA yapılmaz. Kırpılmış ya da
+   * büyük ölçüde doğrulamayı geçemeyen bir feed, eksik kayıtları
+   * "kaynakta yok" gibi gösterir.
+   */
+  snapshotComplete: boolean;
   sampleErrors: Array<{ externalId: string | null; reason: string }>;
   error?: string;
 }

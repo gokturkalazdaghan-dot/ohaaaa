@@ -22,6 +22,12 @@
  */
 
 import { productSignature as canonicalSignature } from '@ohaaaa/shared/product-sync';
+import {
+  canonicalFingerprint,
+  classifyDelta,
+  needsWrite,
+  type FingerprintInput,
+} from '@ohaaaa/shared';
 import type {
   IngestSummary,
   NormalizedOffer,
@@ -57,10 +63,18 @@ export interface IngestRepository {
   upsertOffers(
     merchantId: string,
     sourceId: string,
-    rows: Array<NormalizedOffer & { groupId: string | null }>,
+    rows: Array<NormalizedOffer & { groupId: string | null; fingerprint: string }>,
     /** Tekliflerin yazılacağı pazar — kaynağın pazarı. */
     market: SourceConfig['market'],
   ): Promise<{ created: number; updated: number }>;
+  /**
+   * Bu kaynağın bilinen parmak izleri: dış kimlik → parmak izi.
+   *
+   * Delta karşılaştırmasının "önceki durum" tarafı. Parmak izi olmayan
+   * (eski) satırlar haritaya GİRMEZ; onlar NEW sayılır ve bir kez
+   * yazılarak parmak izi kazanırlar.
+   */
+  getFingerprints(sourceId: string): Promise<Map<string, string>>;
   /** Bu çalışmada görülmeyen teklifleri stoksuz işaretler. */
   markStale(sourceId: string, runStartedAt: Date): Promise<number>;
   /** Çalışma kaydını açar/kapatır. */
@@ -99,9 +113,13 @@ export async function runSource(
     itemsSeen: 0,
     itemsCreated: 0,
     itemsUpdated: 0,
+    itemsUnchanged: 0,
     itemsSkipped: 0,
     itemsFailed: 0,
     durationMs: 0,
+    // Aksi kanıtlanana kadar TAM DEĞİL. Güvenli varsayılan: bir hata
+    // yolunda buraya hiç gelinmezse silme/bayatlatma yapılmasın.
+    snapshotComplete: false,
     sampleErrors: [],
   };
 
@@ -126,10 +144,23 @@ export async function runSource(
     const parsed = adapter(body);
     let records: RawRecord[] = parsed.records;
 
+    /*
+     * KIRPMA, ANLIK GÖRÜNTÜYÜ EKSİK YAPAR.
+     *
+     * Önce bu bayrak yoktu ve `markStale` kırpılmış bir turdan sonra da
+     * çalışıyordu: 60.000 kalemlik bir feed'de sınırın ötesindeki 10.000
+     * teklif HER TURDA "bu beslemede görülmedi" sayılıp stoksuz
+     * işaretleniyordu -- kısmi bir anlık görüntüden toplu
+     * geçersizleştirme. Sıralama değişirse de her turda başka 10.000'i
+     * gidip geliyordu.
+     */
+    let kirpildi = false;
     if (records.length > MAX_ITEMS_PER_RUN) {
+      kirpildi = true;
       summary.sampleErrors.push({
         externalId: null,
-        reason: `Feed ${records.length} kalem içeriyor; ilk ${MAX_ITEMS_PER_RUN} işlendi.`,
+        reason: `Feed ${records.length} kalem içeriyor; ilk ${MAX_ITEMS_PER_RUN} işlendi. `
+          + 'Anlık görüntü eksik sayıldı; bu turda bayatlatma yapılmayacak.',
       });
       records = records.slice(0, MAX_ITEMS_PER_RUN);
     }
@@ -177,31 +208,89 @@ export async function runSource(
       });
     }
 
+    /*
+     * ANLIK GÖRÜNTÜ TAM MI?
+     *
+     * İki koşul: feed kırpılmadı VE kalemlerin çoğu doğrulamayı geçti.
+     * Düşük geçiş oranı, alan haritasının bozulduğunu gösterir; o
+     * durumda "kaynakta yok" ile "ayrıştıramadık" ayırt edilemez ve
+     * silme kararı verilemez.
+     */
+    summary.snapshotComplete = !kirpildi && passRate >= 0.5;
+
     // --- 4) Kanonik ürünle eşleştir -----------------------------------------
     const withGroups = await matchCanonicalGroups(offers, deps.repository);
 
-    // --- 5) Yaz --------------------------------------------------------------
-    const { created, updated } = await deps.repository.upsertOffers(
-      source.merchantId,
-      source.id,
-      withGroups,
-      source.market,
+    // --- 5) DELTA: neyin gerçekten değiştiği --------------------------------
+    /*
+     * Buradan önce hat, her turda TÜM teklifleri yazıyordu. 50.000 üründe
+     * hiçbiri değişmese bile 50.000 yazma ve 50.000 tetikleyici. Asıl
+     * zarar maliyet değil gürültü: gerçekten değişen üç fiyat,
+     * değişmeyen 49.997'nin arasında kayboluyordu.
+     */
+    const oncekiIzler = await deps.repository.getFingerprints(source.id);
+
+    const izli = withGroups.map((offer) => ({
+      offer,
+      fingerprint: canonicalFingerprint(fingerprintInput(offer, source)),
+    }));
+
+    const delta = classifyDelta({
+      previous: oncekiIzler,
+      current: izli.map((k) => fingerprintInput(k.offer, source)),
+      snapshotComplete: summary.snapshotComplete,
+    });
+
+    summary.itemsUnchanged = delta.counts.UNCHANGED;
+
+    const yazilacakKimlikler = new Set(
+      needsWrite(delta).map((e) => e.externalId),
     );
 
-    summary.itemsCreated = created;
-    summary.itemsUpdated = updated;
+    const yazilacaklar = izli
+      .filter((k) => yazilacakKimlikler.has(k.offer.externalId))
+      .map((k) => ({ ...k.offer, fingerprint: k.fingerprint }));
 
-    // --- 6) Bayatları işaretle ----------------------------------------------
-    const stale = await deps.repository.markStale(source.id, startedAt);
-    if (stale > 0) {
+    // --- 6) Yaz (yalnızca değişenler) ---------------------------------------
+    if (yazilacaklar.length > 0) {
+      const { created, updated } = await deps.repository.upsertOffers(
+        source.merchantId,
+        source.id,
+        yazilacaklar,
+        source.market,
+      );
+      summary.itemsCreated = created;
+      summary.itemsUpdated = updated;
+    }
+
+    // --- 7) Bayatları işaretle — YALNIZCA TAM ANLIK GÖRÜNTÜDE ---------------
+    /*
+     * `markStale` "bu turda görülmeyeni stoksuz işaretle" demek. Eksik
+     * bir anlık görüntüde bu, ağ hatası yüzünden kataloğun bir kısmını
+     * yok etmektir -- alım hattının en pahalı arızası.
+     *
+     * SİLME değil stoksuz işaretleme olması ayrı bir güvenlik katmanı:
+     * bir sonraki tam turda kendiliğinden düzelir.
+     */
+    if (summary.snapshotComplete) {
+      const stale = await deps.repository.markStale(source.id, startedAt);
+      if (stale > 0) {
+        summary.sampleErrors.push({
+          externalId: null,
+          reason: `${stale} teklif bu beslemede görülmedi, stoksuz işaretlendi.`,
+        });
+      }
+    } else {
       summary.sampleErrors.push({
         externalId: null,
-        reason: `${stale} teklif bu beslemede görülmedi, stoksuz işaretlendi.`,
+        reason: 'Anlık görüntü eksik: bayatlatma atlandı, katalog korundu.',
       });
     }
 
     summary.status =
-      summary.itemsFailed > 0 || parsed.warnings.length > 0 ? 'partial' : 'success';
+      summary.itemsFailed > 0 || parsed.warnings.length > 0 || !summary.snapshotComplete
+        ? 'partial'
+        : 'success';
   } catch (error) {
     summary.status = 'failed';
     summary.error = error instanceof Error ? error.message : String(error);
@@ -303,3 +392,38 @@ export async function matchCanonicalGroups(
  * `public.product_signature()` de aynı değeri üretir.
  */
 export { canonicalSignature };
+
+
+/**
+ * Normalleştirilmiş teklifi parmak izi girdisine çevirir.
+ *
+ * Buraya HANGİ alanların girdiği, "değişim" tanımının kendisidir.
+ * Zaman damgaları ve tarama kimliği bilerek dışarıda: girselerdi her
+ * tarama "değişti" derdi ve delta tespiti anlamını tamamen kaybederdi.
+ */
+function fingerprintInput(
+  offer: NormalizedOffer & { groupId: string | null },
+  source: SourceConfig,
+): FingerprintInput {
+  return {
+    externalId: offer.externalId,
+    // Pazar parmak izine GİRER: aynı dış kimliğe sahip TR ve DE teklifi
+    // aynı entity gibi karşılaştırılmamalı.
+    market: source.market,
+    merchantId: source.merchantId,
+    title: offer.title,
+    priceCents: offer.priceCents,
+    currency: offer.currency,
+    // Stok DURUMU, adedi değil: 12'den 11'e düşmek kullanıcı için hiçbir
+    // şey değiştirmez ve her stok hareketini değişim saymak kuyruğu
+    // anlamsız işle doldururdu.
+    inStock: offer.stock > 0,
+    productUrl: offer.productUrl,
+    shippingFeeCents: offer.shippingFeeCents,
+    attributes: {
+      brand: offer.brand ?? '',
+      gtin: offer.gtin ?? '',
+      category: offer.categorySlug ?? '',
+    },
+  };
+}
