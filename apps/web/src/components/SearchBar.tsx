@@ -184,8 +184,19 @@ export function SearchBar({
               }
               autoComplete="off"
               autoFocus={autoFocus}
+              /*
+                Yer tutucu kutunun BOYUTUNA göre değişir.
+
+                Hero kutusu geniş ve sayfanın birincil eylemi: orada cümle
+                kurulabileceğini SÖYLEMEK gerekiyor, yoksa kimse denemez --
+                doğal dil araması ancak keşfedilirse kullanılır. Üst
+                çubuktaki dar kutuda aynı metin taşar ve yarısı görünmez;
+                orada kısa hâli kalır.
+              */
               placeholder={
-                'Ürün, marka veya model'
+                isHero
+                  ? 'Örn: 5.000 TL altında iyi bir oyuncu kulaklığı bul'
+                  : 'Ürün, marka veya model'
               }
               aria-label="Ürün ara"
               className={`w-full min-w-0 bg-transparent px-1 text-fg outline-none placeholder:text-subtle ${

@@ -17,6 +17,7 @@ import type {
   Category,
   FlashDeal,
   Offer,
+  PriceDrop,
   PricePoint,
   ProductGroupWithOffers,
   SearchResult,
@@ -1490,4 +1491,64 @@ export async function getAnswerVendorId(groupId: string): Promise<string | null>
   }
 
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Fiyatı düşenler
+// ---------------------------------------------------------------------------
+/**
+ * Fiyatı düşen ürün grupları — `/firsatlar` sayfalarının verisi.
+ *
+ * Veritabanındaki `price_drops()` fonksiyonunu çağırır. O fonksiyon düşüşü
+ * BİZİM kendi fiyat gözlemlerimizden (`price_points`) hesaplar; mağazanın
+ * üstü çizili fiyatını kullanmaz ve en az iki ölçüm ister.
+ *
+ * DEMO MODUNDA BOŞ DÖNER.
+ * Demo katalogunda fiyat geçmişi yoktur. Olmayan bir geçmişten "bu ürün
+ * %30 düştü" cümlesi üretmek, uydurma indirim göstermek olurdu — sayfanın
+ * bütün varlık nedenine aykırı. Boş liste, sayfanın dürüst boş durumunu
+ * gösterir.
+ */
+export async function getPriceDrops(options?: {
+  days?: number;
+  minDropRatio?: number;
+  categoryId?: string | null;
+  limit?: number;
+}): Promise<PriceDrop[]> {
+  const supabase = createAnonClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase.rpc('price_drops', {
+    p_days: options?.days ?? 30,
+    p_min_drop_ratio: options?.minDropRatio ?? 0.05,
+    p_category_id: options?.categoryId ?? null,
+    p_limit: options?.limit ?? 24,
+  });
+
+  if (error) {
+    // Fırsat listesi bir vitrindir, sayfanın gövdesi değil. Okunamazsa
+    // sayfa "şu an fırsat listesi hazırlanamadı" der; demo veriyle
+    // doldurmak sahte indirim üretmek olurdu.
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        msg: 'Fiyatı düşenler okunamadı',
+        error: error.message,
+      }),
+    );
+    throw new Error(`Fiyatı düşenler okunamadı: ${error.message}`);
+  }
+
+  return (data ?? []).map((row: Record<string, unknown>): PriceDrop => ({
+    groupId: String(row.group_id),
+    slug: String(row.slug),
+    title: String(row.title),
+    imageUrl: row.image_url ? String(row.image_url) : null,
+    categoryId: row.category_id ? String(row.category_id) : null,
+    currentPriceCents: Number(row.current_price_cents),
+    referencePriceCents: Number(row.reference_price_cents),
+    dropRatio: Number(row.drop_ratio),
+    observedDays: Number(row.observed_days),
+    offerCount: Number(row.offer_count),
+  }));
 }

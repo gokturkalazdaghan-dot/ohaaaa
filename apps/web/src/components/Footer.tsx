@@ -13,6 +13,16 @@ export function Footer() {
               </Link>
             </li>
             <li>
+              <Link href="/firsatlar" className="text-muted hover:text-fg">
+                Fırsatlar
+              </Link>
+            </li>
+            <li>
+              <Link href="/fiyat-takip" className="text-muted hover:text-fg">
+                Fiyat takibi
+              </Link>
+            </li>
+            <li>
               <Link href="/tasoron/basvuru" className="text-muted hover:text-fg">
                 Satıcı ol
               </Link>

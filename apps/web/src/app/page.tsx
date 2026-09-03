@@ -49,11 +49,18 @@ export default async function HomePage() {
           burada acikca soylenir; fiyat karsilastirmada asil fark budur. */}
       <section className="py-10 sm:py-14">
         <h1 className="max-w-3xl text-4xl font-extrabold leading-[1.1] tracking-tight text-fg sm:text-5xl">
-          Aynı ürün, <span className="text-brand">kargo dahil</span> fiyat
+          <span className="text-brand">OHA!</span> Aradığını bulduk
         </h1>
+        {/*
+          Alt metin ne yaptığımızı SÖYLER, başlık dikkati çeker. Başlığın
+          tek başına ne sattığımızı anlatmaması sorun değil -- hemen altında
+          yazıyor. Ama alt metin de kaybolmamalı: "kargo dahil" bu sitenin
+          rakiplerinden ayrıldığı tek cümle.
+        */}
         <p className="mt-4 max-w-xl text-base text-muted sm:text-lg">
-          Mağazaların kargo ve indirimlerini hesaba katıp toplam tutarı karşılaştırıyoruz.
-          En düşük toplam üstte durur.
+          Ne aradığını yaz — mağazaların kargo ve indirimlerini hesaba katıp
+          <strong className="font-semibold text-fg"> kargo dahil toplam tutarı</strong>{' '}
+          karşılaştıralım. En düşük toplam üstte durur.
         </p>
 
         {/*

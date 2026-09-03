@@ -66,18 +66,38 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     /* Yasal sayfa: diğer üçü (gizlilik, koşullar, ortaklık) listedeyken
        KVKK aydınlatma metni atlanmıştı. */
     { url: `${siteUrl}/kvkk`, lastModified: now, changeFrequency: 'yearly', priority: 0.3 },
+    /* Fırsat sayfası içeriği fiyat ölçümleriyle günlük değişir; yöntemi
+       anlatan /fiyat-takip ise kararlı bir metin. */
+    { url: `${siteUrl}/firsatlar`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
+    {
+      url: `${siteUrl}/fiyat-takip`,
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.5,
+    },
   ];
 
   try {
     // --- Kategori sayfaları --------------------------------------------------
     const categories = await getCategories();
 
-    const categoryPages: MetadataRoute.Sitemap = categories.map((category) => ({
-      url: `${siteUrl}/kategori/${category.slug}`,
-      lastModified: now,
-      changeFrequency: 'daily' as const,
-      priority: 0.7,
-    }));
+    const categoryPages: MetadataRoute.Sitemap = categories.flatMap((category) => [
+      {
+        url: `${siteUrl}/kategori/${category.slug}`,
+        lastModified: now,
+        changeFrequency: 'daily' as const,
+        priority: 0.7,
+      },
+      /* Kategori fırsat sayfası. Sayfa kümesi kategori sayısıyla SINIRLI:
+         her marka/fiyat aralığı için otomatik sayfa üretmiyoruz, o ince
+         içerik olurdu. */
+      {
+        url: `${siteUrl}/firsatlar/${category.slug}`,
+        lastModified: now,
+        changeFrequency: 'daily' as const,
+        priority: 0.6,
+      },
+    ]);
 
     // --- Ürün sayfaları ------------------------------------------------------
     const { results: products } = await searchProducts({ limit: MAX_PRODUCTS, sort: 'offers' });

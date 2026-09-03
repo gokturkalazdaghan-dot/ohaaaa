@@ -346,3 +346,25 @@ export function offerSellerName(offer: Offer): string {
 export function offerSellerRating(offer: Offer): number | null {
   return offer.vendor?.rating ?? offer.merchant?.rating ?? null;
 }
+
+/**
+ * Fiyatı düşen bir ürün grubu — "fırsat" sayfalarının tek veri kaynağı.
+ *
+ * `referencePriceCents` mağazanın üstü çizili fiyatı DEĞİLDİR; bizim
+ * gözlem penceresi içinde gerçekten ölçtüğümüz en yüksek fiyattır.
+ * `observedDays` o gözlemin kaç güne yayıldığını söyler: bir günlük
+ * gözlemle "aylardır bu kadar ucuz olmamıştı" denemez.
+ */
+export interface PriceDrop {
+  groupId: string;
+  slug: string;
+  title: string;
+  imageUrl: string | null;
+  categoryId: string | null;
+  currentPriceCents: number;
+  referencePriceCents: number;
+  /** 0-1 arası oran. 0.25 = %25 düşüş. */
+  dropRatio: number;
+  observedDays: number;
+  offerCount: number;
+}
