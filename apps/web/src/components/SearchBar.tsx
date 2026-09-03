@@ -142,6 +142,7 @@ export function SearchBar({
 
   const isHero = size === 'hero';
 
+
   return (
     <div className={isHero ? 'w-full' : 'w-full max-w-xl'}>
       <form
@@ -152,7 +153,7 @@ export function SearchBar({
       >
         {/* Gradyan çerçeve: odaklandığında parlar. */}
         <div
-          className={`group relative rounded-2xl bg-gradient-to-r from-brand/60 via-electric/50 to-cyan/40 transition-colors duration-200 ease-out focus-within:from-brand focus-within:via-electric focus-within:to-cyan ${
+          className={`group relative rounded-2xl bg-brand/40 transition-colors duration-200 ease-out focus-within:bg-brand ${
             isHero ? 'p-[2px] focus-within:shadow-[var(--glow-brand)]' : 'p-px'
           }`}
         >
@@ -193,11 +194,31 @@ export function SearchBar({
                 çubuktaki dar kutuda aynı metin taşar ve yarısı görünmez;
                 orada kısa hâli kalır.
               */
-              placeholder={
-                isHero
-                  ? 'Örn: 5.000 TL altında iyi bir oyuncu kulaklığı bul'
-                  : 'Ürün, marka veya model'
-              }
+              /*
+                Yer tutucu KUTUNUN BOYUTUNA göre değişir ve mobilde ayrıca
+                kısalır.
+
+                Hero kutusu geniş: orada cümle kurulabileceğini SÖYLEMEK
+                gerekiyor, yoksa doğal dil araması keşfedilmez. Ama 390px'lik
+                bir telefonda o cümle "Örn: 5.00" diye kırpılıyordu -- yani
+                söylemek istediği şeyi söyleyemiyor, üstelik bozuk görünüyordu
+                (ölçüldü).
+
+                CSS ile iki ayrı yer tutucu yazmak mümkün değil; bu yüzden
+                iki metin de basılıyor ve görünürlüğü ekran genişliği
+                belirliyor. `aria-hidden` YOK: ikisi de yalnızca placeholder,
+                erişilebilir ad aşağıdaki `aria-label`.
+              */
+              /*
+                YER TUTUCU KISA. Uzun bir örnek cümle 390px'lik bir telefonda
+                "Örn: 5.00" diye kırpılıyordu (ölçüldü) -- kesik bir örnek,
+                örnek olmaktan çıkar ve arayüzü bozuk gösterir.
+
+                Doğal dil yeteneği yer tutucuda değil, kutunun ALTINDA
+                görünür bir ipucu satırında anlatılıyor: orası sarmalanabilir,
+                kırpılmaz ve ekran okuyucu da okur.
+              */
+              placeholder={isHero ? 'Ne arıyorsun?' : 'Ürün, marka veya model'}
               aria-label="Ürün ara"
               className={`w-full min-w-0 bg-transparent px-1 text-fg outline-none placeholder:text-subtle ${
                 isHero ? 'text-lg' : 'text-sm'
@@ -233,6 +254,23 @@ export function SearchBar({
           listId={listId}
         />
       </form>
+
+      {isHero && (
+        /*
+          DOĞAL DİL İPUCU.
+
+          Bu satır yer tutucunun yerine geçiyor: örnek cümle burada
+          sarmalanabiliyor, kırpılmıyor ve ekran okuyucu tarafından da
+          okunuyor. Yeteneği söylemek şart -- kimse denemediği sürece
+          cümleyle arama diye bir şey yok demektir.
+        */
+        <p className="mt-3 text-xs leading-relaxed text-subtle">
+          Cümleyle de arayabilirsin —{' '}
+          <span className="text-muted">
+            “5.000 TL altında iyi bir oyuncu kulaklığı bul”
+          </span>
+        </p>
+      )}
 
       {isHero && (
         <div className="mt-4 flex flex-wrap items-center gap-2">

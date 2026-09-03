@@ -4,19 +4,22 @@ import Link from 'next/link';
 import { useCallback, useRef, useState } from 'react';
 
 /**
- * Başlık kilidi: arma + turuncu zemin üzerinde vaat.
+ * Ohaaaa arması.
  *
- * ARMANIN YAZISI NEDEN CANLI METİN?
- * Harflerin tek tek hareket edebilmesi için yazının metin olması gerekir;
- * tek parça PNG'de "a"ları ayrı ayrı büyütmek mümkün değil. Bu yüzden disk
- * bir görsel, üzerindeki "Ohaaaa" ise gerçek metin.
+ * MARKA İMZASI: HARFLER SOLDAN SAĞA KÜÇÜLÜR.
+ * O h a a a a — ilk harf en güçlü, her harf bir öncekinden küçük. Bu
+ * dekoratif bir ayrıntı değil; markanın tanınma işareti. Sesin sönümlenmesini
+ * ("ohaaaa" derken sesin azalması) yazıya çeviriyor ve altı harfli bir
+ * kelimeyi tek bakışta ayırt edilir kılıyor.
  *
- * Konum ve ölçü, armanın kendi çiziminden ÖLÇÜLEREK alındı (1024 piksellik
- * asılda yazı 771x155, merkezden %0,5 yukarıda). Oranlar aşağıda sabit;
- * arma boyutu değişse de yazı yerinde kalır.
+ * ORTAK TABAN ÇİZGİSİ ŞART. Harfler `items-baseline` ile hizalanır; ortadan
+ * hizalansalardı küçülen harfler havada asılı kalır ve kademe bir dalga
+ * değil, dağınıklık gibi okunurdu.
  *
- * Yazı tipi Outfit — armanın çizildiği yazı tipiyle aynı. Farklı olsaydı
- * favicon ile başlık farklı harflerle yazılmış görünürdü.
+ * NEDEN CANLI METİN, PNG DEĞİL?
+ * Harflerin tek tek hareket edebilmesi için metin olmalı. Ayrıca kademeli
+ * boyut, kullanıcının yazı tipi ayarıyla birlikte ölçeklenir — sabit
+ * piksellik bir görselde bu olmaz.
  *
  * DOKUNMA
  * Animasyon yalnızca :hover'a bağlansaydı telefonda hiç çalışmazdı; dokunmalı
@@ -24,22 +27,21 @@ import { useCallback, useRef, useState } from 'react';
  * süre dolunca kaldırılıyor: parmak kalksa bile animasyon tamamlanır.
  */
 
-/*
- * "Oh" TEK parça: armada O ile h birleşik çiziliyor (negatif kern), o yüzden
- * burada da tek birim olarak hareket etmeli. Ayrı ayrı ölçeklenselerdi
- * büyürken aradaki bağ kopar ve harfler birbirinden ayrılırdı.
+/**
+ * Harfler ve göreli boyutları.
+ *
+ * Oran dizisi düz bir aritmetik iniş DEĞİL: baştaki düşüş daha keskin,
+ * sona doğru yumuşuyor. Eşit adımlarla inen bir dizi, son "a"ları okunmaz
+ * hale getiriyordu.
  */
-const UNITS = ['Oh', 'a', 'a', 'a', 'a'];
-
-/** O ile h arasındaki yaklaştırma — make-badge.py'deki KERN_OH ile aynı. */
-const KERN_OH = 0.135;
-
-// Armadan ölçülen oranlar (bkz. assets/brand/ohaaaa-word-1024.png)
-const WORD_WIDTH_RATIO = 0.751; // yazı genişliği / arma genişliği (asıldan ölçüldü)
-// Punto katsayısı: canlı metin tarayıcıda ölçülüp asıldaki 0,753 oranına
-// oturtuldu. Yazı tipi metriklerinden hesaplamak yerine ölçmek daha güvenli;
-// Outfit'in ascender oranı sürümle değişebilir.
-const WORD_SHIFT_RATIO = -0.006; // dikey kayma / arma yüksekliği
+const HARFLER: Array<{ ch: string; olcek: number }> = [
+  { ch: 'O', olcek: 1 },
+  { ch: 'h', olcek: 0.84 },
+  { ch: 'a', olcek: 0.72 },
+  { ch: 'a', olcek: 0.63 },
+  { ch: 'a', olcek: 0.56 },
+  { ch: 'a', olcek: 0.5 },
+];
 
 /** Son harfin animasyonu bitene kadar geçen süre. */
 const TAP_MS = 640;
@@ -58,45 +60,44 @@ export function Logo({ className = '' }: { className?: string }) {
     <Link
       href="/"
       onPointerDown={play}
-      className={`group -my-2 flex items-center py-2 ${className}`}
+      /*
+        Erişilebilir ad ARMANIN KENDİSİNDE. Harfler `aria-hidden` çünkü
+        ekran okuyucu onları tek tek okursa "O, h, a, a, a, a" duyulur.
+      */
       aria-label="Ohaaaa ana sayfa"
+      className={`group -my-2 flex items-center gap-2 py-2 ${className}`}
     >
-      <span className="relative z-10 block h-9 w-9 shrink-0">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/ohaaaa-disc.png" alt="" width={36} height={36} className="h-9 w-9" />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/ohaaaa-disc.png"
+        alt=""
+        width={28}
+        height={28}
+        className="h-7 w-7 shrink-0"
+      />
 
-        <span
-          aria-hidden="true"
-          className={`oha-word absolute inset-0 flex items-center justify-center ${
-            tapped ? 'oha-word-tap' : ''
-          }`}
-          style={{
-            transform: `translateY(${WORD_SHIFT_RATIO * 100}%)`,
-            fontFamily: 'var(--font-outfit), sans-serif',
-            fontSize: `${WORD_WIDTH_RATIO * 0.2795 * 36}px`,
-          }}
-        >
-          {UNITS.map((ch, i) => (
-            <span
-              key={`${ch}-${i}`}
-              className="oha-letter"
-              style={{ animationDelay: `${i * 62}ms` }}
-            >
-              {ch === 'Oh' ? (
-                <>
-                  O
-                  <span style={{ marginLeft: `-${KERN_OH}em` }}>h</span>
-                </>
-              ) : (
-                ch
-              )}
-            </span>
-          ))}
-        </span>
-      </span>
-
-      <span className="-ml-4 rounded-r-full bg-gradient-to-r from-[#E9692A] via-[#D4501F] to-[#C13515] py-[7px] pl-5 pr-4 text-[0.9375rem] font-extrabold leading-none tracking-tight text-[#fffaf5] shadow-sm transition-transform duration-200 origin-left group-hover:scale-x-[1.02]">
-        kargo dahil fiyat
+      <span
+        aria-hidden="true"
+        className={`oha-word flex items-baseline ${tapped ? 'oha-word-tap' : ''}`}
+        style={{ fontFamily: 'var(--font-outfit), sans-serif' }}
+      >
+        {HARFLER.map(({ ch, olcek }, i) => (
+          <span
+            key={`${ch}-${i}`}
+            className="oha-letter font-bold leading-none tracking-tight text-fg"
+            style={{
+              fontSize: `${olcek * 1.5}rem`,
+              animationDelay: `${i * 62}ms`,
+              /*
+                Küçülen harfler arasındaki boşluk da küçülmeli; sabit boşluk
+                bırakılsaydı sondaki küçük "a"lar birbirinden kopardı.
+              */
+              marginLeft: i === 0 ? 0 : `${-0.02 * olcek}em`,
+            }}
+          >
+            {ch}
+          </span>
+        ))}
       </span>
     </Link>
   );

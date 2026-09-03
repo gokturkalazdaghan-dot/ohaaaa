@@ -199,7 +199,7 @@ export function CartDrawer() {
 
             <footer className="border-t border-line bg-surface px-5 py-4">
               {summary.vendorCount > 1 && (
-                <p className="mb-3 rounded-lg border border-electric/25 bg-electric/10 px-3 py-2 text-2xs text-electric-soft">
+                <p className="mb-3 rounded-lg border border-brand/25 bg-brand/10 px-3 py-2 text-2xs text-brand-soft">
                   Siparişiniz {summary.vendorCount} mağazaya bölünecek ve{' '}
                   {summary.vendorCount} ayrı kargo ile gelecek.
                 </p>

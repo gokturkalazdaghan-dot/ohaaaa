@@ -268,7 +268,7 @@ function StatCard({
   hint?: string;
 }) {
   const toneClasses = {
-    info: 'text-electric bg-electric/12',
+    info: 'text-brand bg-brand/12',
     success: 'text-success bg-success/12',
     warning: 'text-warning bg-warning/12',
   }[tone];

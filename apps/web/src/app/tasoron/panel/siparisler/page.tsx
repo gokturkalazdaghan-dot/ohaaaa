@@ -26,9 +26,9 @@ export const metadata: Metadata = {
 
 const STATUS_META = {
   awaiting_vendor: { label: 'Onay bekliyor', className: 'bg-warning/12 text-warning' },
-  accepted: { label: 'Onaylandı', className: 'bg-electric/12 text-electric' },
+  accepted: { label: 'Onaylandı', className: 'bg-brand/12 text-brand' },
   preparing: { label: 'Hazırlanıyor', className: 'bg-brand/12 text-brand-soft' },
-  shipped: { label: 'Kargoda', className: 'bg-cyan/12 text-cyan' },
+  shipped: { label: 'Kargoda', className: 'bg-brand/12 text-brand' },
   delivered: { label: 'Teslim edildi', className: 'bg-success/12 text-success' },
 } as const;
 

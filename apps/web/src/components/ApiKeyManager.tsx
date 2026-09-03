@@ -367,7 +367,7 @@ function RevealedKey({
               type="button"
               onClick={copy}
               className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                copied ? 'bg-success text-[#0b0b0d]' : 'bg-surface-2 text-fg hover:bg-surface-hover'
+                copied ? 'bg-success text-on-success' : 'bg-surface-2 text-fg hover:bg-surface-hover'
               }`}
             >
               {copied ? <CheckIcon className="h-3.5 w-3.5" /> : <CopyIcon className="h-3.5 w-3.5" />}

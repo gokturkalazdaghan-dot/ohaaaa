@@ -64,7 +64,7 @@ export function TrustSignals() {
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {SIGNALS.map((signal) => (
           <article key={signal.title} className="card flex flex-col p-5">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-brand/18 to-electric/18 text-brand-soft">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand/12 text-brand">
               <signal.icon className="h-5 w-5" />
             </span>
 
