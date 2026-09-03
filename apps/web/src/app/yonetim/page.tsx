@@ -109,6 +109,24 @@ export default async function AdminOverviewPage() {
         </span>
       </a>
 
+      {/*
+        Tahsilat sayfası.
+
+        Bu panodaki "komisyon" rakamı AĞIN BEYANIDIR; hesaba geçen para
+        değildir. İkisi aynı sayfada aynı büyüklükte durursa okuyucu ikisini
+        aynı sanar. Tahsilat ayrı bir sayfada ve buradan bağlanıyor.
+      */}
+      <a
+        href="/yonetim/tahsilat"
+        className="flex items-center gap-3 rounded-xl border border-line bg-surface p-4 text-sm transition-colors hover:border-brand/40"
+      >
+        <ChartIcon className="h-5 w-5 shrink-0 text-brand" />
+        <span className="text-fg">
+          <strong className="font-semibold">Tahsilat</strong> — hesaba gerçekten geçen
+          tutar. Aşağıdaki komisyon rakamı ağın beyanıdır, tahsilat değildir.
+        </span>
+      </a>
+
       <section className="card-glow p-6">
         <p className="text-xs text-muted">Son 30 günün onaylı komisyonu</p>
         <p className="tabular mt-1 text-4xl font-black tracking-tight text-success">
