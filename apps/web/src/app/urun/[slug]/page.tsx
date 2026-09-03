@@ -9,6 +9,8 @@ import { ShieldIcon, TruckIcon } from '@/components/Icons';
 import { JsonLd } from '@/components/JsonLd';
 import { OfferRow } from '@/components/OfferRow';
 import { FavoriteButton } from '@/components/FavoriteButton';
+import { OhaaaaScorePanel } from '@/components/OhaaaaScorePanel';
+import { ShareButton } from '@/components/ShareButton';
 import { ProductGallery } from '@/components/ProductGallery';
 import { RecentlyViewed, RecordProductView } from '@/components/RecentlyViewed';
 import { PriceHistory } from '@/components/PriceHistory';
@@ -18,6 +20,7 @@ import { ProductReviews } from '@/components/ProductReviews';
 import {
   getAnswerVendorId,
   getPriceHistory,
+  getOhaaaaScore,
   getProductGroup,
   getProductQuestions,
   getProductReviews,
@@ -100,6 +103,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   // Teklifler zaten toplam maliyete göre sıralı gelir (veri katmanında).
   const bestOffer = group.offers[0];
+
+  /*
+   * Skor da ikincil: en iyi teklif için hesaplanır ve alınamazsa panel hiç
+   * çizilmez. Ürün sayfasının açılması buna bağlı olmamalı.
+   */
+  const score = bestOffer ? await getOhaaaaScore(bestOffer.id).catch(() => null) : null;
   const savingsCents =
     group.offers.length > 1
       ? group.offers[group.offers.length - 1]!.totalCostCents - (bestOffer?.totalCostCents ?? 0)
@@ -307,12 +316,26 @@ export default async function ProductPage({ params }: ProductPageProps) {
             <p className="mt-4 leading-relaxed text-muted">{group.description}</p>
           )}
 
-          <div className="mt-5">
+          <div className="mt-5 flex flex-wrap items-center gap-3">
             <FavoriteButton
               slug={group.slug}
               title={group.title}
               imageUrl={galleryImages[0] ?? null}
               priceCents={bestOffer?.priceCents ?? group.minPriceCents}
+            />
+            {/*
+              Paylaşım metni yalnızca ÖLÇÜLMÜŞ değerden kurulur: fiyat varsa
+              yazılır, yoksa yalnızca ürün adı paylaşılır. "En ucuz burada"
+              gibi doğrulanamayan bir cümle kurulmuyor.
+            */}
+            <ShareButton
+              path={`/urun/${group.slug}`}
+              title={group.title}
+              text={
+                group.minPriceCents !== null
+                  ? `${group.title} — ${group.offerCount} mağazada, kargo dahil en düşük ${formatMoney(group.minPriceCents)}`
+                  : group.title
+              }
             />
           </div>
 
@@ -339,6 +362,14 @@ export default async function ProductPage({ params }: ProductPageProps) {
               </div>
             )}
           </div>
+
+          {/*
+            Skor panelinin yeri KASITLI: teklif listesinin hemen ÜSTÜ.
+            Kullanıcı listeye bakmadan önce "bu en iyi teklif neye göre iyi"
+            sorusunun cevabını görüyor; listeden sonra gelseydi kararı çoktan
+            verilmiş olurdu.
+          */}
+          {score && <OhaaaaScorePanel score={score} />}
 
           <div className="mt-8">
             <h2 className="text-lg font-bold">Mağaza fiyatları</h2>

@@ -219,7 +219,14 @@ check(
 );
 
 // --- Yatay taşma -----------------------------------------------------------
-for (const path of ['/', '/arama', '/kategori/elektronik', '/urun/sony-wh-1000xm5', '/tasoron']) {
+for (const path of [
+  '/',
+  '/arama',
+  '/kategori/elektronik',
+  '/firsatlar',
+  '/urun/sony-wh-1000xm5',
+  '/tasoron',
+]) {
   await page.goto(`${BASE}${path}`, { waitUntil: 'networkidle' });
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -705,6 +712,108 @@ const realErrors = consoleErrors.filter(
   (text) => !/favicon|Failed to load resource.*40[34]/i.test(text),
 );
 check(realErrors.length === 0, 'Konsolda hata yok', realErrors.slice(0, 3).join(' | '));
+
+// --- Fırsat sayfası: iddia ile dayanağı ayrılamaz --------------------------
+/*
+ * Bu sayfanın tek riski, ölçüm olmadan "indirim" yazmasıdır. Kontrol,
+ * sayfanın hangi durumda olduğuna bakmadan geçerli: ya hiç kart yoktur ve
+ * dürüst boş durum görünür, ya da her kartın üzerinde düşüşün neye göre
+ * ölçüldüğü yazar. İkisi de yoksa sayfa dayanaksız bir iddia gösteriyordur.
+ */
+await page.goto(`${BASE}/firsatlar`, { waitUntil: 'networkidle' });
+
+const yontemNotu = await page.getByText('bizim kendi ölçtüğümüz').count();
+check(yontemNotu > 0, 'Fırsat sayfası düşüşü neye göre ölçtüğünü yazıyor');
+
+const rozetSayisi = await page.locator('text=/% ?\\d+ düştü/').count();
+const dayanakSayisi = await page.getByText('gördüğümüz en yüksek fiyat').count();
+const bosDurum = await page.getByText('ölçülmüş bir fiyat düşüşü yok').count();
+
+check(
+  rozetSayisi === 0 ? bosDurum > 0 : dayanakSayisi >= rozetSayisi,
+  'Her düşüş iddiasının yanında ölçüm dayanağı var',
+  `rozet=${rozetSayisi} dayanak=${dayanakSayisi} bosDurum=${bosDurum}`,
+);
+
+// Kategori şeridi gerçekten gezdiriyor mu?
+const firsatKategori = page.locator('nav[aria-label="Fırsat kategorileri"] a[href^="/firsatlar/"]').first();
+if ((await firsatKategori.count()) > 0) {
+  const hedef = await firsatKategori.getAttribute('href');
+  const yanit = await page.goto(`${BASE}${hedef}`, { waitUntil: 'networkidle' });
+  check(yanit?.status() === 200, `Fırsat kategorisi açılıyor: ${hedef}`, `durum ${yanit?.status()}`);
+  check(
+    (await page.getByText('bizim kendi ölçtüğümüz').count()) > 0,
+    'Kategori fırsat sayfası da yöntemi yazıyor',
+  );
+}
+
+// Üst çubuktaki Fırsatlar bağı her sayfadan çalışıyor mu?
+await page.setViewportSize({ width: 1280, height: 900 });
+await page.goto(`${BASE}/kategori/elektronik`, { waitUntil: 'networkidle' });
+const ustBag = page.locator('nav[aria-label="Kategori menüsü"] a[href="/firsatlar"]');
+check((await ustBag.count()) > 0, 'Üst çubukta Fırsatlar bağı var');
+
+// --- Paylaş düğmesi gerçekten paylaşıyor mu? -------------------------------
+/*
+ * "Çalışıyor gibi görünen buton" yasak. Paylaş düğmesinin ölçülebilir işi
+ * şudur: menüyü açar, menüdeki bağlantılar doğru hedefe ve KAYNAK
+ * ETİKETİYLE gider. Etiket olmazsa paylaşımdan gelen ziyaret ölçülemez ve
+ * özellik sessizce anlamsızlaşır.
+ */
+await page.goto(`${BASE}/urun/sony-wh-1000xm5`, { waitUntil: 'networkidle' });
+
+const paylasDugmesi = page.getByRole('button', { name: 'Paylaş' });
+check((await paylasDugmesi.count()) > 0, 'Ürün sayfasında paylaş düğmesi var');
+
+await paylasDugmesi.first().click();
+const paylasMenusu = page.getByRole('menu', { name: 'Paylaşım seçenekleri' });
+check(await paylasMenusu.isVisible(), 'Paylaş düğmesi menüyü açıyor');
+
+const whatsapp = await page.getByRole('menuitem', { name: 'WhatsApp' }).getAttribute('href');
+check(
+  typeof whatsapp === 'string' && whatsapp.includes('wa.me'),
+  'WhatsApp bağlantısı WhatsApp\'a gidiyor',
+  String(whatsapp),
+);
+check(
+  typeof whatsapp === 'string' &&
+    decodeURIComponent(whatsapp).includes('utm_source=whatsapp') &&
+    decodeURIComponent(whatsapp).includes('/urun/sony-wh-1000xm5'),
+  'Paylaşılan bağlantı ürünü ve kaynağı taşıyor',
+  String(whatsapp && decodeURIComponent(whatsapp).slice(0, 160)),
+);
+
+// Escape ile kapanmayan menü, altındaki içeriği tıklanamaz bırakır.
+await page.keyboard.press('Escape');
+check(!(await paylasMenusu.isVisible().catch(() => false)), 'Paylaş menüsü Escape ile kapanıyor');
+
+// Önizleme görseli gerçekten üretiliyor mu?
+const onizleme = await page.goto(`${BASE}/urun/sony-wh-1000xm5/opengraph-image`, {
+  waitUntil: 'domcontentloaded',
+});
+check(
+  onizleme?.status() === 200 && (onizleme.headers()['content-type'] ?? '').includes('image/png'),
+  'Ürün önizleme görseli üretiliyor',
+  `${onizleme?.status()} ${onizleme?.headers()['content-type']}`,
+);
+
+// --- Skor paneli: sayı varsa dayanağı da var ------------------------------
+/*
+ * Demo katalogunda ölçüm yok, bu yüzden panel çizilmiyor -- ve bu doğru
+ * davranış. Kontrol, panelin VARLIĞINI değil, var olduğunda eksiksiz
+ * olduğunu sınıyor: bir skor sayısı gösterilip ölçüt dökümü gösterilmiyorsa,
+ * sayı olduğundan güçlü görünür.
+ */
+await page.goto(`${BASE}/urun/sony-wh-1000xm5`, { waitUntil: 'networkidle' });
+
+const skorPaneli = page.getByRole('region', { name: 'Ohaaaa Skoru' });
+const skorVar = (await skorPaneli.count()) > 0;
+check(
+  !skorVar || (await skorPaneli.getByRole('listitem').count()) > 0,
+  skorVar
+    ? 'Skor paneli ölçüt dökümünü gösteriyor'
+    : 'Ölçüm yokken skor paneli çizilmiyor (uydurulmuyor)',
+);
 
 await browser.close();
 

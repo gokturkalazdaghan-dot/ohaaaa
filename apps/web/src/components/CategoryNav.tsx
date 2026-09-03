@@ -30,6 +30,19 @@ export async function CategoryNav() {
         çubuğu iki üç sıra büyütür ve ilk ekranın yarısını yer.
       */}
       <ul className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 py-1.5 sm:px-6">
+        {/*
+          Fırsatlar şeridin BAŞINDA duruyor ve vurgulu: fiyatı düşen ürünler
+          sitenin en çok aranan girişi ve kategori listesinin içinde kaybolursa
+          hiç tıklanmaz. Bir kategori değil, bu yüzden rengiyle ayrılıyor.
+        */}
+        <li className="shrink-0">
+          <Link
+            href="/firsatlar"
+            className="block rounded-lg px-3 py-1.5 text-sm font-semibold text-brand transition-colors hover:bg-surface-2"
+          >
+            Fırsatlar
+          </Link>
+        </li>
         {categories.map((category) => (
           <li key={category.id} className="shrink-0">
             <Link

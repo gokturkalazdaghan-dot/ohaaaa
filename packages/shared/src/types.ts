@@ -346,3 +346,70 @@ export function offerSellerName(offer: Offer): string {
 export function offerSellerRating(offer: Offer): number | null {
   return offer.vendor?.rating ?? offer.merchant?.rating ?? null;
 }
+
+/**
+ * Fiyatı düşen bir ürün grubu — "fırsat" sayfalarının tek veri kaynağı.
+ *
+ * `referencePriceCents` mağazanın üstü çizili fiyatı DEĞİLDİR; bizim
+ * gözlem penceresi içinde gerçekten ölçtüğümüz en yüksek fiyattır.
+ * `observedDays` o gözlemin kaç güne yayıldığını söyler: bir günlük
+ * gözlemle "aylardır bu kadar ucuz olmamıştı" denemez.
+ */
+export interface PriceDrop {
+  groupId: string;
+  slug: string;
+  title: string;
+  imageUrl: string | null;
+  categoryId: string | null;
+  currentPriceCents: number;
+  referencePriceCents: number;
+  /** 0-1 arası oran. 0.25 = %25 düşüş. */
+  dropRatio: number;
+  observedDays: number;
+  offerCount: number;
+}
+
+/** Skor bileşeninin kaynağı: bizim ölçümümüz mü, mağazanın beyanı mı. */
+export type ScoreSource = 'olcum' | 'beyan';
+
+/**
+ * Ohaaaa skorunun tek bir bileşeni.
+ *
+ * `available` false ise `points` YOKTUR — sıfır değil, yok. Ölçemediğimiz
+ * bir ölçüte sıfır vermek "kötü" demek olurdu; `reason` neden ölçemediğimizi
+ * söyler ve arayüz onu yazmak zorundadır.
+ */
+export type ScoreComponent =
+  | {
+      key: string;
+      available: true;
+      source: ScoreSource;
+      weight: number;
+      points: number;
+      detail: Record<string, unknown>;
+    }
+  | {
+      key: string;
+      available: false;
+      source: ScoreSource;
+      weight: number;
+      reason: string;
+      detail: Record<string, unknown>;
+    };
+
+/**
+ * Bir teklifin Ohaaaa skoru.
+ *
+ * `score` null olabilir: ölçülebilen ağırlık eşiğin altındaysa sayı
+ * üretilmez. `measuredWeight` / `totalWeight` oranı, sayının ne kadarlık bir
+ * ölçüme dayandığını gösterir ve arayüzde sayının yanında durmalıdır.
+ */
+export interface OhaaaaScore {
+  score: number | null;
+  maxScore: number;
+  measuredWeight: number;
+  totalWeight: number;
+  confidence: 'yuksek' | 'orta' | 'dusuk' | 'yetersiz';
+  windowDays: number;
+  components: ScoreComponent[];
+}

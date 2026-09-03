@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Outfit, Plus_Jakarta_Sans } from 'next/font/google';
+import { Analytics as VercelAnalytics } from '@vercel/analytics/next';
 
 import { Analytics } from '@/components/Analytics';
 import { ConsentBanner } from '@/components/ConsentBanner';
@@ -147,6 +148,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </FavoritesProvider>
         <ConsentBanner />
         {gaMeasurementId && <Analytics measurementId={gaMeasurementId} />}
+        <VercelAnalytics />
       </body>
     </html>
   );

@@ -66,6 +66,8 @@ const ornekler = new Map();
 for (const [desen, liste, secici] of [
   ['/urun/[slug]', '/arama', 'a[href^="/urun/"]'],
   ['/kategori/[slug]', '/', 'a[href^="/kategori/"]'],
+  // Firsat sayfasindaki kategori seridi: ornek slug oradan alinir.
+  ['/firsatlar/[kategori]', '/firsatlar', 'a[href^="/firsatlar/"]'],
   ['/magaza/[slug]', '/', 'a[href^="/magaza/"]'],
 ]) {
   const yol = await ornekSlug(sayfa, liste, secici).catch(() => null);
