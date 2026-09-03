@@ -51,6 +51,21 @@ jobs:
       - run: npm run build --workspace @ohaaaa/shared
       - run: npm run build --workspace @ohaaaa/ingest
 
+      # ZAMANLAYICI KIPI (--schedule)
+      #
+      # Onceki hal her calismada TUM etkin kaynaklari sirayla aliyordu.
+      # Artik yalnizca `next_refresh_at <= now()` olanlar kuyruga giriyor
+      # ve worker onlari isliyor. Fiyati gunde bes kez degisen bir urun
+      # ile yilda bir degisen bir yedek parca artik ayni muameleyi
+      # gormuyor.
+      #
+      # DURUSTCE BIR SINIR: bu is 6 saatte bir tetikleniyor, dolayisiyla
+      # uyarlanabilir planin onerdigi 5 dakikalik araliklar PRATIKTE 6
+      # saatte bir uygulanabiliyor. Cron sikligi, planin tavani. Daha sik
+      # tetikleme bir maliyet karari; kod tarafi hazir.
+      #
+      # Elle tek kaynak calistirmak icin eski dogrudan kip korundu:
+      # `--source=<slug>` verildiginde zamanlayici atlanir.
       - name: Alımı çalıştır
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -58,5 +73,5 @@ jobs:
           OHAAAA_USER_AGENT: 'OhaaaaBot/1.0 (+https://ohaaaa.com/bot; iletisim@ohaaaa.com)'
         run: |
           node packages/ingest/dist/cli.js \
-            ${{ inputs.source && format('--source={0}', inputs.source) || '' }} \
+            ${{ inputs.source && format('--source={0}', inputs.source) || '--schedule' }} \
             ${{ inputs.dry_run && '--dry-run' || '' }}

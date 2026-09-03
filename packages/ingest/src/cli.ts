@@ -17,7 +17,11 @@
 
 import { createClient } from '@supabase/supabase-js';
 
+import { runWorkerOnce } from '@ohaaaa/shared';
+
 import { runSource } from './pipeline.js';
+import { createQueueRepository, scheduleDueSources } from './queueRepository.js';
+import { createSourceSyncHandler } from './sourceSyncHandler.js';
 import { createSupabaseRepository, loadSources } from './supabaseRepository.js';
 import { createPoliteClient } from './http/politeClient.js';
 import type { IngestSummary } from './types.js';
@@ -29,13 +33,22 @@ const USER_AGENT =
 interface CliOptions {
   sourceSlug?: string;
   dryRun: boolean;
+  /**
+   * Zamanlayıcı kipi.
+   *
+   * Varsayılan kip (kaynakları doğrudan sırayla çalıştırmak) KORUNUYOR:
+   * elle müdahale ve hata ayıklama için gerekli. Zamanlayıcı kipi onun
+   * yerine geçmiyor, yanına ekleniyor.
+   */
+  schedule: boolean;
 }
 
 function parseArgs(argv: string[]): CliOptions {
-  const options: CliOptions = { dryRun: false };
+  const options: CliOptions = { dryRun: false, schedule: false };
 
   for (const arg of argv) {
     if (arg === '--dry-run') options.dryRun = true;
+    else if (arg === '--schedule') options.schedule = true;
     else if (arg.startsWith('--source=')) options.sourceSlug = arg.slice('--source='.length);
     else if (arg === '--help' || arg === '-h') {
       console.log(
@@ -43,6 +56,8 @@ function parseArgs(argv: string[]): CliOptions {
           'Kullanım: ohaaaa-ingest [seçenekler]',
           '',
           '  --source=<slug>   Yalnızca bu kaynağı çalıştır',
+          '  --schedule        Zamanlayıcı kipi: due kaynakları kuyruğa al',
+          '                    ve kuyruktaki işleri çalıştır',
           '  --dry-run         Veritabanına yazmadan dene',
           '  --help            Bu yardım',
           '',
@@ -75,6 +90,80 @@ async function main(): Promise<void> {
   const supabase = createClient(supabaseUrl, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  const fetcherForAll = createPoliteClient({
+    userAgent: USER_AGENT,
+    minDelayMs: 2000,
+    timeoutMs: 30_000,
+    maxRetries: 3,
+    circuitBreakerThreshold: 5,
+  });
+
+  /*
+   * ZAMANLAYICI KİPİ — zincirin gerçek giriş noktası.
+   *
+   *   schedule_due_sources()  → SOURCE_SYNC işleri
+   *   runWorkerOnce()         → claim_jobs → işleyici → runSource
+   *
+   * Kuru çalışmada zamanlayıcı ÇALIŞTIRILMAZ: kuyruğa iş yazmak da bir
+   * yazma işlemidir ve `--dry-run` sözünü bozardı.
+   */
+  if (options.schedule) {
+    if (options.dryRun) {
+      console.error('HATA: --schedule ile --dry-run birlikte kullanılamaz.');
+      process.exit(2);
+    }
+
+    const planlanan = await scheduleDueSources(supabase);
+    console.log(`▸ Zamanlayıcı: ${planlanan.length} kaynak kuyruğa alındı`);
+    for (const p of planlanan) console.log(`  · ${p.sourceId} (${p.reason})`);
+
+    /*
+     * Yetim işler önce kurtarılır: bir önceki çalışmada worker ölmüşse
+     * o işler `calisiyor` durumunda asılı kalmıştır ve kirası dolmuştur.
+     */
+    const { error: kurtarmaHatasi } = await supabase.rpc('recover_orphaned_jobs');
+    if (kurtarmaHatasi) {
+      console.error(`  ! yetim kurtarma başarısız: ${kurtarmaHatasi.message}`);
+    }
+
+    const queueRepo = createQueueRepository(supabase);
+    const ingestRepo = createSupabaseRepository(supabase);
+
+    const sonuc = await runWorkerOnce({
+      repository: queueRepo,
+      batchSize: 5,
+      // Aynı kaynağa eşzamanlı istek göndermemek için tek tek işlenir.
+      concurrency: 1,
+      leaseRenewMs: 60_000,
+      handlers: {
+        SOURCE_SYNC: createSourceSyncHandler({
+          loadSource: async (id) => {
+            const bulunan = await loadSources(supabase, { id });
+            return bulunan[0] ?? null;
+          },
+          repository: ingestRepo,
+          fetcher: fetcherForAll,
+          onComplete: (summary) => {
+            console.log(
+              `  ${statusIcon(summary.status)} ${summary.status} · ` +
+                `${summary.itemsSeen} görüldü, ${summary.itemsNew} yeni, ` +
+                `${summary.itemsChanged} değişti, ${summary.itemsUnchanged} aynı, ` +
+                `${summary.itemsDeleted} eksildi`,
+            );
+          },
+        }),
+      },
+      log: (event, data) => console.log(JSON.stringify({ event, ...data })),
+    });
+
+    console.log(
+      `▸ Worker: ${sonuc.claimed} alındı, ${sonuc.completed} tamamlandı, ` +
+        `${sonuc.failed} başarısız`,
+    );
+
+    process.exit(sonuc.failed > 0 ? 1 : 0);
+  }
 
   const sources = await loadSources(supabase, { slug: options.sourceSlug });
 

@@ -337,7 +337,13 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
 /** Alım için etkin kaynakları, mağaza bilgileriyle birlikte okur. */
 export async function loadSources(
   supabase: SupabaseClient,
-  filter: { slug?: string } = {},
+  /*
+   * `id` süzgeci SOURCE_SYNC işleyicisi için eklendi: iş yükü yalnızca
+   * kaynak kimliği taşıyor ve kaynak veritabanından YENİDEN çözülüyor.
+   * İkinci bir yükleyici yazmak, "etkin kaynak" ve "aktif satıcı"
+   * koşullarını iki yerde tutmak olurdu.
+   */
+  filter: { slug?: string; id?: string } = {},
 ): Promise<SourceConfig[]> {
   let query = supabase
     .from('sources')
@@ -349,6 +355,7 @@ export async function loadSources(
     .eq('merchants.status', 'active');
 
   if (filter.slug) query = query.eq('slug', filter.slug);
+  if (filter.id) query = query.eq('id', filter.id);
 
   const { data, error } = await query;
   if (error) throw new Error(`Kaynaklar okunamadı: ${error.message}`);
