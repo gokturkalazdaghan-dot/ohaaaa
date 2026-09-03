@@ -31,8 +31,22 @@ import Link from 'next/link';
  * başlık ile sekme ikonu aynı dili konuşuyor.
  */
 
-/** H'nin O'nun içine girme miktarı. Ölçülerek seçildi (yukarıya bakın). */
+/**
+ * H'nin İKİ YANI DA bağlı.
+ *
+ * O ile H arasındaki kern (-0,20em) daha önce ölçülmüştü. Ama H'nin sağ
+ * tarafı açıkta kalıyordu: O ile H birleşik, A ise ayrı duruyordu. H'nin
+ * ortada olması, iki yandan da bağlı olmasını gerektiriyor -- aksi halde
+ * "birleşik OH + ayrı AAAA" gibi iki parça okunuyor.
+ *
+ * H→A kerni de aynı yöntemle ölçüldü (14px–52px, dört kademe):
+ *    0      H ve A ayrı duruyor
+ *   -0,06   değiyor
+ *   -0,12   birleşiyor, 14px'te hâlâ okunuyor          ← seçilen
+ *   -0,18   "HA" tek bir şekle dönüşüyor, okunurluk kayboluyor
+ */
 const OH_KERN = '-0.2em';
+const HA_KERN = '-0.12em';
 
 /** Dört A'nın göreli boyutu — soldan sağa büyür. */
 const A_RAMPA = [0.7, 0.85, 1.0, 1.2] as const;
@@ -60,7 +74,7 @@ export function Monogram({ className = '' }: { className?: string }) {
       style={{ fontFamily: 'var(--font-outfit), sans-serif' }}
     >
       <span style={{ letterSpacing: OH_KERN }}>O</span>
-      <span>H</span>
+      <span style={{ letterSpacing: HA_KERN }}>H</span>
       <span>A</span>
     </span>
   );
@@ -76,7 +90,7 @@ export function Wordmark({ className = '' }: { className?: string }) {
       style={{ fontFamily: 'var(--font-outfit), sans-serif' }}
     >
       <span style={{ letterSpacing: OH_KERN }}>O</span>
-      <span>H</span>
+      <span style={{ letterSpacing: HA_KERN }}>H</span>
       {A_RAMPA.map((oran, i) => (
         <span key={i} style={{ fontSize: `${oran}em` }}>
           A
