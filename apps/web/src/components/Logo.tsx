@@ -1,104 +1,114 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useRef, useState } from 'react';
 
 /**
- * Ohaaaa arması.
+ * Ohaaaa arması — kelime işareti ve OHA monogramı.
  *
- * MARKA İMZASI: HARFLER SOLDAN SAĞA KÜÇÜLÜR.
- * O h a a a a — ilk harf en güçlü, her harf bir öncekinden küçük. Bu
- * dekoratif bir ayrıntı değil; markanın tanınma işareti. Sesin sönümlenmesini
- * ("ohaaaa" derken sesin azalması) yazıya çeviriyor ve altı harfli bir
- * kelimeyi tek bakışta ayırt edilir kılıyor.
+ * İKİ TASARIM KURALI, İKİSİ DE ÖLÇÜLEREK BULUNDU
  *
- * ORTAK TABAN ÇİZGİSİ ŞART. Harfler `items-baseline` ile hizalanır; ortadan
- * hizalansalardı küçülen harfler havada asılı kalır ve kademe bir dalga
- * değil, dağınıklık gibi okunurdu.
+ * 1) OH BİRLEŞİK. O ile H bağımsız iki harf gibi durmamalı. Bu, negatif
+ *    kern ile sağlanıyor: H'nin sol dikmesi O'nun sağ gövdesinin içine
+ *    giriyor. Değer tahminle seçilmedi -- dört kademe (-0,10 / -0,15 /
+ *    -0,20 / -0,25) 14px'ten 52px'e kadar ölçüldü:
+ *      -0,10  harfler ayrı duruyor, bağ yok
+ *      -0,15  değiyor ama kaynaşmıyor
+ *      -0,20  gerçekten kaynaşıyor ve 14px'te hâlâ "OH" okunuyor  ← seçilen
+ *      -0,25  O kesilmeye başlıyor, "Œ" gibi okunuyor
  *
- * NEDEN CANLI METİN, PNG DEĞİL?
- * Harflerin tek tek hareket edebilmesi için metin olmalı. Ayrıca kademeli
- * boyut, kullanıcının yazı tipi ayarıyla birlikte ölçeklenir — sabit
- * piksellik bir görselde bu olmaz.
+ * 2) DÖRT A SOLDAN SAĞA BÜYÜR. Sesin yükselmesini yazıya çeviriyor.
+ *    Rampa yine ölçülerek seçildi: daha yumuşak bir dizi (.82 .90 1.0 1.10)
+ *    fark edilmiyordu, daha sert olanı (.64 .82 1.0 1.28) çocuk markası
+ *    hissi veriyordu. Seçilen dizi belirgin ama kontrollü.
  *
- * DOKUNMA
- * Animasyon yalnızca :hover'a bağlansaydı telefonda hiç çalışmazdı; dokunmalı
- * ekranda hover yoktur. Bu yüzden pointerdown ile bir sınıf ekleniyor ve
- * süre dolunca kaldırılıyor: parmak kalksa bile animasyon tamamlanır.
+ * NEDEN CANLI METİN, ÇİZİM DEĞİL?
+ * Önce geometrik primitiflerle (daire + dikdörtgen) çizildi ve ölçüldü:
+ * üç harf ağır konturlarla üst üste binince "OHA" değil "GIVA" gibi
+ * okunuyordu. Gerçek harf formları 16px'te bile doğru okunuyor. Ayrıca
+ * canlı metin kullanıcının yazı tipi ayarıyla ölçekleniyor.
+ *
+ * Yazı tipi Outfit — favicon ve arma da aynı harflerle çizildiği için
+ * başlık ile sekme ikonu aynı dili konuşuyor.
  */
+
+/** H'nin O'nun içine girme miktarı. Ölçülerek seçildi (yukarıya bakın). */
+const OH_KERN = '-0.2em';
+
+/** Dört A'nın göreli boyutu — soldan sağa büyür. */
+const A_RAMPA = [0.7, 0.85, 1.0, 1.2] as const;
 
 /**
- * Harfler ve göreli boyutları.
+ * OHA monogramı.
  *
- * Oran dizisi düz bir aritmetik iniş DEĞİL: baştaki düşüş daha keskin,
- * sona doğru yumuşuyor. Eşit adımlarla inen bir dizi, son "a"ları okunmaz
- * hale getiriyordu.
+ * Favicon, mobil başlık, uygulama ikonu ve sosyal avatar için. Tek parça
+ * bir marka işareti gibi çalışması, OH birleşmesinden geliyor: üç harf
+ * yan yana dizilmiş gibi değil, bağlı bir işaret gibi okunuyor.
  */
-const HARFLER: Array<{ ch: string; olcek: number }> = [
-  { ch: 'O', olcek: 1 },
-  { ch: 'h', olcek: 0.84 },
-  { ch: 'a', olcek: 0.72 },
-  { ch: 'a', olcek: 0.63 },
-  { ch: 'a', olcek: 0.56 },
-  { ch: 'a', olcek: 0.5 },
-];
+export function Monogram({ className = '' }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      /*
+        `display` SINIFI BURADA YOK ve bu kasıtlı.
+        Önce base sınıfta `inline-flex` vardı; çağıran taraf `hidden`
+        geçtiğinde ikisi aynı özgüllükte çakışıyor ve stil sırasına göre
+        `inline-flex` kazanıyordu. Sonuç mobil başlıkta "OHAAAAOHA" idi --
+        kelime ve monogram aynı anda çiziliyordu (ölçüldü). Display kararı
+        artık tek yerde: çağıran tarafta.
+      */
+      className={`items-baseline font-bold leading-none tracking-tight ${className}`}
+      style={{ fontFamily: 'var(--font-outfit), sans-serif' }}
+    >
+      <span style={{ letterSpacing: OH_KERN }}>O</span>
+      <span>H</span>
+      <span>A</span>
+    </span>
+  );
+}
 
-/** Son harfin animasyonu bitene kadar geçen süre. */
-const TAP_MS = 640;
+/** Tam kelime işareti: OHAAAA. */
+export function Wordmark({ className = '' }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      /* `display` sınıfı yok — gerekçe Monogram'da yazılı. */
+      className={`items-baseline font-bold leading-none tracking-tight ${className}`}
+      style={{ fontFamily: 'var(--font-outfit), sans-serif' }}
+    >
+      <span style={{ letterSpacing: OH_KERN }}>O</span>
+      <span>H</span>
+      {A_RAMPA.map((oran, i) => (
+        <span key={i} style={{ fontSize: `${oran}em` }}>
+          A
+        </span>
+      ))}
+    </span>
+  );
+}
 
+/**
+ * Başlıktaki arma kilidi.
+ *
+ * Masaüstünde tam kelime, dar ekranda yalnızca monogram: 390px'lik bir
+ * telefonda altı harflik kelime, aramanın ve sepetin yerini yiyordu.
+ *
+ * Erişilebilir ad BAĞLANTIDA; harfler `aria-hidden` çünkü ekran okuyucu
+ * onları tek tek okursa "O, H, A, A, A, A" duyulur.
+ */
 export function Logo({ className = '' }: { className?: string }) {
-  const [tapped, setTapped] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const play = useCallback(() => {
-    if (timer.current) clearTimeout(timer.current);
-    setTapped(true);
-    timer.current = setTimeout(() => setTapped(false), TAP_MS);
-  }, []);
-
   return (
     <Link
       href="/"
-      onPointerDown={play}
-      /*
-        Erişilebilir ad ARMANIN KENDİSİNDE. Harfler `aria-hidden` çünkü
-        ekran okuyucu onları tek tek okursa "O, h, a, a, a, a" duyulur.
-      */
       aria-label="Ohaaaa ana sayfa"
-      className={`group -my-2 flex items-center gap-2 py-2 ${className}`}
+      /*
+        ANA KOMBİNASYON: turuncu arma, bej zemin. Koyu bir arma da geçerli
+        bir varyant ama birincil olan bu -- arma markanın tanınma noktası ve
+        turuncu, Ohaaaa'yı bir bakışta ayırt eden şey.
+      */
+      className={`group inline-flex items-center text-brand transition-opacity hover:opacity-80 ${className}`}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/ohaaaa-disc.png"
-        alt=""
-        width={28}
-        height={28}
-        className="h-7 w-7 shrink-0"
-      />
-
-      <span
-        aria-hidden="true"
-        className={`oha-word flex items-baseline ${tapped ? 'oha-word-tap' : ''}`}
-        style={{ fontFamily: 'var(--font-outfit), sans-serif' }}
-      >
-        {HARFLER.map(({ ch, olcek }, i) => (
-          <span
-            key={`${ch}-${i}`}
-            className="oha-letter font-bold leading-none tracking-tight text-fg"
-            style={{
-              fontSize: `${olcek * 1.5}rem`,
-              animationDelay: `${i * 62}ms`,
-              /*
-                Küçülen harfler arasındaki boşluk da küçülmeli; sabit boşluk
-                bırakılsaydı sondaki küçük "a"lar birbirinden kopardı.
-              */
-              marginLeft: i === 0 ? 0 : `${-0.02 * olcek}em`,
-            }}
-          >
-            {ch}
-          </span>
-        ))}
-      </span>
+      <Wordmark className="hidden text-[1.35rem] sm:inline-flex" />
+      <Monogram className="inline-flex text-[1.35rem] sm:hidden" />
     </Link>
   );
 }
