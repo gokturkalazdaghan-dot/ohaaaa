@@ -4,6 +4,7 @@ import { formatMoney, type Category, type PriceDrop } from '@ohaaaa/shared';
 
 import { JsonLd } from '@/components/JsonLd';
 import { PriceDropCard } from '@/components/PriceDropCard';
+import { ShareButton } from '@/components/ShareButton';
 import { siteUrl } from '@/lib/env';
 
 /**
@@ -152,10 +153,24 @@ export function DealsView({
 
       {drops.length > 0 ? (
         <>
-          <p className="mt-8 text-sm text-muted">
-            <strong className="text-fg">{drops.length} üründe</strong> düşüş ölçtük
-            {enBuyuk > 0 && <> — en büyüğü %{Math.round(enBuyuk * 100)}.</>}
-          </p>
+          <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted">
+              <strong className="text-fg">{drops.length} üründe</strong> düşüş ölçtük
+              {enBuyuk > 0 && <> — en büyüğü %{Math.round(enBuyuk * 100)}.</>}
+            </p>
+
+            {/*
+              Paylaşım metni sayfadaki ÖLÇÜLMÜŞ sayılardan kurulur. Liste
+              boşken düğme hiç çizilmiyor: paylaşacak bir bulgu yok.
+            */}
+            <ShareButton
+              path={yol}
+              title={heading}
+              text={`${heading}: ${drops.length} üründe düşüş ölçtük${
+                enBuyuk > 0 ? `, en büyüğü %${Math.round(enBuyuk * 100)}` : ''
+              }`}
+            />
+          </div>
 
           <h2 className="sr-only">Fiyatı düşen ürünler</h2>
           <ul className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">

@@ -753,6 +753,50 @@ await page.goto(`${BASE}/kategori/elektronik`, { waitUntil: 'networkidle' });
 const ustBag = page.locator('nav[aria-label="Kategori menüsü"] a[href="/firsatlar"]');
 check((await ustBag.count()) > 0, 'Üst çubukta Fırsatlar bağı var');
 
+// --- Paylaş düğmesi gerçekten paylaşıyor mu? -------------------------------
+/*
+ * "Çalışıyor gibi görünen buton" yasak. Paylaş düğmesinin ölçülebilir işi
+ * şudur: menüyü açar, menüdeki bağlantılar doğru hedefe ve KAYNAK
+ * ETİKETİYLE gider. Etiket olmazsa paylaşımdan gelen ziyaret ölçülemez ve
+ * özellik sessizce anlamsızlaşır.
+ */
+await page.goto(`${BASE}/urun/sony-wh-1000xm5`, { waitUntil: 'networkidle' });
+
+const paylasDugmesi = page.getByRole('button', { name: 'Paylaş' });
+check((await paylasDugmesi.count()) > 0, 'Ürün sayfasında paylaş düğmesi var');
+
+await paylasDugmesi.first().click();
+const paylasMenusu = page.getByRole('menu', { name: 'Paylaşım seçenekleri' });
+check(await paylasMenusu.isVisible(), 'Paylaş düğmesi menüyü açıyor');
+
+const whatsapp = await page.getByRole('menuitem', { name: 'WhatsApp' }).getAttribute('href');
+check(
+  typeof whatsapp === 'string' && whatsapp.includes('wa.me'),
+  'WhatsApp bağlantısı WhatsApp\'a gidiyor',
+  String(whatsapp),
+);
+check(
+  typeof whatsapp === 'string' &&
+    decodeURIComponent(whatsapp).includes('utm_source=whatsapp') &&
+    decodeURIComponent(whatsapp).includes('/urun/sony-wh-1000xm5'),
+  'Paylaşılan bağlantı ürünü ve kaynağı taşıyor',
+  String(whatsapp && decodeURIComponent(whatsapp).slice(0, 160)),
+);
+
+// Escape ile kapanmayan menü, altındaki içeriği tıklanamaz bırakır.
+await page.keyboard.press('Escape');
+check(!(await paylasMenusu.isVisible().catch(() => false)), 'Paylaş menüsü Escape ile kapanıyor');
+
+// Önizleme görseli gerçekten üretiliyor mu?
+const onizleme = await page.goto(`${BASE}/urun/sony-wh-1000xm5/opengraph-image`, {
+  waitUntil: 'domcontentloaded',
+});
+check(
+  onizleme?.status() === 200 && (onizleme.headers()['content-type'] ?? '').includes('image/png'),
+  'Ürün önizleme görseli üretiliyor',
+  `${onizleme?.status()} ${onizleme?.headers()['content-type']}`,
+);
+
 await browser.close();
 
 const failed = results.filter((r) => !r.ok);

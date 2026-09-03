@@ -9,6 +9,7 @@ import { ShieldIcon, TruckIcon } from '@/components/Icons';
 import { JsonLd } from '@/components/JsonLd';
 import { OfferRow } from '@/components/OfferRow';
 import { FavoriteButton } from '@/components/FavoriteButton';
+import { ShareButton } from '@/components/ShareButton';
 import { ProductGallery } from '@/components/ProductGallery';
 import { RecentlyViewed, RecordProductView } from '@/components/RecentlyViewed';
 import { PriceHistory } from '@/components/PriceHistory';
@@ -307,12 +308,26 @@ export default async function ProductPage({ params }: ProductPageProps) {
             <p className="mt-4 leading-relaxed text-muted">{group.description}</p>
           )}
 
-          <div className="mt-5">
+          <div className="mt-5 flex flex-wrap items-center gap-3">
             <FavoriteButton
               slug={group.slug}
               title={group.title}
               imageUrl={galleryImages[0] ?? null}
               priceCents={bestOffer?.priceCents ?? group.minPriceCents}
+            />
+            {/*
+              Paylaşım metni yalnızca ÖLÇÜLMÜŞ değerden kurulur: fiyat varsa
+              yazılır, yoksa yalnızca ürün adı paylaşılır. "En ucuz burada"
+              gibi doğrulanamayan bir cümle kurulmuyor.
+            */}
+            <ShareButton
+              path={`/urun/${group.slug}`}
+              title={group.title}
+              text={
+                group.minPriceCents !== null
+                  ? `${group.title} — ${group.offerCount} mağazada, kargo dahil en düşük ${formatMoney(group.minPriceCents)}`
+                  : group.title
+              }
             />
           </div>
 
