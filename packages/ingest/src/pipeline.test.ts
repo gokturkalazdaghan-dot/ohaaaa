@@ -17,6 +17,7 @@ const SOURCE: SourceConfig = {
   merchantId: 'merchant-1',
   kind: 'feed_csv',
   endpointUrl: 'https://magaza.example/feed.csv',
+  market: 'TR',
   currency: 'TRY',
   allowedHosts: ['magaza.example'],
   fieldMapping: {
@@ -40,6 +41,8 @@ function fakeRepository(overrides: Partial<IngestRepository> = {}) {
   const calls = {
     markStale: 0,
     upserted: [] as Array<NormalizedOffer & { groupId: string | null }>,
+    /** upsertOffers'a hangi pazarın geçtiği — pazar izolasyonunun kanıtı. */
+    upsertMarkets: [] as Array<SourceConfig['market']>,
     createdGroups: [] as string[],
     finished: [] as IngestSummary[],
   };
@@ -59,8 +62,9 @@ function fakeRepository(overrides: Partial<IngestRepository> = {}) {
       }
       return result;
     },
-    async upsertOffers(_merchantId, _sourceId, rows) {
+    async upsertOffers(_merchantId, _sourceId, rows, market) {
       calls.upserted.push(...rows);
+      calls.upsertMarkets.push(market);
       return { created: rows.length, updated: 0 };
     },
     async markStale() {
@@ -241,4 +245,35 @@ test('çalışma kaydı her durumda kapatılır', async () => {
     await runSource(SOURCE, { fetcher: fakeFetcher(body), repository });
     assert.equal(calls.finished.length, 1, `kapatılmadı: "${body.slice(0, 10)}"`);
   }
+});
+
+
+/*
+ * PAZAR KAYNAKTAN TEKLİFE TAŞINIR.
+ *
+ * Pazar alanı eklendiğinde hattın onu yazmayı unutması, sütunun
+ * varsayılanda ('TR') kalması demekti: Alman feed'inden gelen teklifler
+ * sessizce Türk pazarına düşerdi. Şema, para birimi uyuşmadığı için
+ * bunların çoğunu reddeder -- ama EUR fiyatlı bir Avusturya feed'i
+ * sessizce Almanya'ya karışabilirdi. Bu yüzden taşıma AYRICA sınanıyor.
+ */
+test('kaynağın pazarı upsertOffers çağrısına geçirilir', async () => {
+  const { repository, calls } = fakeRepository();
+
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository });
+
+  assert.deepEqual(calls.upsertMarkets, ['TR']);
+});
+
+test('farklı pazardaki kaynak kendi pazarını taşır', async () => {
+  const { repository, calls } = fakeRepository();
+
+  await runSource(
+    { ...SOURCE, market: 'DE', currency: 'EUR' },
+    { fetcher: fakeFetcher(CSV), repository },
+  );
+
+  assert.deepEqual(calls.upsertMarkets, ['DE']);
+  // Pazar değişti diye teklifler kaybolmamalı.
+  assert.equal(calls.upserted.length, 2);
 });

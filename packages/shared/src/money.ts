@@ -11,6 +11,16 @@
 export const SUPPORTED_CURRENCIES = ['TRY', 'USD', 'EUR'] as const;
 export type Currency = (typeof SUPPORTED_CURRENCIES)[number];
 
+/**
+ * Para biriminin "ana vatanı" — kullanıcının dili bilinmediğinde kullanılır.
+ *
+ * Bu bir VARSAYILAN, kural değil. Biçimi belirleyen şey para birimi değil
+ * OKUYAN KİŞİDİR: Alman bir kullanıcıya Türk lirası fiyat gösterirken
+ * sayıyı Türk biçiminde yazmak, ona yabancı bir biçim dayatmaktır. Doğru
+ * davranış "1.234,56 ₺" değil, onun kendi biçiminde "1.234,56 ₺" veya
+ * "$1,234.56"dır -- yani AYIRICILAR okuyanın dilinden, SEMBOL paranın
+ * kendisinden gelir.
+ */
 const CURRENCY_LOCALES: Record<Currency, string> = {
   TRY: 'tr-TR',
   USD: 'en-US',
@@ -19,10 +29,20 @@ const CURRENCY_LOCALES: Record<Currency, string> = {
 
 /**
  * Kuruş cinsinden tutarı yerelleştirilmiş metne çevirir.
- * @example formatMoney(5499900) // "54.999,00 ₺"
+ *
+ * @param numberLocale Okuyanın BCP-47 etiketi (ör. 'de-DE'). Verilmezse
+ *   para biriminin kendi varsayılanı kullanılır -- eski çağrılar bu
+ *   sayede aynen çalışmaya devam eder.
+ *
+ * @example formatMoney(5499900)                  // "54.999,00 ₺"
+ * @example formatMoney(49900, 'USD', 'de-DE')    // "499,00 $"
  */
-export function formatMoney(cents: number, currency: Currency = 'TRY'): string {
-  return new Intl.NumberFormat(CURRENCY_LOCALES[currency], {
+export function formatMoney(
+  cents: number,
+  currency: Currency = 'TRY',
+  numberLocale?: string,
+): string {
+  return new Intl.NumberFormat(numberLocale ?? CURRENCY_LOCALES[currency], {
     style: 'currency',
     currency,
     minimumFractionDigits: 2,
@@ -34,13 +54,68 @@ export function formatMoney(cents: number, currency: Currency = 'TRY'): string {
  * Kısaltılmış gösterim — analitik kartları ve grafik eksenleri için.
  * @example formatMoneyCompact(125_400_000) // "1,3 Mn ₺"
  */
-export function formatMoneyCompact(cents: number, currency: Currency = 'TRY'): string {
-  return new Intl.NumberFormat(CURRENCY_LOCALES[currency], {
+export function formatMoneyCompact(
+  cents: number,
+  currency: Currency = 'TRY',
+  numberLocale?: string,
+): string {
+  return new Intl.NumberFormat(numberLocale ?? CURRENCY_LOCALES[currency], {
     style: 'currency',
     currency,
     notation: 'compact',
     maximumFractionDigits: 1,
   }).format(cents / 100);
+}
+
+/**
+ * Bir kur ölçümü. Kaynağı ve zamanı OLMADAN kur diye bir şey yoktur.
+ *
+ * Alan adları bilerek zorunlu: bir kur kaynağı bağlanana kadar bu nesneyi
+ * üretmek mümkün değildir, dolayısıyla sahte bir çevrim de yazılamaz.
+ * "Yaklaşık 30 lira eder" demek, kullanıcıya ölçmediğimiz bir sayı
+ * söylemektir.
+ */
+export interface ExchangeRate {
+  from: Currency;
+  to: Currency;
+  /** 1 birim `from` kaç birim `to` eder. */
+  rate: number;
+  /** Kurun alındığı yer (ör. 'TCMB', 'ECB'). Serbest metin değil, kayıt. */
+  source: string;
+  observedAt: Date;
+}
+
+export interface ConvertedMoney {
+  amountCents: number;
+  currency: Currency;
+  /** Çevrimin dayandığı ölçüm — ekranda "hangi kur?" sorusunu yanıtlar. */
+  via: ExchangeRate;
+}
+
+/**
+ * Tutarı başka bir para birimine çevirir (madde 15).
+ *
+ * KUR YOKSA ÇEVRİM YOKTUR. Fonksiyon `null` döner ve çağıran taraf
+ * tutarı KENDİ para biriminde göstermek zorunda kalır. Bu kasıtlı bir
+ * sürtünmedir: uydurma bir kurla "yaklaşık" fiyat göstermek, fiyat
+ * karşılaştırma sitesinin yapabileceği en zararlı şeydir.
+ *
+ * @returns Çevrilmiş tutar, ya da kur uygunsuzsa `null`.
+ */
+export function convertMoney(
+  cents: number,
+  to: Currency,
+  rate: ExchangeRate | null | undefined,
+): ConvertedMoney | null {
+  if (!rate) return null;
+  if (rate.to !== to) return null;
+  if (!Number.isFinite(rate.rate) || rate.rate <= 0) return null;
+
+  return {
+    amountCents: Math.round(cents * rate.rate),
+    currency: to,
+    via: rate,
+  };
 }
 
 /**

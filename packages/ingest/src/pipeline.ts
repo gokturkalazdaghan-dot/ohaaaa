@@ -58,6 +58,8 @@ export interface IngestRepository {
     merchantId: string,
     sourceId: string,
     rows: Array<NormalizedOffer & { groupId: string | null }>,
+    /** Tekliflerin yazılacağı pazar — kaynağın pazarı. */
+    market: SourceConfig['market'],
   ): Promise<{ created: number; updated: number }>;
   /** Bu çalışmada görülmeyen teklifleri stoksuz işaretler. */
   markStale(sourceId: string, runStartedAt: Date): Promise<number>;
@@ -183,6 +185,7 @@ export async function runSource(
       source.merchantId,
       source.id,
       withGroups,
+      source.market,
     );
 
     summary.itemsCreated = created;

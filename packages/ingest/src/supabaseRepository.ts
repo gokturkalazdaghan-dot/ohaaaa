@@ -107,7 +107,7 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
       return result;
     },
 
-    async upsertOffers(merchantId, sourceId, rows) {
+    async upsertOffers(merchantId, sourceId, rows, market) {
       if (rows.length === 0) return { created: 0, updated: 0 };
 
       // Hangilerinin yeni olduğunu bilmek için önce mevcutları oku.
@@ -140,6 +140,10 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
         price_cents: row.priceCents,
         compare_at_price_cents: row.compareAtPriceCents,
         currency: row.currency,
+        // Pazar KAYNAKTAN gelir, fiyattan tahmin edilmez. Şema ayrıca
+        // pazar ile para biriminin uyumunu zorunlu kılıyor
+        // (products_market_currency_uyumlu).
+        market,
         stock: row.stock,
         shipping_fee_cents: row.shippingFeeCents,
         // Stok yoksa vitrine çıkmaz; feed 'active' dese bile.
@@ -239,7 +243,7 @@ export async function loadSources(
   let query = supabase
     .from('sources')
     .select(
-      `id, slug, merchant_id, kind, endpoint_url, field_mapping, currency,
+      `id, slug, merchant_id, kind, endpoint_url, field_mapping, currency, market,
        merchant:merchants!inner ( id, status, homepage_url, deeplink_template )`,
     )
     .eq('is_enabled', true)
@@ -272,6 +276,7 @@ export async function loadSources(
       endpointUrl: row.endpoint_url ? String(row.endpoint_url) : null,
       fieldMapping: (row.field_mapping ?? {}) as SourceConfig['fieldMapping'],
       currency: String(row.currency ?? 'TRY'),
+      market: (String(row.market ?? 'TR') as SourceConfig['market']),
       allowedHosts: host ? [host] : [],
     };
   });

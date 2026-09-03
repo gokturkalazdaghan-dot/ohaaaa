@@ -15,6 +15,7 @@ import { PrelaunchBanner } from '@/components/PrelaunchBanner';
 import { JsonLd } from '@/components/JsonLd';
 import { isDemoMode } from '@/data/catalog';
 import { gaMeasurementId, isPrelaunch, searchConsoleVerification, siteUrl } from '@/lib/env';
+import { getRequestLocale } from '@/lib/locale';
 
 import './globals.css';
 
@@ -109,12 +110,37 @@ const siteJsonLd = [
 ];
 
 export const viewport: Viewport = {
-  themeColor: '#0B0B0D',
+  /*
+   * Tarayıcı çubuğu rengi ZEMİNLE aynı olmalı.
+   *
+   * Bu değer bej palete geçişte güncellenmeden kaldı: site açık bej
+   * zeminliyken mobil tarayıcı çubuğu hâlâ eski koyu paletin rengini
+   * (#0B0B0D) yayınlıyordu -- yani markanın rengi değil, silinmiş bir
+   * temanın rengi.
+   *
+   * İki tema için iki değer verilir; tarayıcı hangisini uygulayacağına
+   * kullanıcının ayarına göre karar verir.
+   */
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#faf6f1' },
+    { media: '(prefers-color-scheme: dark)', color: '#12100e' },
+  ],
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  /*
+   * DİL ARTIK SABİT DEĞİL, AMA UYDURMA DA DEĞİL.
+   *
+   * Önce `lang="tr"` gömülüydü. Şimdi istekten çözülüyor -- ancak
+   * `contentTag`, kullanıcının İSTEDİĞİ dili değil GERÇEKTEN SUNULAN dili
+   * bildirir. Gerekçesi `lib/locale.ts` içinde yazılı: çevirisi olmayan
+   * bir dili ilan etmek, ekran okuyucuya yanlış fonetik ve arama
+   * motoruna yanlış dil bildirmek demektir.
+   */
+  const { contentTag } = await getRequestLocale();
+
   return (
-    <html lang="tr" className={`${jakarta.variable} ${outfit.variable}`}>
+    <html lang={contentTag} className={`${jakarta.variable} ${outfit.variable}`}>
       <head>
         <JsonLd data={siteJsonLd} />
       </head>

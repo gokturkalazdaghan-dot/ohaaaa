@@ -63,6 +63,15 @@ export interface SourceConfig {
   id: string;
   slug: string;
   merchantId: string;
+  /**
+   * Bu kaynağın veri getirdiği pazar.
+   *
+   * Para biriminden AYRI taşınır: EUR hem Almanya hem Avusturya demektir
+   * ve bir satıcı kendi ülkesi dışındaki bir para birimiyle fiyat
+   * verebilir. Pazarı para biriminden türetmek, kullanıcıya kendisine
+   * gönderilmeyecek teklifleri "en ucuz" diye göstermeye yol açar.
+   */
+  market: 'TR' | 'DE' | 'US';
   kind: 'feed_csv' | 'feed_xml' | 'feed_json' | 'api' | 'sitemap' | 'manual';
   endpointUrl: string | null;
   fieldMapping: FieldMapping;
