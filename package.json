@@ -23,7 +23,8 @@
     "verify:browser": "node scripts/verify-browser.mjs",
     "verify:a11y": "node scripts/verify-a11y.mjs",
     "verify:routes": "node scripts/verify-routes.mjs",
-    "verify:brand": "node scripts/verify-brand.mjs"
+    "verify:brand": "node scripts/verify-brand.mjs",
+    "verify:secrets": "node scripts/verify-secrets.mjs"
   },
   "devDependencies": {
     "axe-core": "^4.10.0",

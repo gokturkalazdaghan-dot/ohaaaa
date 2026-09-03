@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 
 import { formatMoney, intentToSearchParams, looksLikeNaturalLanguage } from '@ohaaaa/shared';
 
-import { tuketAiButcesi } from '@/lib/aiBudget';
+import { tuketButce } from '@/lib/rateBudget';
 import { logAgentDecision, recordAgentOutcome } from '@/lib/agentLog';
 import { MODEL, PROMPT_VERSION, parseSearchIntent } from '@/lib/searchIntent';
 
@@ -130,7 +130,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
      * atlanır ve kullanıcının yazdığı metin olduğu gibi aranır.
      */
     const { headers } = await import('next/headers');
-    const butce = await tuketAiButcesi('arama', new Headers(await headers()));
+    const butce = await tuketButce('arama', new Headers(await headers()));
 
     const sonuc = butce.izin ? await parseSearchIntent(q).catch(() => null) : null;
 

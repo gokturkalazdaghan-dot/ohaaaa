@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import { Outfit, Plus_Jakarta_Sans } from 'next/font/google';
-import { Analytics as VercelAnalytics } from '@vercel/analytics/next';
 
 import { Analytics } from '@/components/Analytics';
+import { VercelAnalytics } from '@/components/VercelAnalytics';
 import { ConsentBanner } from '@/components/ConsentBanner';
 import { Footer } from '@/components/Footer';
 import { Header } from '@/components/Header';

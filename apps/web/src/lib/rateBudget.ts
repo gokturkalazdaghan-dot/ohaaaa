@@ -1,7 +1,11 @@
 import 'server-only';
 
 /**
- * Yapay zekâ çağrılarının bütçe kapısı.
+ * Hız sınırı kapısı.
+ *
+ * Aynı sayaç iki iş yapıyor: pahalı yapay zekâ çağrılarını bütçelemek ve
+ * kimlik doğrulama denemelerini sınırlamak. Mekanizma aynı olduğu için ad
+ * da genel: `consume_rate_budget`.
  *
  * Her model çağrısının önünde İKİ tavan vardır:
  *
@@ -28,7 +32,14 @@ import 'server-only';
 import { getServiceClient } from '@/lib/supabase/service';
 import { hashedClientIp } from '@/lib/clientHash';
 
-export type AiFeature = 'arama' | 'gorsel';
+/**
+ * Sınırlanan iş türü.
+ *
+ * `arama` / `gorsel` model çağrısı yapar (maliyet). `giris` / `kayit` kaba
+ * kuvvet ve credential stuffing'e karşı korunur (güvenlik). İkisi de aynı
+ * sayaçta ama AYRI kovalarda: birinin dolması diğerini kapatmaz.
+ */
+export type RateFeature = 'arama' | 'gorsel' | 'giris' | 'kayit';
 
 interface Tavan {
   /** Kişi başı pencere içindeki en fazla çağrı. */
@@ -47,7 +58,32 @@ function sayi(ad: string, yedek: number): number {
   return Number.isInteger(deger) && deger > 0 ? deger : yedek;
 }
 
-function tavanlar(feature: AiFeature): Tavan {
+function tavanlar(feature: RateFeature): Tavan {
+  if (feature === 'giris') {
+    /*
+     * Kaba kuvvet ve credential stuffing.
+     *
+     * 15 dakikada 10 deneme: unutkan bir kullanıcıyı engellemez ama sözlük
+     * saldırısını işe yaramaz hâle getirir. `kuresel` burada AYRI bir işe
+     * yarıyor: tek bir hesaba değil, çok sayıda hesaba dağıtılmış denemeyi
+     * (credential stuffing) yakalar.
+     */
+    return {
+      kisiBasi: sayi('GIRIS_IP_DENEME', 10),
+      kisiPencereSaniye: 900,
+      kuresel: sayi('GIRIS_GUNLUK', 20_000),
+    };
+  }
+
+  if (feature === 'kayit') {
+    // Kayıt daha seyrek ve daha pahalı (e-posta gönderimi tetikler).
+    return {
+      kisiBasi: sayi('KAYIT_IP_SAATLIK', 5),
+      kisiPencereSaniye: 3600,
+      kuresel: sayi('KAYIT_GUNLUK', 2000),
+    };
+  }
+
   if (feature === 'gorsel') {
     /*
      * Görselle arama daha pahalı (fotoğraf girdi olarak gider) ve daha
@@ -81,8 +117,8 @@ export type ButceSonucu =
  * Kaybedilen şey yalnızca bir kolaylık özelliği; arama düz metinle çalışmaya
  * devam eder.
  */
-export async function tuketAiButcesi(
-  feature: AiFeature,
+export async function tuketButce(
+  feature: RateFeature,
   headers: Headers,
 ): Promise<ButceSonucu> {
   const tavan = tavanlar(feature);
@@ -125,7 +161,7 @@ async function say(
   tavan: number,
   pencereSaniye: number,
 ): Promise<boolean | null> {
-  const { data, error } = await supabase.rpc('consume_ai_budget', {
+  const { data, error } = await supabase.rpc('consume_rate_budget', {
     p_bucket: kova,
     p_limit: tavan,
     p_window_seconds: pencereSaniye,

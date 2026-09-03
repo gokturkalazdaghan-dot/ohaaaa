@@ -57,6 +57,13 @@ jobs:
       - name: Marka yazimi
         run: npm run verify:brand
 
+      # Sir sizintisinin en pahali hali fark edilmeden commit edilenidir:
+      # dosya sonradan silinse bile deger git gecmisinde kalir ve anahtarin
+      # dondurulmesi gerekir. Kontrol bu yuzden commit'ten SONRA degil,
+      # her derlemede yapilir.
+      - name: Sir taramasi
+        run: npm run verify:secrets
+
       - name: Birim testleri
         run: npm test
 

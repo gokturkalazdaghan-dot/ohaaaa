@@ -11,7 +11,7 @@ import {
   describeProductImage,
   isVisualSearchConfigured,
 } from '@/lib/visualSearch';
-import { tuketAiButcesi } from '@/lib/aiBudget';
+import { tuketButce } from '@/lib/rateBudget';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,7 +60,7 @@ export async function POST(request: Request): Promise<Response> {
    * Kontrol formData'dan önce yapılıyor: reddedilecek bir isteğin 5 MB'ını
    * belleğe almanın anlamı yok.
    */
-  const butce = await tuketAiButcesi('gorsel', new Headers(request.headers));
+  const butce = await tuketButce('gorsel', new Headers(request.headers));
 
   if (!butce.izin) {
     const kod =
