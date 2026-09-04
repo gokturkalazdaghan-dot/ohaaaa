@@ -49,6 +49,15 @@ import { expandSecretPlaceholders, redactError } from './http/redact.js';
  * Supabase bağlantısı olmadan test edilebilsin diye.
  */
 export interface IngestRepository {
+  /**
+   * Feed'in kategori degerlerini MEVCUT katalog kategorilerine cozer.
+   * → normalize edilmis slug → category_id
+   *
+   * Yeni kategori ACMAZ. Bulunamayan deger haritaya hic girmez ve cagiran
+   * taraf onu `null` (siniflandirilmamis) olarak yazar. Feed'in sozlugu
+   * bizim taksonomimizi belirleyemez.
+   */
+  findCategoryIdsBySlug(slugs: string[]): Promise<Map<string, string>>;
   /** GTIN ile kanonik ürün arar. → gtin → group_id */
   findGroupsByGtin(gtins: string[]): Promise<Map<string, string>>;
   /** Marka + normalize başlık imzasıyla arar. → imza → group_id */
@@ -61,13 +70,22 @@ export interface IngestRepository {
       gtin: string | null;
       imageUrl: string | null;
       signature: string;
+      /** Cozulemezse null; kanonik urun siniflandirilmamis acilir. */
+      categoryId: string | null;
     }>,
   ): Promise<Map<string, string>>;
   /** Teklifleri (merchant_id, external_id) anahtarıyla upsert eder. */
   upsertOffers(
     merchantId: string,
     sourceId: string,
-    rows: Array<NormalizedOffer & { groupId: string | null; fingerprint: string }>,
+    rows: Array<
+      NormalizedOffer & {
+        groupId: string | null;
+        fingerprint: string;
+        /** Cozulemezse null; teklif siniflandirilmamis yazilir. */
+        categoryId: string | null;
+      }
+    >,
     /** Tekliflerin yazılacağı pazar — kaynağın pazarı. */
     market: SourceConfig['market'],
   ): Promise<{ created: number; updated: number }>;
@@ -157,6 +175,7 @@ export async function runSource(
     itemsNew: 0,
     itemsChanged: 0,
     itemsUnchanged: 0,
+    itemsUnclassified: 0,
     itemsDeleted: 0,
     itemsSkipped: 0,
     itemsFailed: 0,
@@ -307,8 +326,53 @@ export async function runSource(
      */
     summary.snapshotComplete = !kirpildi && passRate >= 0.5;
 
-    // --- 4) Kanonik ürünle eşleştir -----------------------------------------
-    const withGroups = await matchCanonicalGroups(offers, deps.repository);
+    // --- 4) Kategori ve kanonik ürünle eşleştir -----------------------------
+    /*
+     * KATEGORI COZUMLEME YAZMADAN ONCE YAPILIR.
+     *
+     * Kok neden kaydi: feed'in kategori degeri `normalize.ts` icinde
+     * `categorySlug` olarak okunuyordu ama YALNIZCA parmak izi
+     * niteliklerine giriyordu -- yani degisiklik tespitine. Ne
+     * `products.category_id`'ye ne de `product_groups.category_id`'ye
+     * yaziliyordu. Sonucu su: alim BASARIYLA biter, urunler veritabanina
+     * girer, ama `/kategori/*` sayfalari `category_id` uzerinden
+     * filtreledigi icin BOS kalir. Hatanin en pahali bicimi: her sayac
+     * yesil, vitrin bos.
+     */
+    const categoryIds = await resolveCategoryIds(offers, deps.repository);
+    const withGroups = await matchCanonicalGroups(offers, deps.repository, categoryIds);
+
+    /*
+     * Siniflandirilamayanlar SAYILIR ve LOGLANIR.
+     *
+     * Sessiz bir null, E5'in ta kendisidir. Bu satir olmasa "0 urun
+     * kategoride gorunuyor" durumunu ancak vitrine bakarak fark ederdik.
+     */
+    const cozulemeyen = [
+      ...new Set(
+        offers
+          .map((offer) => categorySlugKey(offer.categorySlug))
+          .filter((slug): slug is string => !!slug && !categoryIds.has(slug)),
+      ),
+    ];
+
+    summary.itemsUnclassified = withGroups.filter((row) => row.categoryId === null).length;
+
+    if (summary.itemsUnclassified > 0) {
+      console.warn(
+        JSON.stringify({
+          level: 'warn',
+          msg: 'Kategorisi cozulemeyen teklifler var -- kategori sayfalarinda gorunmezler',
+          source_id: source.id,
+          items_unclassified: summary.itemsUnclassified,
+          items_seen: summary.itemsSeen,
+          // Bilinmeyen slug'lar sinirli sayida orneklenir: feed'in kategori
+          // sozlugu buyuk olabilir ve log satiri kanit olmali, dokum degil.
+          unknown_category_slugs: cozulemeyen.slice(0, 20),
+          unknown_category_slug_count: cozulemeyen.length,
+        }),
+      );
+    }
 
     // --- 5) DELTA: neyin gerçekten değiştiği --------------------------------
     /*
@@ -474,10 +538,83 @@ export async function runSource(
  * ürünü yanlışlıkla birleştirmek, hiç birleştirmemekten çok daha zararlıdır —
  * kullanıcı yanlış ürünü satın alır.
  */
+/**
+ * Feed'in kategori metnini katalog slug bicimine indirger.
+ *
+ * "Ev & Yaşam" -> "ev-yasam", "Elektronik" -> "elektronik".
+ * `categories.slug` citext oldugu icin buyuk/kucuk harf zaten onemsiz;
+ * burada aksan ve noktalama da normalize edilir.
+ *
+ * BULANIK (fuzzy) ESLESME YOK. Yalnizca tam eslesme kabul edilir:
+ * "telefon-aksesuar" degeri "telefon" kategorisine DUSMEZ. Bir urunu
+ * yanlis kategoriye koymak, hic koymamaktan zararlidir -- kullanici yanlis
+ * vitrinde yanlis urunu gorur ve karsilastirma vaadimiz coker.
+ */
+export function categorySlugKey(value: string | null | undefined): string | null {
+  if (!value) return null;
+
+  /*
+   * TURKCE 'I' TUZAGI.
+   *
+   * JavaScript'te 'İ'.toLowerCase() 'i' + U+0307 (birlesen nokta) uretir --
+   * tek karakter degil IKI karakter. Basit bir [ğüşıöç] haritasi bunu
+   * yakalamaz ve 'ELEKTRONİK' degeri 'elektroni-k' olarak slug'lanip
+   * katalogdaki 'elektronik' ile ESLESMEZ. Bu testle yakalandi; gercek bir
+   * feed'de sessizce butun bir kategorinin siniflandirilamamasi demekti.
+   *
+   * Cozum: noktali/noktasiz I acikca ele alinir, kalan aksanlar NFD ile
+   * ayristirilip birlesen isaretler atilir (ğ->g, ü->u, ş->s, ö->o, ç->c).
+   */
+  const slug = value
+    .trim()
+    .replace(/İ/g, 'i')
+    .replace(/ı/g, 'i')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return slug || null;
+}
+
+/**
+ * Feed'de gecen kategori degerlerini MEVCUT katalog kategorilerine cozer.
+ *
+ * Tek sorguda, tekillestirilmis slug listesiyle. Yeni kategori ACILMAZ:
+ * taksonomi urun kararidir, feed karari degil.
+ */
+export async function resolveCategoryIds(
+  offers: NormalizedOffer[],
+  repository: IngestRepository,
+): Promise<Map<string, string>> {
+  const slugs = [
+    ...new Set(
+      offers
+        .map((offer) => categorySlugKey(offer.categorySlug))
+        .filter((slug): slug is string => slug !== null),
+    ),
+  ];
+
+  if (slugs.length === 0) return new Map<string, string>();
+
+  return repository.findCategoryIdsBySlug(slugs);
+}
+
 export async function matchCanonicalGroups(
   offers: NormalizedOffer[],
   repository: IngestRepository,
-): Promise<Array<NormalizedOffer & { groupId: string | null }>> {
+  /**
+   * Cozulmus kategori haritasi. Bos gecilebilir: o durumda her sey
+   * siniflandirilmamis olur ve mevcut davranis aynen korunur.
+   */
+  categoryIds: Map<string, string> = new Map(),
+): Promise<Array<NormalizedOffer & { groupId: string | null; categoryId: string | null }>> {
+  const categoryOf = (offer: NormalizedOffer): string | null => {
+    const key = categorySlugKey(offer.categorySlug);
+    return key ? categoryIds.get(key) ?? null : null;
+  };
+
   const gtins = [...new Set(offers.map((o) => o.gtin).filter((g): g is string => !!g))];
   const byGtin = gtins.length > 0
     ? await repository.findGroupsByGtin(gtins)
@@ -495,7 +632,14 @@ export async function matchCanonicalGroups(
   // edenleri tek sefer yaratarak).
   const toCreate = new Map<
     string,
-    { title: string; brand: string | null; gtin: string | null; imageUrl: string | null; signature: string }
+    {
+      title: string;
+      brand: string | null;
+      gtin: string | null;
+      imageUrl: string | null;
+      signature: string;
+      categoryId: string | null;
+    }
   >();
 
   for (const offer of offers) {
@@ -511,6 +655,9 @@ export async function matchCanonicalGroups(
       gtin: offer.gtin,
       imageUrl: offer.imageUrls[0] ?? null,
       signature,
+      // Kanonik urun de siniflandirilir: vitrin kartlari `product_groups`
+      // uzerinden listelenir, teklif satirlari uzerinden degil.
+      categoryId: categoryOf(offer),
     });
   }
 
@@ -525,7 +672,11 @@ export async function matchCanonicalGroups(
     const viaGtin = offer.gtin ? byGtin.get(offer.gtin) : undefined;
     const viaSignature = bySignature.get(canonicalSignature(offer.title, offer.brand));
 
-    return { ...offer, groupId: viaGtin ?? viaSignature ?? null };
+    return {
+      ...offer,
+      groupId: viaGtin ?? viaSignature ?? null,
+      categoryId: categoryOf(offer),
+    };
   });
 }
 

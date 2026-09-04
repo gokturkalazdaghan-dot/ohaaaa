@@ -49,7 +49,13 @@ function fakeRepository(overrides: Partial<IngestRepository> = {}) {
       freshnessClass: string;
       reasons: readonly string[];
     }>,
-    upserted: [] as Array<NormalizedOffer & { groupId: string | null; fingerprint: string }>,
+    upserted: [] as Array<
+      NormalizedOffer & {
+        groupId: string | null;
+        fingerprint: string;
+        categoryId: string | null;
+      }
+    >,
     /** upsertOffers'a hangi pazarın geçtiği — pazar izolasyonunun kanıtı. */
     upsertMarkets: [] as Array<SourceConfig['market']>,
     createdGroups: [] as string[],
@@ -65,6 +71,13 @@ function fakeRepository(overrides: Partial<IngestRepository> = {}) {
     },
     async saveRefreshPlan(sourceId, plan) {
       calls.refreshPlans.push({ sourceId, ...plan });
+    },
+    async findCategoryIdsBySlug(slugs) {
+      // Varsayilan sahte katalog: yalnizca 'elektronik' cozulur.
+      // Diger her deger siniflandirilmamis kalir -- fail-safe yolun kaniti.
+      return new Map(
+        slugs.filter((slug) => slug === 'elektronik').map((slug) => [slug, 'cat-elektronik']),
+      );
     },
     async findGroupsByGtin() {
       return new Map();
