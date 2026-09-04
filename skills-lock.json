@@ -97,6 +97,12 @@
       "skillPath": ".claude/skills/slides/SKILL.md",
       "computedHash": "c72a8bcd2ee98a7caab8f00a816c7e7ccfa46bba6682539db2186e71220155f1"
     },
+    "task-observer": {
+      "source": "rebelytics/one-skill-to-rule-them-all",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "625afba7a97cbebb8dee848e341f57f86e59be83d1ee5ab342748bca35162126"
+    },
     "ui-styling": {
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",
       "sourceType": "github",

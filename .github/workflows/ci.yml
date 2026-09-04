@@ -50,8 +50,39 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Marka yazimi gozle yakalanmaz: uc a ile dort a arasindaki fark tek
+      # harf ve okurken beyin dogrusunu gorur. Bir kez yanlis yazilip
+      # kopyalandiginda sessizce yayilir -- e-postaya, bildirime, meta
+      # etiketine. Sayan makine olmali. Dogrusu: O + dort a.
+      - name: Marka yazimi
+        run: npm run verify:brand
+
+      # Sir sizintisinin en pahali hali fark edilmeden commit edilenidir:
+      # dosya sonradan silinse bile deger git gecmisinde kalir ve anahtarin
+      # dondurulmesi gerekir. Kontrol bu yuzden commit'ten SONRA degil,
+      # her derlemede yapilir.
+      - name: Sir taramasi
+        run: npm run verify:secrets
+
       - name: Birim testleri
         run: npm test
+
+      # SQL paketi pgTAP iddialarıyla yazılmıştır ve `postgres:16` imajı bunu
+      # İÇERMEZ. Eksikliği sessiz değil, ölümcül: 00_supabase_shim.sql'deki
+      # `create extension pgtap` düşer ve tüm SQL adımı ilk saniyede biter.
+      #
+      # Bu, geliştirici makinesinde pgTAP kurulu olduğu için YEREL koşuda
+      # görünmüyordu -- yerel yeşil, CI kırmızıydı. Eklentiyi burada kurmak
+      # farkı kapatıyor: kaynak imaj değişmiyor, kap içinde tek paket.
+      - name: pgTAP eklentisini veritabanı kabına kur
+        run: |
+          cid="$(docker ps --filter 'ancestor=postgres:16' --format '{{.ID}}' | head -1)"
+          if [ -z "$cid" ]; then
+            echo "postgres:16 servis kabı bulunamadı" >&2
+            exit 1
+          fi
+          docker exec "$cid" bash -c \
+            'apt-get update -qq && apt-get install -y -qq postgresql-16-pgtap'
 
       - name: SQL migration ve güvenlik testleri
         env:

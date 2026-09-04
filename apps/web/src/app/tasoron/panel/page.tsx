@@ -168,7 +168,7 @@ function StatusCard({
 }) {
   const toneClasses = {
     warning: 'text-warning bg-warning/12',
-    info: 'text-electric bg-electric/12',
+    info: 'text-brand bg-brand/12',
     success: 'text-success bg-success/12',
   }[tone];
 

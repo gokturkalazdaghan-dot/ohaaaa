@@ -73,7 +73,7 @@ export function OfferRow({
       }`}
     >
       {isBest && (
-        <span className="absolute -top-2.5 left-4 rounded-full bg-success px-2.5 py-0.5 text-3xs font-bold uppercase tracking-wide text-[#0b0b0d]">
+        <span className="absolute -top-2.5 left-4 rounded-full bg-success px-2.5 py-0.5 text-3xs font-bold uppercase tracking-wide text-on-success">
           En iyi toplam fiyat
         </span>
       )}
@@ -189,7 +189,7 @@ export function OfferRow({
           disabled={offer.stock === 0}
           className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-40 ${
             added
-              ? 'bg-success text-[#0b0b0d]'
+              ? 'bg-success text-on-success'
               : isBest
                 ? 'press bg-brand-cta text-white'
                 : 'border border-line bg-surface-2 text-fg hover:border-brand/50'

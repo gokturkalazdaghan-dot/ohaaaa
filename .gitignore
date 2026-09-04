@@ -11,9 +11,13 @@ out/
 *.tsbuildinfo
 
 # Environment
+#
+# Kalıp KASITLI olarak geniş: önceki hâli `.env`, `.env.local` ve
+# `.env.*.local` idi -- yani `.env.production`, `.env.development` ve
+# `.env.test` YAKALANMIYORDU ve commit edilebilirdi. Üretim sırrının
+# depoya girmesi için tek gereken, birinin dosyayı o adla kaydetmesiydi.
 .env
-.env.local
-.env.*.local
+.env.*
 !.env.example
 
 # Logs

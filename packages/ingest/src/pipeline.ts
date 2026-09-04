@@ -22,6 +22,12 @@
  */
 
 import { productSignature as canonicalSignature } from '@ohaaaa/shared/product-sync';
+import {
+  canonicalFingerprint,
+  classifyDelta,
+  needsWrite,
+  type FingerprintInput,
+} from '@ohaaaa/shared';
 import type {
   IngestSummary,
   NormalizedOffer,
@@ -33,6 +39,10 @@ import { parseCsv } from './adapters/csv.js';
 import { parseJson } from './adapters/json.js';
 import { parseXml } from './adapters/xml.js';
 import { normalizeRecords } from './normalize.js';
+import { planNextRefresh } from './refreshSignals.js';
+import { buildAuthHeaders } from './auth.js';
+import { classifyIngestError, IngestError } from './errors.js';
+import { expandSecretPlaceholders, redactError } from './http/redact.js';
 
 /**
  * Veritabanı işlemleri. Arayüz olarak tanımlıdır: hattın tamamı gerçek bir
@@ -57,17 +67,64 @@ export interface IngestRepository {
   upsertOffers(
     merchantId: string,
     sourceId: string,
-    rows: Array<NormalizedOffer & { groupId: string | null }>,
+    rows: Array<NormalizedOffer & { groupId: string | null; fingerprint: string }>,
+    /** Tekliflerin yazılacağı pazar — kaynağın pazarı. */
+    market: SourceConfig['market'],
   ): Promise<{ created: number; updated: number }>;
+  /**
+   * Bu kaynağın bilinen parmak izleri: dış kimlik → parmak izi.
+   *
+   * Delta karşılaştırmasının "önceki durum" tarafı. Parmak izi olmayan
+   * (eski) satırlar haritaya GİRMEZ; onlar NEW sayılır ve bir kez
+   * yazılarak parmak izi kazanırlar.
+   */
+  getFingerprints(sourceId: string): Promise<Map<string, string>>;
+  /**
+   * Bu turda GÖRÜLEN tüm teklifleri damgalar: `last_seen_at` ve tazelik
+   * damgaları (`price_checked_at`, `stock_checked_at`, `offer_checked_at`).
+   *
+   * DEĞİŞMEYEN TEKLİFLER DE DAMGALANIR ve bu zorunlu.
+   *
+   * Delta yalnızca NEW/CHANGED'i yazdığı için, UNCHANGED tekliflerin
+   * `last_seen_at`'i eski turda kalır. `markStale` "bu turda görülmeyeni
+   * stoksuz işaretle" dediğinden, damgalanmasalardı DEĞİŞMEYEN HER ÜRÜN
+   * katalogdan düşerdi -- delta'nın yan etkisi olarak.
+   *
+   * Kavramsal olarak da doğru: bir teklifi GÖRDÜK ve DOĞRULADIK, ama
+   * DEĞİŞMEDİ. "Kontrol ettik" ile "değişti" ayrı olaylar.
+   */
+  touchSeen(sourceId: string, externalIds: string[], checkedAt: Date): Promise<void>;
   /** Bu çalışmada görülmeyen teklifleri stoksuz işaretler. */
   markStale(sourceId: string, runStartedAt: Date): Promise<number>;
+  /**
+   * Bir sonraki yoklama planını kaynağa yazar.
+   *
+   * Plan yalnızca bellekte kalsaydı zamanlayıcı onu göremezdi;
+   * uyarlanabilir yoklamanın tek anlamlı çıktısı bu kalıcı yazma.
+   */
+  saveRefreshPlan(
+    sourceId: string,
+    plan: {
+      nextRefreshAt: Date;
+      freshnessClass: string;
+      reasons: readonly string[];
+    },
+  ): Promise<void>;
   /** Çalışma kaydını açar/kapatır. */
   startRun(sourceId: string): Promise<string>;
   finishRun(runId: string, summary: IngestSummary): Promise<void>;
 }
 
 export interface Fetcher {
-  get(url: string): Promise<{ body: string; contentType: string | null }>;
+  /**
+   * `headers` İSTEĞE BAĞLI: `query` kimlik doğrulamasında hiç
+   * gönderilmez ve mevcut getiriciler (testlerdeki sahteler dâhil) imza
+   * değişmeden çalışmaya devam eder.
+   */
+  get(
+    url: string,
+    options?: { headers?: Record<string, string> },
+  ): Promise<{ body: string; contentType: string | null }>;
 }
 
 const ADAPTERS = {
@@ -97,37 +154,87 @@ export async function runSource(
     itemsSeen: 0,
     itemsCreated: 0,
     itemsUpdated: 0,
+    itemsNew: 0,
+    itemsChanged: 0,
+    itemsUnchanged: 0,
+    itemsDeleted: 0,
     itemsSkipped: 0,
     itemsFailed: 0,
     durationMs: 0,
+    // Aksi kanıtlanana kadar TAM DEĞİL. Güvenli varsayılan: bir hata
+    // yolunda buraya hiç gelinmezse silme/bayatlatma yapılmasın.
+    snapshotComplete: false,
     sampleErrors: [],
   };
 
   try {
     if (source.kind === 'manual') {
-      throw new Error('Elle yönetilen kaynak otomatik alınamaz.');
+      throw new IngestError(
+        'CONFIG_ERROR',
+        'Elle yönetilen kaynak otomatik alınamaz.',
+        true,
+      );
     }
 
     const adapter = ADAPTERS[source.kind as keyof typeof ADAPTERS];
     if (!adapter) {
-      throw new Error(`Bu kaynak türü için adaptör yok: ${source.kind}`);
+      throw new IngestError(
+        'CONFIG_ERROR',
+        `Bu kaynak türü için adaptör yok: ${source.kind}`,
+        true,
+      );
     }
 
     if (!source.endpointUrl) {
-      throw new Error('Kaynak adresi tanımlı değil.');
+      throw new IngestError('CONFIG_ERROR', 'Kaynak adresi tanımlı değil.', true);
     }
 
-    // --- 1) Getir ------------------------------------------------------------
-    const { body } = await deps.fetcher.get(source.endpointUrl);
+    /*
+     * --- 1) Getir ------------------------------------------------------------
+     *
+     * KİMLİK BİLGİSİ ADRESTEN DEĞİL ORTAMDAN GELİR.
+     *
+     * `sources.endpoint_url` sütununda jetonun kendisi değil şablonu durur
+     * (`...?token=${OHAAAA_FEED_TOKEN}`). Gerçek değer burada, çalışma
+     * anında ortamdan okunur; böylece veritabanında, yedeklerde ve panelde
+     * düz metin bir kimlik bilgisi hiç bulunmaz. Genişletme aynı anda
+     * değeri maskeleme defterine yazar: bu noktadan sonra hiçbir hata
+     * metni ya da günlük satırı onu taşıyamaz.
+     *
+     * Yer tutucu içermeyen adres bu işlemden DEĞİŞMEDEN geçer -- kimlik
+     * bilgisi gerektirmeyen açık feed'ler için ek bir kural yok.
+     */
+    const adres = expandSecretPlaceholders(source.endpointUrl);
+
+    /*
+     * Başlık tabanlı kimlik doğrulama (bearer/basic) da ortamdan okunur ve
+     * üretilen değer maskeleme defterine yazılır. `query` yönteminde bu
+     * boş nesne döner -- iki yol tek çağrı noktasından geçsin diye.
+     */
+    const basliklar = buildAuthHeaders(source);
+    const { body } = await deps.fetcher.get(adres, { headers: basliklar });
 
     // --- 2) Ayrıştır ---------------------------------------------------------
     const parsed = adapter(body);
     let records: RawRecord[] = parsed.records;
 
+    /*
+     * KIRPMA, ANLIK GÖRÜNTÜYÜ EKSİK YAPAR.
+     *
+     * Önce bu bayrak yoktu ve `markStale` kırpılmış bir turdan sonra da
+     * çalışıyordu: 60.000 kalemlik bir feed'de sınırın ötesindeki 10.000
+     * teklif HER TURDA "bu beslemede görülmedi" sayılıp stoksuz
+     * işaretleniyordu -- kısmi bir anlık görüntüden toplu
+     * geçersizleştirme. Sıralama değişirse de her turda başka 10.000'i
+     * gidip geliyordu.
+     */
+    let kirpildi = false;
     if (records.length > MAX_ITEMS_PER_RUN) {
+      kirpildi = true;
       summary.sampleErrors.push({
         externalId: null,
-        reason: `Feed ${records.length} kalem içeriyor; ilk ${MAX_ITEMS_PER_RUN} işlendi.`,
+        reason: `Feed ${records.length} kalem içeriyor; ilk ${MAX_ITEMS_PER_RUN} işlendi. `
+          + 'Anlık görüntü eksik sayıldı; bu turda bayatlatma yapılmayacak.',
       });
       records = records.slice(0, MAX_ITEMS_PER_RUN);
     }
@@ -143,8 +250,16 @@ export async function runSource(
     // bozulduysa) bütün kataloğu stoksuz işaretlemek felakettir. Boş sonuç
     // başarı değil, hata olarak raporlanır ve bayatlatma ÇALIŞTIRILMAZ.
     if (records.length === 0) {
-      throw new Error(
+      /*
+       * GEÇİCİ sayılıyor: sağlayıcının yarım yayınladığı ya da o an
+       * boş dönen bir dosya yaygın bir durumdur ve bir sonraki turda
+       * düzelir. Kalıcı saymak, düzelecek bir arızada kaynağı tek
+       * denemede öldürmek olurdu -- katalog zaten korunuyor.
+       */
+      throw new IngestError(
+        'PARSER_ERROR',
         'Feed boş döndü. Katalog korundu; kaynağı kontrol edin.',
+        false,
       );
     }
 
@@ -158,9 +273,16 @@ export async function runSource(
     summary.sampleErrors.push(...errors.slice(0, MAX_SAMPLE_ERRORS));
 
     if (offers.length === 0) {
-      throw new Error(
+      /*
+       * KALICI: alan haritası düzeltilmeden hiçbir tur bu satırı geçemez.
+       * Yeniden denemek, aynı feed'i aynı yanlış haritayla beş kez
+       * indirmek olurdu.
+       */
+      throw new IngestError(
+        'VALIDATION_ERROR',
         `${records.length} kalemin hiçbiri doğrulamayı geçemedi. ` +
           `Alan haritası (field_mapping) yanlış olabilir.`,
+        true,
       );
     }
 
@@ -175,36 +297,165 @@ export async function runSource(
       });
     }
 
+    /*
+     * ANLIK GÖRÜNTÜ TAM MI?
+     *
+     * İki koşul: feed kırpılmadı VE kalemlerin çoğu doğrulamayı geçti.
+     * Düşük geçiş oranı, alan haritasının bozulduğunu gösterir; o
+     * durumda "kaynakta yok" ile "ayrıştıramadık" ayırt edilemez ve
+     * silme kararı verilemez.
+     */
+    summary.snapshotComplete = !kirpildi && passRate >= 0.5;
+
     // --- 4) Kanonik ürünle eşleştir -----------------------------------------
     const withGroups = await matchCanonicalGroups(offers, deps.repository);
 
-    // --- 5) Yaz --------------------------------------------------------------
-    const { created, updated } = await deps.repository.upsertOffers(
-      source.merchantId,
-      source.id,
-      withGroups,
+    // --- 5) DELTA: neyin gerçekten değiştiği --------------------------------
+    /*
+     * Buradan önce hat, her turda TÜM teklifleri yazıyordu. 50.000 üründe
+     * hiçbiri değişmese bile 50.000 yazma ve 50.000 tetikleyici. Asıl
+     * zarar maliyet değil gürültü: gerçekten değişen üç fiyat,
+     * değişmeyen 49.997'nin arasında kayboluyordu.
+     */
+    const oncekiIzler = await deps.repository.getFingerprints(source.id);
+
+    const izli = withGroups.map((offer) => ({
+      offer,
+      fingerprint: canonicalFingerprint(fingerprintInput(offer, source)),
+    }));
+
+    const delta = classifyDelta({
+      previous: oncekiIzler,
+      current: izli.map((k) => fingerprintInput(k.offer, source)),
+      snapshotComplete: summary.snapshotComplete,
+    });
+
+    /*
+     * DÖRT SAYAÇ DA KAYDEDİLİR.
+     *
+     * Önce yalnızca UNCHANGED taşınıyordu; NEW/CHANGED/DELETED hesaplanıp
+     * atılıyordu. DELETED özellikle önemli: bir kaynağın sessizce ürün
+     * kaybetmeye başladığını gösteren tek sinyal o.
+     */
+    summary.itemsNew = delta.counts.NEW;
+    summary.itemsChanged = delta.counts.CHANGED;
+    summary.itemsUnchanged = delta.counts.UNCHANGED;
+    summary.itemsDeleted = delta.counts.DELETED;
+
+    const yazilacakKimlikler = new Set(
+      needsWrite(delta).map((e) => e.externalId),
     );
 
-    summary.itemsCreated = created;
-    summary.itemsUpdated = updated;
+    const yazilacaklar = izli
+      .filter((k) => yazilacakKimlikler.has(k.offer.externalId))
+      .map((k) => ({ ...k.offer, fingerprint: k.fingerprint }));
 
-    // --- 6) Bayatları işaretle ----------------------------------------------
-    const stale = await deps.repository.markStale(source.id, startedAt);
-    if (stale > 0) {
+    // --- 6) GÖRÜLEN HER TEKLİFİ DAMGALA -------------------------------------
+    /*
+     * Yazmadan ÖNCE ve delta sınıfından BAĞIMSIZ.
+     *
+     * Bu çağrı olmadan delta bir regresyon üretiyordu: değişmeyen
+     * teklifler yazılmadığı için `last_seen_at`'leri eskide kalıyor,
+     * ardından `markStale` hepsini stoksuz işaretliyordu.
+     */
+    await deps.repository.touchSeen(
+      source.id,
+      izli.map((k) => k.offer.externalId),
+      startedAt,
+    );
+
+    // --- 7) Yaz (yalnızca değişenler) ---------------------------------------
+    if (yazilacaklar.length > 0) {
+      const { created, updated } = await deps.repository.upsertOffers(
+        source.merchantId,
+        source.id,
+        yazilacaklar,
+        source.market,
+      );
+      summary.itemsCreated = created;
+      summary.itemsUpdated = updated;
+    }
+
+    // --- 8) Bayatları işaretle — YALNIZCA TAM ANLIK GÖRÜNTÜDE ---------------
+    /*
+     * `markStale` "bu turda görülmeyeni stoksuz işaretle" demek. Eksik
+     * bir anlık görüntüde bu, ağ hatası yüzünden kataloğun bir kısmını
+     * yok etmektir -- alım hattının en pahalı arızası.
+     *
+     * SİLME değil stoksuz işaretleme olması ayrı bir güvenlik katmanı:
+     * bir sonraki tam turda kendiliğinden düzelir.
+     */
+    if (summary.snapshotComplete) {
+      const stale = await deps.repository.markStale(source.id, startedAt);
+      if (stale > 0) {
+        summary.sampleErrors.push({
+          externalId: null,
+          reason: `${stale} teklif bu beslemede görülmedi, stoksuz işaretlendi.`,
+        });
+      }
+    } else {
       summary.sampleErrors.push({
         externalId: null,
-        reason: `${stale} teklif bu beslemede görülmedi, stoksuz işaretlendi.`,
+        reason: 'Anlık görüntü eksik: bayatlatma atlandı, katalog korundu.',
       });
     }
 
     summary.status =
-      summary.itemsFailed > 0 || parsed.warnings.length > 0 ? 'partial' : 'success';
+      summary.itemsFailed > 0 || parsed.warnings.length > 0 || !summary.snapshotComplete
+        ? 'partial'
+        : 'success';
   } catch (error) {
     summary.status = 'failed';
-    summary.error = error instanceof Error ? error.message : String(error);
+    /*
+     * SON BARİYER. Hata metinleri `politeClient` içinde zaten maskelenerek
+     * üretiliyor; burada bir kez daha temizleniyor çünkü bu alan doğrudan
+     * `ingest_runs.error` ve `sources.last_error` sütunlarına yazılıyor ve
+     * hata her zaman bizim ürettiğimiz sınıflardan gelmiyor (fetch, JSON
+     * ayrıştırıcı ya da Supabase istemcisi kendi metnini üretebilir).
+     */
+    summary.error = redactError(error);
+    const siniflandirma = classifyIngestError(error);
+    summary.errorClass = siniflandirma.errorClass;
+    summary.errorPermanent = siniflandirma.permanent;
   } finally {
     summary.durationMs = now().getTime() - startedMs;
     summary.sampleErrors = summary.sampleErrors.slice(0, MAX_SAMPLE_ERRORS);
+
+    /*
+     * YENİLEME PLANI — BAŞARIDA DA BAŞARISIZLIKTA DA.
+     *
+     * `finally` içinde ve bu kasıtlı: alım başarısız olduğunda da bir
+     * sonraki deneme zamanı belirlenmeli. Yalnızca başarı yolunda
+     * yazılsaydı, çöken bir kaynağın `next_refresh_at`'i eski değerinde
+     * donar ve zamanlayıcı onu ya hiç denemez ya da eski plana göre
+     * döverdi.
+     *
+     * Hesap özetin TAMAMLANMIŞ hâlini kullanıyor: durum, delta sayaçları
+     * ve anlık görüntü tamlığı bu noktada belli.
+     */
+    try {
+      const refresh = planNextRefresh(summary, now());
+      await deps.repository.saveRefreshPlan(source.id, {
+        nextRefreshAt: refresh.nextRefreshAt,
+        freshnessClass: refresh.plan.freshnessClass,
+        reasons: refresh.plan.reasons,
+      });
+    } catch (error) {
+      /*
+       * PLAN YAZILAMAZSA ALIM BAŞARISIZ SAYILMAZ.
+       *
+       * Veri zaten yazıldı; turu başarısız ilan etmek daha büyük zarar
+       * olurdu. Sorun görünür kalıyor: örnek hatalara ekleniyor ve
+       * çalışma kaydında duruyor.
+       */
+      summary.sampleErrors.push({
+        externalId: null,
+        reason:
+          'Yenileme planı yazılamadı: ' +
+          (error instanceof Error ? error.message : String(error)),
+      });
+    }
+
     await deps.repository.finishRun(runId, summary);
   }
 
@@ -300,3 +551,38 @@ export async function matchCanonicalGroups(
  * `public.product_signature()` de aynı değeri üretir.
  */
 export { canonicalSignature };
+
+
+/**
+ * Normalleştirilmiş teklifi parmak izi girdisine çevirir.
+ *
+ * Buraya HANGİ alanların girdiği, "değişim" tanımının kendisidir.
+ * Zaman damgaları ve tarama kimliği bilerek dışarıda: girselerdi her
+ * tarama "değişti" derdi ve delta tespiti anlamını tamamen kaybederdi.
+ */
+function fingerprintInput(
+  offer: NormalizedOffer & { groupId: string | null },
+  source: SourceConfig,
+): FingerprintInput {
+  return {
+    externalId: offer.externalId,
+    // Pazar parmak izine GİRER: aynı dış kimliğe sahip TR ve DE teklifi
+    // aynı entity gibi karşılaştırılmamalı.
+    market: source.market,
+    merchantId: source.merchantId,
+    title: offer.title,
+    priceCents: offer.priceCents,
+    currency: offer.currency,
+    // Stok DURUMU, adedi değil: 12'den 11'e düşmek kullanıcı için hiçbir
+    // şey değiştirmez ve her stok hareketini değişim saymak kuyruğu
+    // anlamsız işle doldururdu.
+    inStock: offer.stock > 0,
+    productUrl: offer.productUrl,
+    shippingFeeCents: offer.shippingFeeCents,
+    attributes: {
+      brand: offer.brand ?? '',
+      gtin: offer.gtin ?? '',
+      category: offer.categorySlug ?? '',
+    },
+  };
+}

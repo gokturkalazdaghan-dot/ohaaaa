@@ -55,7 +55,7 @@ export function PriceDropCard({
           eşiğini geçmez. Koyu metin OfferRow'daki "en iyi teklif" rozetiyle
           aynı yolu izliyor.
         */}
-        <span className="absolute left-2 top-2 rounded-full bg-success px-2 py-0.5 text-2xs font-bold text-[#0b0b0d]">
+        <span className="absolute left-2 top-2 rounded-full bg-success px-2 py-0.5 text-2xs font-bold text-on-success">
           %{yuzde} düştü
         </span>
       </div>

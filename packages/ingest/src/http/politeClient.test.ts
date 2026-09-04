@@ -312,3 +312,190 @@ test('User-Agent her istekte gönderilir ve iletişim adresi içerir', async () 
     assert.match(ua, /https?:\/\//, 'UA iletişim adresi içermeli');
   }
 });
+
+// --- Kimlik bilgisi sızıntısı (HTTP katmanı) ------------------------------
+
+/*
+ * §18'in istediği test: BAŞARISIZ istek sırasında jeton hata metnine
+ * girmemeli. Hattın üst katmanında (pipeline) zaten sınanıyor; burada
+ * hatanın ÜRETİLDİĞİ yerde sınanıyor -- üst katman maskelemesi bir gün
+ * kaldırılsa bile bu hat tutmalı.
+ *
+ * Jeton UYDURMADIR. Testin iddiası tek: bu dizgi çıktıda yok.
+ */
+const HTTP_JETONU = 'tk_ornek_9f4c2b7e51a08d63';
+
+function jetonluIstemci(routes: Record<string, RouteResponse | RouteResponse[]>) {
+  const { impl } = fakeFetch(routes);
+  const clock = fakeClock();
+  return createPoliteClient({
+    userAgent: UA,
+    minDelayMs: 0,
+    timeoutMs: 5000,
+    maxRetries: 0,
+    circuitBreakerThreshold: 5,
+    fetchImpl: impl,
+    now: clock.now,
+    sleep: clock.sleep,
+  });
+}
+
+const JETONLU_ADRES = `https://feed.example/export.csv?token=${HTTP_JETONU}`;
+
+for (const durum of [401, 403, 404] as const) {
+  test(`HTTP ${durum} hatasında jeton mesaja girmez`, async () => {
+    const client = jetonluIstemci({
+      'https://feed.example/robots.txt': { body: '' },
+      [JETONLU_ADRES]: { status: durum },
+    });
+
+    const hata = await client.get(JETONLU_ADRES).then(
+      () => null,
+      (e: unknown) => e as Error,
+    );
+
+    assert.ok(hata, `${durum} hata fırlatmalıydı`);
+    assert.ok(!hata!.message.includes(HTTP_JETONU), `jeton sızdı: ${hata!.message}`);
+    // Teşhis korunur: durum kodu ve alan adı görünür.
+    assert.ok(hata!.message.includes(String(durum)), hata!.message);
+    assert.ok(hata!.message.includes('feed.example'), hata!.message);
+  });
+}
+
+test('robots.txt yasağında jeton mesaja girmez', async () => {
+  const client = jetonluIstemci({
+    'https://feed.example/robots.txt': { body: 'User-agent: *\nDisallow: /export.csv' },
+  });
+
+  const hata = await client.get(JETONLU_ADRES).then(
+    () => null,
+    (e: unknown) => e as Error,
+  );
+
+  assert.ok(hata);
+  assert.ok(!hata!.message.includes(HTTP_JETONU), `jeton sızdı: ${hata!.message}`);
+});
+
+/*
+ * robots.txt ALINAMADIĞINDA mesaj adres + açıklama taşır. Bu iki parça
+ * ayrı ayrı birleştiriliyor; tek dizgi olarak birleştirilseydi maskeleme
+ * ya tamamını silerdi ya da açıklamayı sorgu dizisine karıştırırdı.
+ */
+test('robots.txt alınamadığında jeton mesaja girmez, açıklama korunur', async () => {
+  const client = jetonluIstemci({
+    'https://feed.example/robots.txt': { status: 500 },
+  });
+
+  const hata = await client.get(JETONLU_ADRES).then(
+    () => null,
+    (e: unknown) => e as Error,
+  );
+
+  assert.ok(hata);
+  assert.ok(!hata!.message.includes(HTTP_JETONU), `jeton sızdı: ${hata!.message}`);
+  assert.ok(hata!.message.includes('güvenli varsayım'), hata!.message);
+});
+
+test('ağ hatası tükendiğinde jeton son hata metnine girmez', async () => {
+  const { impl } = fakeFetch({ 'https://feed.example/robots.txt': { body: '' } });
+  const clock = fakeClock();
+
+  // Her denemede ağ seviyesinde çöken getirici: son hata `İstek başarısız`
+  // dalına düşer ve o dal adresi metne yazıyordu.
+  const patlayan = (async (input: string | URL | Request) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    if (url.endsWith('/robots.txt')) return impl(url);
+    throw new Error('ECONNRESET');
+  }) as unknown as typeof fetch;
+
+  const client = createPoliteClient({
+    userAgent: UA,
+    minDelayMs: 0,
+    timeoutMs: 50,
+    maxRetries: 1,
+    circuitBreakerThreshold: 5,
+    fetchImpl: patlayan,
+    now: clock.now,
+    sleep: clock.sleep,
+  });
+
+  const hata = await client.get(JETONLU_ADRES).then(
+    () => null,
+    (e: unknown) => e as Error,
+  );
+
+  assert.ok(hata);
+  assert.ok(!hata!.message.includes(HTTP_JETONU), `jeton sızdı: ${hata!.message}`);
+});
+
+// --- Çağıran başlıkları ---------------------------------------------------
+
+test('çağıranın başlıkları isteğe eklenir', async () => {
+  let gorulen: Record<string, string> = {};
+
+  const impl = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    gorulen = Object.fromEntries(
+      Object.entries((init?.headers ?? {}) as Record<string, string>),
+    );
+    if (url.endsWith('/robots.txt')) return new Response('', { status: 200 });
+    return new Response('id,title\n1,X', { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const clock = fakeClock();
+  const client = createPoliteClient({
+    userAgent: UA,
+    minDelayMs: 0,
+    timeoutMs: 5000,
+    maxRetries: 0,
+    circuitBreakerThreshold: 5,
+    fetchImpl: impl,
+    now: clock.now,
+    sleep: clock.sleep,
+  });
+
+  await client.get('https://feed.example/x.csv', {
+    headers: { authorization: 'Bearer sahte-deger-testte' },
+  });
+
+  assert.equal(gorulen.authorization, 'Bearer sahte-deger-testte');
+});
+
+/*
+ * KİMLİĞİMİZ EZİLEMEZ.
+ *
+ * Çağıran user-agent gönderirse istek kimliğimizi gizleyebilirdi; bu,
+ * robots.txt uyumunu anlamsız kılar ve bot kimliği bu projede pazarlık
+ * konusu değil. Bu yüzden user-agent çağıranın başlıklarından SONRA
+ * yazılıyor.
+ */
+test('çağıran user-agent başlığını EZEMEZ', async () => {
+  let gorulen: Record<string, string> = {};
+
+  const impl = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    gorulen = Object.fromEntries(
+      Object.entries((init?.headers ?? {}) as Record<string, string>),
+    );
+    if (url.endsWith('/robots.txt')) return new Response('', { status: 200 });
+    return new Response('x', { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const clock = fakeClock();
+  const client = createPoliteClient({
+    userAgent: UA,
+    minDelayMs: 0,
+    timeoutMs: 5000,
+    maxRetries: 0,
+    circuitBreakerThreshold: 5,
+    fetchImpl: impl,
+    now: clock.now,
+    sleep: clock.sleep,
+  });
+
+  await client.get('https://feed.example/x.csv', {
+    headers: { 'user-agent': 'Mozilla/5.0 (gizlenmis)' },
+  });
+
+  assert.equal(gorulen['user-agent'], UA);
+});

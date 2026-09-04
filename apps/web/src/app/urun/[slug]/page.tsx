@@ -410,7 +410,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
           */}
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <Guarantee
-              icon={<TruckIcon className="h-5 w-5 text-electric" />}
+              icon={<TruckIcon className="h-5 w-5 text-brand" />}
               title="Kargo dahil sıralama"
               description="Teklifler etiket fiyatına değil, kargoyla birlikte ödeyeceğiniz toplama göre sıralanır."
             />

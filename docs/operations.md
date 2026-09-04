@@ -117,6 +117,62 @@ values (
 Sonra `--dry-run` ile haritayı doğrulayın. Geçerlilik oranı %90'ın altındaysa
 harita yanlıştır.
 
+### Kimlik doğrulamalı feed
+
+Ortaklık feed'lerinin çoğu kimlik ister. Kimlik bilgisinin **kendisi
+veritabanına hiçbir zaman yazılmaz**; `sources` satırında yalnızca onu nereden
+okuyacağımız durur. Gerçek değer çalışma anında ortamdan gelir.
+
+Üç taşıma yöntemi vardır (`auth_type`):
+
+| `auth_type` | Jeton nereye girer | `auth_secret_ref` |
+|---|---|---|
+| `query` (varsayılan) | Adresteki `${DEĞİŞKEN}` yer tutucusuna | gerekmez |
+| `bearer` | `Authorization: Bearer <jeton>` başlığına | **zorunlu** |
+| `basic` | `Authorization: Basic <base64>` başlığına | **zorunlu** |
+
+`auth_secret_ref` bir **ortam değişkeni ADI** taşır, değeri değil
+(`OHAAAA_FEED_TOKEN` gibi). Bunu bir veritabanı kısıtı zorlar: değer
+`^[A-Z][A-Z0-9_]{2,63}$` kalıbına uymuyorsa — yani bir jeton yapıştırıldıysa —
+yazma anında reddedilir. İkinci bir kısıt da `bearer`/`basic` seçilip
+`auth_secret_ref` boş bırakılmasını engeller.
+
+```sql
+-- Başlık tabanlı örnek
+insert into public.sources
+  (merchant_id, slug, name, kind, endpoint_url, field_mapping,
+   auth_type, auth_secret_ref)
+values (
+  '<mağaza id>', 'ortak-bearer', 'Ortak — feed', 'feed_json',
+  'https://ortak.example/feed.json',
+  '{"external_id":"id","title":"name","price":"price","url":"link"}',
+  'bearer', 'OHAAAA_FEED_TOKEN'
+);
+
+-- Adres tabanlı örnek: jetonun KENDİSİ değil, yer tutucusu yazılır
+--   'https://ortak.example/feed.csv?token=${OHAAAA_FEED_TOKEN}'
+```
+
+`basic` için değişken `kullanici:parola` biçiminde tutulur; base64'e çeviren
+koddur. Operatörden base64 istemek iki hataya açıktı: yanlış kodlama ve
+"base64 şifrelemedir" yanılgısı.
+
+**İki adım birlikte yapılmalı.** Değişkeni yalnızca `auth_secret_ref`'e yazmak
+yetmez; aynı adın çalışma ortamına da ulaşması gerekir:
+
+1. GitHub → Settings → Secrets and variables → Actions → sırrı ekleyin
+2. `.github/workflows/ingest.yml` içindeki `env:` bloğuna satırı ekleyin
+
+İkincisi atlanırsa alım şu hatayla ve **kalıcı** olarak durur:
+`Kimlik doğrulama değişkeni ortamda tanımlı değil: <AD>`. Bu bilinçlidir —
+kimliksiz istek gönderip 401'i "sağlayıcı arızası" sanmaktansa açıkça durmak
+yeğdir; 401 alan bir kaynağa tekrar tekrar kimliksiz istek atmak bazı ortaklık
+ağlarında sözleşme ihlalidir.
+
+Hata metinleri değişkenin **adını** söyler, değerini değil. Adresteki tüm
+sorgu değerleri ve ortamdan okunan gizli değerler, günlüğe veya
+`sources.last_error` sütununa girmeden önce maskelenir.
+
 ---
 
 ## 2. Tarama politikası (kesin sınır)

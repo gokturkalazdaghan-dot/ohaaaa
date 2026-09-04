@@ -9,9 +9,10 @@
  * yeterlidir; ölçeklenince Redis'e taşınmalıdır (bkz. docs/architecture.md §6).
  */
 
-import { createHash } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
+
+import { hashedClientIp } from '@/lib/clientHash';
 
 export const dynamic = 'force-dynamic';
 
@@ -119,12 +120,14 @@ function allowSubmission(key: string): boolean {
   return true;
 }
 
-/** IP ham saklanmaz; yalnızca hız sınırı anahtarı olarak özetlenir. */
+/*
+ * Ziyaretçi özeti ortak yardımcıdan gelir.
+ *
+ * Buradaki eski hâli TUZSUZ bir sha256(ip) idi. IPv4 uzayı 2^32'dir; tuzsuz
+ * bir özet sıradan bir makinede tamamen taranıp geri çözülebilir, yani
+ * adresi saklamaz. Ortak yardımcı günlük dönen tuz kullanır: aynı gün
+ * içindeki tekilleştirme korunur, günler arası takip mümkün olmaz.
+ */
 function hashIp(request: NextRequest): string {
-  const ip =
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    request.headers.get('x-real-ip') ??
-    'unknown';
-
-  return createHash('sha256').update(ip).digest('hex').slice(0, 16);
+  return hashedClientIp(new Headers(request.headers));
 }

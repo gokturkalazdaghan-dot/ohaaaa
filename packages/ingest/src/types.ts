@@ -1,3 +1,6 @@
+import type { AuthType } from './auth.js';
+import type { IngestErrorClass } from './errors.js';
+
 /**
  * Alım hattının ortak tipleri.
  *
@@ -63,12 +66,32 @@ export interface SourceConfig {
   id: string;
   slug: string;
   merchantId: string;
+  /**
+   * Bu kaynağın veri getirdiği pazar.
+   *
+   * Para biriminden AYRI taşınır: EUR hem Almanya hem Avusturya demektir
+   * ve bir satıcı kendi ülkesi dışındaki bir para birimiyle fiyat
+   * verebilir. Pazarı para biriminden türetmek, kullanıcıya kendisine
+   * gönderilmeyecek teklifleri "en ucuz" diye göstermeye yol açar.
+   */
+  market: 'TR' | 'DE' | 'US';
   kind: 'feed_csv' | 'feed_xml' | 'feed_json' | 'api' | 'sitemap' | 'manual';
   endpointUrl: string | null;
   fieldMapping: FieldMapping;
   currency: string;
   /** Mağazanın izinli alan adları — ürün adresleri buraya ait olmalı. */
   allowedHosts: string[];
+  /**
+   * Kimlik bilgisinin NASIL taşınacağı. Varsayılan `query`: adres
+   * şablonundaki ${DEGISKEN} yer tutucusu. `bearer`/`basic` Authorization
+   * başlığı kullanır.
+   */
+  authType?: AuthType;
+  /**
+   * Kimlik bilgisini taşıyan ORTAM DEĞİŞKENİNİN ADI -- değeri değil.
+   * Değeri burada tutmak, sırrı veritabanında düz metin saklamak olurdu.
+   */
+  authSecretRef?: string | null;
 }
 
 export interface IngestSummary {
@@ -77,9 +100,63 @@ export interface IngestSummary {
   itemsSeen: number;
   itemsCreated: number;
   itemsUpdated: number;
+  /**
+   * Delta sınıflandırmasının ham sonucu.
+   *
+   * `itemsCreated`/`itemsUpdated` veritabanına NE YAPTIĞIMIZI söyler;
+   * bunlar KAYNAĞIN NE YAPTIĞINI. İki soru farklı ve ikisi de gerekli:
+   * `created=0, updated=0` tek başına "hiçbir şey değişmedi" (sağlıklı)
+   * ile "hepsi elendi" (arıza) durumlarını aynı gösterir.
+   */
+  itemsNew: number;
+  itemsChanged: number;
+  /**
+   * Parmak izi değişmediği için HİÇ YAZILMAYAN kalemler.
+   *
+   * Delta tespitinin ne kadar iş elediğinin ölçüsü. Sağlıklı bir feed'de
+   * çoğunluk burada olmalı: 50.000 üründen üçü değiştiyse 49.997 yazma,
+   * tetikleyici ve yeniden indeksleme yapılmamış demektir.
+   */
+  itemsUnchanged: number;
+  /**
+   * Kaynakta artık bulunmayan kalemler.
+   *
+   * `snapshotComplete` false iken bu HER ZAMAN 0'dır -- ve o sıfır
+   * "silinmedi" değil "bakılmadı" anlamına gelir. İkisini ayırmak için
+   * `snapshotComplete` ayrıca taşınıyor.
+   */
+  itemsDeleted: number;
   itemsSkipped: number;
   itemsFailed: number;
   durationMs: number;
+  /**
+   * Anlık görüntü TAM mıydı?
+   *
+   * `false` ise bu turda SİLME/BAYATLATMA yapılmaz. Kırpılmış ya da
+   * büyük ölçüde doğrulamayı geçemeyen bir feed, eksik kayıtları
+   * "kaynakta yok" gibi gösterir.
+   */
+  snapshotComplete: boolean;
   sampleErrors: Array<{ externalId: string | null; reason: string }>;
   error?: string;
+  /**
+   * Hatanın SINIFI.
+   *
+   * `error` metni insana ne olduğunu söyler; bu alan MAKİNEYE söyler.
+   * İkisi ayrı çünkü kuyruğun "yeniden denenir mi" kararı bir metne
+   * bakılarak verilemez: cümle düzeltildiğinde karar sessizce değişirdi.
+   * Ayrıca sınıf sayılabilir -- "bu hafta kaç AUTH_ERROR" sorusu
+   * cevaplanabilir hale gelir.
+   */
+  errorClass?: IngestErrorClass;
+  /**
+   * Bu hata yeniden denenmeli mi?
+   *
+   * SINIFTAN AYRI TAŞINIR ÇÜNKÜ AYNI SINIF İKİ KARAR VEREBİLİR.
+   * `HTTP_ERROR` bunun kanıtı: 404 kalıcı, 503 geçicidir. Yalnızca sınıfı
+   * taşıyıp kalıcılığı sınıf tablosundan okumak, 503'ü kalıcı sayıp
+   * toparlanabilecek bir sunucuda kaynağı öldürüyordu -- bu alan tam olarak
+   * o kusur bir testle yakalandığı için var.
+   */
+  errorPermanent?: boolean;
 }

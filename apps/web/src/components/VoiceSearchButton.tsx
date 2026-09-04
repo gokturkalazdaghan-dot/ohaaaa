@@ -57,7 +57,25 @@ export function VoiceSearchButton({
     setError(null);
 
     const recognition = new Recognition();
-    recognition.lang = 'tr-TR';
+    /*
+     * TANIMA DİLİ SAYFANIN DİLİNDEN GELİR (madde 17).
+     *
+     * Önce 'tr-TR' gömülüydü: Almanca konuşan bir ziyaretçinin sesi Türkçe
+     * fonetikle çözülmeye çalışılıyor ve pratikte hiçbir zaman doğru
+     * sonuç vermiyordu.
+     *
+     * Değer NEDEN prop olarak geçilmiyor? Çünkü tek doğru kaynak zaten
+     * `<html lang>`: sunucu, GERÇEKTEN sunduğu dili oraya yazıyor
+     * (bkz. lib/locale.ts). Prop'u beş bileşen aşağı taşımak, aynı bilgiyi
+     * ikinci bir yoldan taşımak ve iki yolun sapma ihtimalini yaratmak
+     * olurdu -- sesli aramanın sayfa dilinden farklı bir dil dinlemesi.
+     *
+     * Öznitelik okunamazsa tarayıcının kendi varsayılanı kalır; sabit bir
+     * dil dayatmaktan iyidir.
+     */
+    const pageLang =
+      typeof document !== 'undefined' ? document.documentElement.lang.trim() : '';
+    if (pageLang) recognition.lang = pageLang;
     // Tek bir arama sorgusu: sürekli dinleme gereksiz ve mikrofonu açık tutar.
     recognition.continuous = false;
     // Ara sonuç göstermiyoruz; kullanıcı yarım kelimeleri okumak zorunda kalmasın.

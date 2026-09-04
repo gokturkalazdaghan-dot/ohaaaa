@@ -93,7 +93,7 @@ export function Notice({
   const classes =
     tone === 'warning'
       ? 'border-warning/25 bg-warning/8 text-warning'
-      : 'border-electric/25 bg-electric/8 text-electric-soft';
+      : 'border-brand/25 bg-brand/8 text-brand-soft';
 
   return (
     <div className={`rounded-xl border p-4 text-sm leading-relaxed ${classes}`}>{children}</div>

@@ -262,7 +262,7 @@ export function CheckoutFlow({ addresses = [] }: { addresses?: SavedAddress[] })
           <h2 className="text-sm font-semibold">Sipariş özeti</h2>
 
           {summary.vendorCount > 1 && (
-            <p className="mt-3 rounded-xl border border-electric/25 bg-electric/10 px-3 py-2 text-2xs text-electric-soft">
+            <p className="mt-3 rounded-xl border border-brand/25 bg-brand/10 px-3 py-2 text-2xs text-brand-soft">
               Siparişiniz {summary.vendorCount} mağazaya bölünecek. Her mağaza kendi kargosuyla
               gönderim yapar; ürünler ayrı ayrı ulaşabilir.
             </p>

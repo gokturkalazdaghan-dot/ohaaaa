@@ -17,6 +17,7 @@ const SOURCE: SourceConfig = {
   merchantId: 'merchant-1',
   kind: 'feed_csv',
   endpointUrl: 'https://magaza.example/feed.csv',
+  market: 'TR',
   currency: 'TRY',
   allowedHosts: ['magaza.example'],
   fieldMapping: {
@@ -39,12 +40,32 @@ const CSV = [
 function fakeRepository(overrides: Partial<IngestRepository> = {}) {
   const calls = {
     markStale: 0,
-    upserted: [] as Array<NormalizedOffer & { groupId: string | null }>,
+    /** touchSeen'e geçen dış kimlikler — bayatlatma regresyonunun kanıtı. */
+    touched: [] as string[],
+    /** Kaynağa yazılan yenileme planları. */
+    refreshPlans: [] as Array<{
+      sourceId: string;
+      nextRefreshAt: Date;
+      freshnessClass: string;
+      reasons: readonly string[];
+    }>,
+    upserted: [] as Array<NormalizedOffer & { groupId: string | null; fingerprint: string }>,
+    /** upsertOffers'a hangi pazarın geçtiği — pazar izolasyonunun kanıtı. */
+    upsertMarkets: [] as Array<SourceConfig['market']>,
     createdGroups: [] as string[],
     finished: [] as IngestSummary[],
   };
 
   const repository: IngestRepository = {
+    async getFingerprints() {
+      return new Map<string, string>();
+    },
+    async touchSeen(_sourceId, externalIds) {
+      calls.touched.push(...externalIds);
+    },
+    async saveRefreshPlan(sourceId, plan) {
+      calls.refreshPlans.push({ sourceId, ...plan });
+    },
     async findGroupsByGtin() {
       return new Map();
     },
@@ -59,8 +80,9 @@ function fakeRepository(overrides: Partial<IngestRepository> = {}) {
       }
       return result;
     },
-    async upsertOffers(_merchantId, _sourceId, rows) {
+    async upsertOffers(_merchantId, _sourceId, rows, market) {
       calls.upserted.push(...rows);
+      calls.upsertMarkets.push(market);
       return { created: rows.length, updated: 0 };
     },
     async markStale() {
@@ -241,4 +263,719 @@ test('çalışma kaydı her durumda kapatılır', async () => {
     await runSource(SOURCE, { fetcher: fakeFetcher(body), repository });
     assert.equal(calls.finished.length, 1, `kapatılmadı: "${body.slice(0, 10)}"`);
   }
+});
+
+
+/*
+ * PAZAR KAYNAKTAN TEKLİFE TAŞINIR.
+ *
+ * Pazar alanı eklendiğinde hattın onu yazmayı unutması, sütunun
+ * varsayılanda ('TR') kalması demekti: Alman feed'inden gelen teklifler
+ * sessizce Türk pazarına düşerdi. Şema, para birimi uyuşmadığı için
+ * bunların çoğunu reddeder -- ama EUR fiyatlı bir Avusturya feed'i
+ * sessizce Almanya'ya karışabilirdi. Bu yüzden taşıma AYRICA sınanıyor.
+ */
+test('kaynağın pazarı upsertOffers çağrısına geçirilir', async () => {
+  const { repository, calls } = fakeRepository();
+
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository });
+
+  assert.deepEqual(calls.upsertMarkets, ['TR']);
+});
+
+test('farklı pazardaki kaynak kendi pazarını taşır', async () => {
+  const { repository, calls } = fakeRepository();
+
+  await runSource(
+    { ...SOURCE, market: 'DE', currency: 'EUR' },
+    { fetcher: fakeFetcher(CSV), repository },
+  );
+
+  assert.deepEqual(calls.upsertMarkets, ['DE']);
+  // Pazar değişti diye teklifler kaybolmamalı.
+  assert.equal(calls.upserted.length, 2);
+});
+
+/* =========================================================================
+ * DELTA SYNC — GERÇEK HAT ENTEGRASYONU
+ * -------------------------------------------------------------------------
+ * Buradaki testler `classifyDelta`'yı doğrudan çağırmıyor. Hepsi
+ * `runSource` üzerinden geçiyor -- yani delta'nın gerçek yürütme yolunda
+ * olduğunu sınıyorlar. İzole fonksiyonun doğru çalışması, hatta bağlı
+ * olduğunu KANITLAMAZ.
+ * ========================================================================= */
+
+/** İlk turdan sonraki "bilinen durum"u taklit eden depo. */
+function deltaRepository(onceki: Map<string, string>) {
+  const { repository, calls } = fakeRepository({
+    async getFingerprints() {
+      return onceki;
+    },
+  });
+  return { repository, calls };
+}
+
+test('DELTA: bilinmeyen kalemler yazılır (NEW)', async () => {
+  const { repository, calls } = deltaRepository(new Map());
+
+  const summary = await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository });
+
+  assert.equal(calls.upserted.length, 2);
+  assert.equal(summary.itemsUnchanged, 0);
+  // Her yazılan satır bir sonraki tur için parmak izi taşımalı.
+  assert.ok(calls.upserted.every((r) => typeof r.fingerprint === 'string' && r.fingerprint.length > 0));
+});
+
+/*
+ * AYNI ANLIK GÖRÜNTÜ İKİ KEZ → İKİNCİSİNDE HİÇ YAZMA.
+ *
+ * Bu, delta'nın varlık sebebi. 50.000 üründe hiçbiri değişmediyse
+ * 50.000 yazma, tetikleyici ve yeniden indeksleme yapılmamalı.
+ */
+test('DELTA: aynı feed ikinci kez alınırsa hiçbir şey yazılmaz (UNCHANGED)', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+
+  // İlk turun yazdığı parmak izleri artık "bilinen durum".
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  const ikinci = deltaRepository(bilinen);
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher(CSV),
+    repository: ikinci.repository,
+  });
+
+  assert.equal(ikinci.calls.upserted.length, 0);
+  assert.equal(summary.itemsUnchanged, 2);
+  assert.equal(summary.itemsCreated, 0);
+  assert.equal(summary.itemsUpdated, 0);
+});
+
+test('DELTA: yalnızca fiyatı değişen kalem yazılır (CHANGED)', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  // SKU-1'in fiyatı düştü; SKU-2 aynı.
+  const degisenCsv = CSV.replace('11899.00', '9999.00');
+
+  const ikinci = deltaRepository(bilinen);
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher(degisenCsv),
+    repository: ikinci.repository,
+  });
+
+  assert.equal(ikinci.calls.upserted.length, 1);
+  assert.equal(ikinci.calls.upserted[0]!.externalId, 'SKU-1');
+  assert.equal(summary.itemsUnchanged, 1);
+});
+
+/*
+ * KIRPILMIŞ FEED BAYATLATMA YAPMAZ.
+ *
+ * ÖLÇÜLEN GERÇEK ARIZA: bu bayrak eklenmeden önce `markStale` kırpılmış
+ * bir turdan sonra da çalışıyordu. 60.000 kalemlik bir feed'de sınırın
+ * ötesindeki teklifler HER TURDA "görülmedi" sayılıp stoksuz
+ * işaretleniyordu -- kısmi anlık görüntüden toplu geçersizleştirme.
+ */
+test('DELTA: geçiş oranı düşükse anlık görüntü EKSİK sayılır ve bayatlatma atlanır', async () => {
+  // Dört satırın üçü geçersiz adres taşıyor: geçiş oranı %25.
+  const bozukCsv = [
+    'id,title,price,link,gtin,brand',
+    'SKU-1,Gecerli Urun,100.00,https://magaza.example/p/1,4548736134546,Sony',
+    'SKU-2,Bozuk Urun,100.00,https://baska-site.gecersiz/p/2,,Marka',
+    'SKU-3,Bozuk Urun,100.00,https://baska-site.gecersiz/p/3,,Marka',
+    'SKU-4,Bozuk Urun,100.00,https://baska-site.gecersiz/p/4,,Marka',
+  ].join('\n');
+
+  const { repository, calls } = deltaRepository(new Map());
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher(bozukCsv),
+    repository,
+  });
+
+  assert.equal(summary.snapshotComplete, false);
+  // Katalog korundu: bayatlatma HİÇ çağrılmadı.
+  assert.equal(calls.markStale, 0);
+  assert.equal(summary.status, 'partial');
+});
+
+test('DELTA: tam anlık görüntüde bayatlatma çalışır', async () => {
+  const { repository, calls } = deltaRepository(new Map());
+  const summary = await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository });
+
+  assert.equal(summary.snapshotComplete, true);
+  assert.equal(calls.markStale, 1);
+});
+
+/*
+ * Feed hiç indirilemezse anlık görüntü asla "tam" olmamalı. Güvenli
+ * varsayılan sayesinde hata yolunda buraya hiç gelinmese bile
+ * bayatlatma yapılmaz.
+ */
+test('DELTA: alım başarısız olursa anlık görüntü tam sayılmaz', async () => {
+  const { repository, calls } = deltaRepository(new Map());
+
+  const summary = await runSource(SOURCE, {
+    fetcher: {
+      get: async () => {
+        throw new Error('ag hatasi');
+      },
+    },
+    repository,
+  });
+
+  assert.equal(summary.status, 'failed');
+  assert.equal(summary.snapshotComplete, false);
+  assert.equal(calls.markStale, 0);
+});
+
+test('DELTA: boş feed bayatlatma yapmaz ve hata verir', async () => {
+  const { repository, calls } = deltaRepository(new Map());
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher('id,title,price,link\n'),
+    repository,
+  });
+
+  assert.equal(summary.status, 'failed');
+  assert.equal(calls.markStale, 0);
+});
+
+/*
+ * PAZAR PARMAK İZİNE GİRER.
+ *
+ * Aynı dış kimliğe sahip TR ve DE teklifi aynı entity gibi
+ * karşılaştırılmamalı; aksi halde Alman feed'i Türk kataloğunu
+ * "değişmedi" diye atlatabilirdi.
+ */
+test('DELTA: pazar değişince aynı kalem CHANGED sayılır', async () => {
+  const tr = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: tr.repository });
+  const trIzler = new Map(tr.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  // Aynı dış kimlikler, farklı pazar.
+  const de = deltaRepository(trIzler);
+  await runSource(
+    { ...SOURCE, market: 'DE', currency: 'EUR' },
+    { fetcher: fakeFetcher(CSV), repository: de.repository },
+  );
+
+  // TR parmak izleri DE turunda eşleşmemeli.
+  assert.equal(de.calls.upserted.length, 2);
+});
+
+test('DELTA: parmak izi aynı girdi için kararlı', async () => {
+  const a = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: a.repository });
+
+  const b = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: b.repository });
+
+  const izlerA = a.calls.upserted.map((r) => r.fingerprint).sort();
+  const izlerB = b.calls.upserted.map((r) => r.fingerprint).sort();
+  assert.deepEqual(izlerA, izlerB);
+});
+
+test('DELTA: özet sayaçları tutarlı', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  const ikinci = deltaRepository(bilinen);
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher(CSV.replace('11899.00', '8888.00')),
+    repository: ikinci.repository,
+  });
+
+  assert.equal(summary.itemsSeen, 2);
+  assert.equal(summary.itemsUnchanged + summary.itemsCreated, 2);
+});
+
+/*
+ * KIRPMA YOLU DOĞRUDAN SINANIYOR.
+ *
+ * Bulunan asıl arıza buydu: 50.000 sınırında kırpılan bir feed'de
+ * `markStale` yine de çalışıyor ve sınırın ötesindeki HER teklif
+ * "bu beslemede görülmedi" sayılıp stoksuz işaretleniyordu. Sıralama
+ * değişirse her turda başka bir dilim gidip geliyordu.
+ *
+ * Test 50.001 satır üretiyor -- pahalı ama bu kapının gerçekten
+ * kapandığını başka türlü kanıtlamak mümkün değil.
+ */
+test('DELTA: KIRPILMIŞ feed bayatlatma yapmaz', async () => {
+  const satirlar = ['id,title,price,link,gtin,brand'];
+  for (let i = 0; i < 50_001; i += 1) {
+    satirlar.push(`SKU-${i},Urun ${i},100.00,https://magaza.example/p/${i},,Marka`);
+  }
+
+  const { repository, calls } = deltaRepository(new Map());
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher(satirlar.join('\n')),
+    repository,
+  });
+
+  assert.equal(summary.itemsSeen, 50_000, 'kırpma gerçekten uygulandı');
+  assert.equal(summary.snapshotComplete, false, 'kırpılmış görüntü tam sayılmamalı');
+  // Katalog korundu.
+  assert.equal(calls.markStale, 0);
+  assert.equal(summary.status, 'partial');
+});
+
+/*
+ * BU TEST BİR REGRESYONUN ANITIDIR.
+ *
+ * Delta entegrasyonu yalnızca NEW/CHANGED'i yazmaya başlayınca, DEĞİŞMEYEN
+ * tekliflerin `last_seen_at`'i eski turda kaldı. `markStale` "bu turda
+ * görülmeyeni stoksuz işaretle" dediği için, ikinci turdan itibaren
+ * DEĞİŞMEYEN HER ÜRÜN katalogdan düşecekti -- yani delta, kataloğu
+ * boşaltan bir yan etki üretiyordu.
+ *
+ * Testler yakalamamıştı çünkü sahte `markStale` yalnızca çağrı sayıyor.
+ * Bu test, görülen HER teklifin damgalandığını doğruluyor.
+ */
+test('DELTA: değişmeyen teklifler de "görüldü" damgası alır', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  const ikinci = deltaRepository(bilinen);
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ikinci.repository });
+
+  // Hiçbir şey YAZILMADI...
+  assert.equal(ikinci.calls.upserted.length, 0);
+  // ...ama her teklif GÖRÜLDÜ olarak damgalandı.
+  assert.deepEqual(ikinci.calls.touched.sort(), ['SKU-1', 'SKU-2']);
+});
+
+test('DELTA: kısmen değişen turda da TÜM görülenler damgalanır', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  const ikinci = deltaRepository(bilinen);
+  await runSource(SOURCE, {
+    fetcher: fakeFetcher(CSV.replace('11899.00', '7777.00')),
+    repository: ikinci.repository,
+  });
+
+  // Yalnızca biri yazıldı...
+  assert.equal(ikinci.calls.upserted.length, 1);
+  // ...ama ikisi de görüldü.
+  assert.equal(ikinci.calls.touched.length, 2);
+});
+
+// --- §13'ün istediği kalan entegrasyon testleri ---------------------------
+
+test('DELTA: yalnızca stok değişimi CHANGED üretir', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  // CSV'de stok sütunu yok; normalize varsayılan stok veriyor. Stok
+  // durumunu değiştirmek için alan haritasına stok ekleyip 0 veriyoruz.
+  const stokluCsv = [
+    'id,title,price,link,gtin,brand,stock',
+    'SKU-1,Sony WH-1000XM5 Kulaklık,11899.00,https://magaza.example/p/1,4548736134546,Sony,0',
+    'SKU-2,Apple iPhone 15 128GB,53499.00,https://magaza.example/p/2,0195949038204,Apple,5',
+  ].join('\n');
+
+  const ikinci = deltaRepository(bilinen);
+  const summary = await runSource(
+    { ...SOURCE, fieldMapping: { ...SOURCE.fieldMapping, stock: 'stock' } },
+    { fetcher: fakeFetcher(stokluCsv), repository: ikinci.repository },
+  );
+
+  // SKU-1 stoksuz kaldı → CHANGED.
+  assert.ok(summary.itemsChanged >= 1, `beklenen >=1 CHANGED, gelen ${summary.itemsChanged}`);
+  assert.ok(ikinci.calls.upserted.some((r) => r.externalId === 'SKU-1'));
+});
+
+/*
+ * SATIR SIRASI SONUCU DEĞİŞTİRMEZ.
+ *
+ * Bir feed aynı ürünleri farklı sırada verebilir (sunucu tarafı sıralama
+ * değişir). Sıra parmak izini etkileseydi, hiçbir şey değişmediği hâlde
+ * tüm katalog "değişmiş" görünürdü.
+ */
+test('DELTA: feed satır sırası değişse de sonuç aynı', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  const satirlar = CSV.split('\n');
+  const tersCsv = [satirlar[0]!, satirlar[2]!, satirlar[1]!].join('\n');
+
+  const ikinci = deltaRepository(bilinen);
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher(tersCsv),
+    repository: ikinci.repository,
+  });
+
+  assert.equal(ikinci.calls.upserted.length, 0);
+  assert.equal(summary.itemsUnchanged, 2);
+});
+
+/*
+ * TAM ANLIK GÖRÜNTÜDE EKSİLEN KAYIT DELETED SAYILIR.
+ *
+ * Sayı `ingest_runs`'a yazılıyor ve bir kaynağın sessizce ürün
+ * kaybetmeye başladığını gösteren tek sinyal bu.
+ */
+test('DELTA: tam görüntüde eksilen kayıt DELETED sayılır', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  // İkinci turda SKU-2 feed'de yok.
+  const satirlar = CSV.split('\n');
+  const eksikCsv = [satirlar[0]!, satirlar[1]!].join('\n');
+
+  const ikinci = deltaRepository(bilinen);
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher(eksikCsv),
+    repository: ikinci.repository,
+  });
+
+  assert.equal(summary.snapshotComplete, true);
+  assert.equal(summary.itemsDeleted, 1);
+});
+
+test('DELTA: kısmi görüntüde itemsDeleted 0 kalır ("bakılmadı")', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  // Geçiş oranını düşürerek görüntüyü eksik yapıyoruz.
+  const bozukCsv = [
+    'id,title,price,link,gtin,brand',
+    'SKU-1,Sony WH-1000XM5 Kulaklık,11899.00,https://magaza.example/p/1,4548736134546,Sony',
+    'SKU-9,Bozuk,100.00,https://baska.gecersiz/p/9,,X',
+    'SKU-8,Bozuk,100.00,https://baska.gecersiz/p/8,,X',
+    'SKU-7,Bozuk,100.00,https://baska.gecersiz/p/7,,X',
+  ].join('\n');
+
+  const ikinci = deltaRepository(bilinen);
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher(bozukCsv),
+    repository: ikinci.repository,
+  });
+
+  assert.equal(summary.snapshotComplete, false);
+  // 0 burada "silinmedi" değil "bakılmadı" demek.
+  assert.equal(summary.itemsDeleted, 0);
+});
+
+test('DELTA: özet sayaçları görülen kalemi aşmaz', async () => {
+  const { repository } = deltaRepository(new Map());
+  const summary = await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository });
+
+  const toplam = summary.itemsNew + summary.itemsChanged + summary.itemsUnchanged;
+  assert.ok(
+    toplam <= summary.itemsSeen,
+    `${toplam} > ${summary.itemsSeen} — sayaçlar iki kez artıyor olabilir`,
+  );
+  assert.equal(summary.itemsNew, 2);
+});
+
+/* =========================================================================
+ * UYARLANABİLİR YOKLAMA — GERÇEK HAT ENTEGRASYONU (§46)
+ * -------------------------------------------------------------------------
+ * Testlerin hiçbiri `computeRefreshPlan`'ı DOĞRUDAN çağırmıyor. Hepsi
+ * `runSource` üzerinden geçiyor ve kaynağa YAZILAN planı denetliyor --
+ * yani planın gerçek yürütme yolunda üretildiğini kanıtlıyorlar.
+ * ========================================================================= */
+
+test('YOKLAMA: her alım turu kaynağa bir plan yazar', async () => {
+  const { repository, calls } = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository });
+
+  assert.equal(calls.refreshPlans.length, 1);
+  const plan = calls.refreshPlans[0]!;
+  assert.equal(plan.sourceId, SOURCE.id);
+  assert.ok(plan.nextRefreshAt.getTime() > Date.now(), 'plan GELECEĞE bakmalı');
+  assert.ok(plan.reasons.length > 0, 'karar sebebini taşımalı');
+});
+
+/*
+ * YÜKSEK DEĞİŞİM → DAHA KISA ARALIK.
+ *
+ * İlk turda her kalem NEW (değişim oranı 1,0); ikinci turda hiçbiri
+ * değişmiyor (oran 0). Plan bunu görmeli.
+ */
+test('YOKLAMA: yüksek değişim, değişimsiz turdan DAHA KISA aralık üretir', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  const ikinci = deltaRepository(bilinen);
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ikinci.repository });
+
+  const degisimli = ilk.calls.refreshPlans[0]!;
+  const degisimsiz = ikinci.calls.refreshPlans[0]!;
+
+  assert.ok(
+    degisimli.nextRefreshAt.getTime() < degisimsiz.nextRefreshAt.getTime(),
+    `değişimli tur (${degisimli.freshnessClass}) değişimsizden ` +
+      `(${degisimsiz.freshnessClass}) daha erken yoklanmalı`,
+  );
+});
+
+test('YOKLAMA: hiç değişim olmayan tur en soğuk sınıfa düşer', async () => {
+  const ilk = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ilk.repository });
+  const bilinen = new Map(ilk.calls.upserted.map((r) => [r.externalId, r.fingerprint]));
+
+  const ikinci = deltaRepository(bilinen);
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: ikinci.repository });
+
+  assert.equal(ikinci.calls.refreshPlans[0]!.freshnessClass, 'COLD');
+});
+
+/*
+ * TRAFİK VERİSİ OLMADAN VERY_HOT/HOT ÜRETİLMEZ.
+ *
+ * Bir feed'in her turda değişmesi tek başına onu 2 dakikada bir
+ * yoklamayı haklı çıkarmaz -- kimsenin bakmadığı bir ürünün bayat olması
+ * kimseyi yanıltmaz. Bu bir eksiklik değil, kasıtlı bir tavan; test onu
+ * kilitliyor ki biri "daha agresif olsun" diye trafik sinyalini
+ * uydurmasın.
+ */
+test('YOKLAMA: trafik verisi yokken en fazla ACTIVE olunur', async () => {
+  const { repository, calls } = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository });
+
+  const sinif = calls.refreshPlans[0]!.freshnessClass;
+  assert.ok(
+    sinif !== 'VERY_HOT' && sinif !== 'HOT',
+    `trafik ölçülmeden ${sinif} üretilmemeli`,
+  );
+});
+
+/*
+ * BAŞARISIZ ALIM DA PLAN ÜRETİR.
+ *
+ * Yalnızca başarı yolunda yazılsaydı, çöken bir kaynağın
+ * `next_refresh_at`'i eski değerinde donar ve zamanlayıcı onu ya hiç
+ * denemez ya da eski plana göre döverdi.
+ */
+test('YOKLAMA: alım başarısız olsa da plan yazılır ve geri çekilir', async () => {
+  const { repository, calls } = deltaRepository(new Map());
+
+  const summary = await runSource(SOURCE, {
+    fetcher: {
+      get: async () => {
+        throw new Error('ag hatasi');
+      },
+    },
+    repository,
+  });
+
+  assert.equal(summary.status, 'failed');
+  assert.equal(calls.refreshPlans.length, 1);
+
+  const plan = calls.refreshPlans[0]!;
+  assert.equal(plan.freshnessClass, 'COLD');
+  assert.ok(plan.reasons.some((r) => r.includes('basarisiz')));
+});
+
+/*
+ * KISMİ GÖRÜNTÜ AGRESİFLEŞTİRMEZ VE SEYRELTMEZ.
+ *
+ * Kırpılmış ya da büyük ölçüde elenen bir turda değişim oranı
+ * güvenilmez: eksik kalemler "değişmedi" gibi görünür. Sağlıklı saymak,
+ * eksik bir ölçüme dayanarak yoklamayı seyrekleştirmek -- yani arızayı
+ * ödüllendirmek olurdu.
+ */
+test('YOKLAMA: kısmi anlık görüntü geri çekilme uygular', async () => {
+  const bozukCsv = [
+    'id,title,price,link,gtin,brand',
+    'SKU-1,Gecerli,100.00,https://magaza.example/p/1,4548736134546,Sony',
+    'SKU-2,Bozuk,100.00,https://baska.gecersiz/p/2,,X',
+    'SKU-3,Bozuk,100.00,https://baska.gecersiz/p/3,,X',
+    'SKU-4,Bozuk,100.00,https://baska.gecersiz/p/4,,X',
+  ].join('\n');
+
+  const { repository, calls } = deltaRepository(new Map());
+  const summary = await runSource(SOURCE, {
+    fetcher: fakeFetcher(bozukCsv),
+    repository,
+  });
+
+  assert.equal(summary.snapshotComplete, false);
+  const plan = calls.refreshPlans[0]!;
+  // Sağlıklı sayılmadığı için geri çekilme gerekçesi görünmeli.
+  assert.ok(plan.reasons.some((r) => r.includes('yavas')), plan.reasons.join(','));
+});
+
+/*
+ * PAZAR İZOLASYONU: bir kaynağın alımı YALNIZCA kendi kaynağına yazar.
+ *
+ * `saveRefreshPlan` kaynak kimliğiyle çağrılıyor; başka pazardaki bir
+ * kaynağın planına dokunması mimari olarak mümkün değil ve test bunu
+ * kaynak kimliği üzerinden doğruluyor.
+ */
+test('YOKLAMA: TR alımı yalnızca TR kaynağının planını yazar', async () => {
+  const tr = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: tr.repository });
+
+  const de = deltaRepository(new Map());
+  await runSource(
+    { ...SOURCE, id: 'src-de', slug: 'de-feed', market: 'DE', currency: 'EUR' },
+    { fetcher: fakeFetcher(CSV), repository: de.repository },
+  );
+
+  assert.deepEqual(tr.calls.refreshPlans.map((p) => p.sourceId), ['src-1']);
+  assert.deepEqual(de.calls.refreshPlans.map((p) => p.sourceId), ['src-de']);
+});
+
+/*
+ * DETERMİNİZM: aynı girdi aynı sınıfı üretir.
+ *
+ * Rastgelelik olsaydı aynı kaynak iki turda farklı sıklığa düşer ve
+ * "neden şimdi yoklandı" sorusu cevaplanamazdı.
+ */
+test('YOKLAMA: aynı girdi aynı sınıfı üretir', async () => {
+  const a = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: a.repository });
+
+  const b = deltaRepository(new Map());
+  await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository: b.repository });
+
+  assert.equal(
+    a.calls.refreshPlans[0]!.freshnessClass,
+    b.calls.refreshPlans[0]!.freshnessClass,
+  );
+});
+
+/*
+ * PLAN YAZILAMAZSA ALIM BAŞARISIZ SAYILMAZ.
+ *
+ * Veri zaten yazıldı; turu başarısız ilan etmek daha büyük zarar olurdu.
+ * Sorun görünür kalıyor: örnek hatalara ekleniyor.
+ */
+test('YOKLAMA: plan yazımı çökerse alım yine başarılı sayılır', async () => {
+  const { repository } = deltaRepository(new Map());
+  repository.saveRefreshPlan = async () => {
+    throw new Error('plan yazilamadi');
+  };
+
+  const summary = await runSource(SOURCE, { fetcher: fakeFetcher(CSV), repository });
+
+  assert.equal(summary.status, 'success');
+  assert.ok(
+    summary.sampleErrors.some((e) => e.reason.includes('Yenileme planı yazılamadı')),
+  );
+});
+
+// --- Kimlik bilgisi sızıntısı --------------------------------------------
+
+/*
+ * BU TESTİN VAR OLMA SEBEBİ SOMUT BİR SIZINTIYDI.
+ *
+ * Bağlanacak ilk gerçek feed'e yapılacak ilk isteğin EN OLASI sonucu
+ * 401/403'tür. O hatanın metni `summary.error`'a, oradan da
+ * `ingest_runs.error` ile `sources.last_error` sütunlarına (veritabanında
+ * düz metin) ve CLI çıktısıyla CI günlüğüne yazılıyor. Ortaklık ağı feed
+ * adresleri jetonu sorgu dizisinde taşır; maskeleme eklenmeden önce bu
+ * zincir jetonu üç ayrı yere kopyalardı.
+ *
+ * Aşağıdaki jeton UYDURMADIR; testin iddiası "bu dizgi çıktıda yok".
+ */
+const SIZINTI_JETONU = 'tk_ornek_9f4c2b7e51a08d63';
+
+test('feed adresindeki jeton başarısız turun hata metnine SIZMAZ', async () => {
+  const { repository, calls } = fakeRepository();
+
+  const jetonluKaynak: SourceConfig = {
+    ...SOURCE,
+    endpointUrl: `https://magaza.example/feed.csv?token=${SIZINTI_JETONU}`,
+  };
+
+  const summary = await runSource(jetonluKaynak, {
+    repository,
+    fetcher: {
+      async get(url: string) {
+        // Gerçek istemcinin 4xx'te ürettiği hatanın aynısı: metin adresi taşır.
+        throw new (await import('./http/politeClient.js')).PermanentHttpError(401, url);
+      },
+    },
+  });
+
+  assert.equal(summary.status, 'failed');
+  assert.ok(summary.error, 'hata metni yazılmalı');
+  assert.ok(
+    !summary.error!.includes(SIZINTI_JETONU),
+    `jeton hata metnine sızdı: ${summary.error}`,
+  );
+
+  // Teşhis KAYBOLMAMALI: hangi adresin ve hangi durumun başarısız olduğu görünür.
+  assert.ok(summary.error!.includes('401'), summary.error);
+  assert.ok(summary.error!.includes('magaza.example'), summary.error);
+
+  // Aynı metin depoya da bu haliyle gider.
+  const yazilan = calls.finished.at(-1);
+  assert.ok(yazilan);
+  assert.ok(!String(yazilan!.error).includes(SIZINTI_JETONU));
+});
+
+/*
+ * Yer tutucu ORTAMDAN doldurulur: jeton `sources.endpoint_url` sütununda
+ * düz metin olarak DURMAZ.
+ */
+test('endpoint_url yer tutucusu ortamdan doldurulup isteğe geçer', async () => {
+  const { repository } = fakeRepository();
+  process.env.OHAAAA_PIPELINE_TEST_TOKEN = SIZINTI_JETONU;
+
+  let istenenAdres = '';
+
+  try {
+    const summary = await runSource(
+      {
+        ...SOURCE,
+        endpointUrl:
+          'https://magaza.example/feed.csv?token=${OHAAAA_PIPELINE_TEST_TOKEN}',
+      },
+      {
+        repository,
+        fetcher: {
+          async get(url: string) {
+            istenenAdres = url;
+            return { body: CSV, url, status: 200, contentType: 'text/csv' };
+          },
+        },
+      },
+    );
+
+    // İstek GERÇEK jetonla gitmeli, yoksa sunucu reddederdi.
+    assert.equal(
+      istenenAdres,
+      `https://magaza.example/feed.csv?token=${SIZINTI_JETONU}`,
+    );
+    assert.equal(summary.status, 'success');
+  } finally {
+    delete process.env.OHAAAA_PIPELINE_TEST_TOKEN;
+  }
+});
+
+test('tanımsız gizli değişken turu açık bir hatayla düşürür', async () => {
+  const { repository } = fakeRepository();
+
+  const summary = await runSource(
+    {
+      ...SOURCE,
+      endpointUrl: 'https://magaza.example/feed.csv?token=${OHAAAA_TANIMSIZ_JETON}',
+    },
+    {
+      repository,
+      fetcher: {
+        async get() {
+          throw new Error('Bu getirici HİÇ çağrılmamalıydı.');
+        },
+      },
+    },
+  );
+
+  assert.equal(summary.status, 'failed');
+  // Değişken ADI söylenir (güvenli); operatör neyi tanımlayacağını bilir.
+  assert.ok(summary.error?.includes('OHAAAA_TANIMSIZ_JETON'), summary.error);
 });

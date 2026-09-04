@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import { Outfit, Plus_Jakarta_Sans } from 'next/font/google';
-import { Analytics as VercelAnalytics } from '@vercel/analytics/next';
 
 import { Analytics } from '@/components/Analytics';
+import { VercelAnalytics } from '@/components/VercelAnalytics';
 import { ConsentBanner } from '@/components/ConsentBanner';
 import { Footer } from '@/components/Footer';
 import { Header } from '@/components/Header';
@@ -11,9 +11,11 @@ import { FavoritesProvider } from '@/components/FavoritesProvider';
 import { UserMenu } from '@/components/UserMenu';
 import { CartDrawer } from '@/components/CartDrawer';
 import { DemoBanner } from '@/components/DemoBanner';
+import { PrelaunchBanner } from '@/components/PrelaunchBanner';
 import { JsonLd } from '@/components/JsonLd';
 import { isDemoMode } from '@/data/catalog';
 import { gaMeasurementId, isPrelaunch, searchConsoleVerification, siteUrl } from '@/lib/env';
+import { getRequestLocale } from '@/lib/locale';
 
 import './globals.css';
 
@@ -108,12 +110,37 @@ const siteJsonLd = [
 ];
 
 export const viewport: Viewport = {
-  themeColor: '#0B0B0D',
+  /*
+   * Tarayıcı çubuğu rengi ZEMİNLE aynı olmalı.
+   *
+   * Bu değer bej palete geçişte güncellenmeden kaldı: site açık bej
+   * zeminliyken mobil tarayıcı çubuğu hâlâ eski koyu paletin rengini
+   * (#0B0B0D) yayınlıyordu -- yani markanın rengi değil, silinmiş bir
+   * temanın rengi.
+   *
+   * İki tema için iki değer verilir; tarayıcı hangisini uygulayacağına
+   * kullanıcının ayarına göre karar verir.
+   */
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#faf6f1' },
+    { media: '(prefers-color-scheme: dark)', color: '#12100e' },
+  ],
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  /*
+   * DİL ARTIK SABİT DEĞİL, AMA UYDURMA DA DEĞİL.
+   *
+   * Önce `lang="tr"` gömülüydü. Şimdi istekten çözülüyor -- ancak
+   * `contentTag`, kullanıcının İSTEDİĞİ dili değil GERÇEKTEN SUNULAN dili
+   * bildirir. Gerekçesi `lib/locale.ts` içinde yazılı: çevirisi olmayan
+   * bir dili ilan etmek, ekran okuyucuya yanlış fonetik ve arama
+   * motoruna yanlış dil bildirmek demektir.
+   */
+  const { contentTag } = await getRequestLocale();
+
   return (
-    <html lang="tr" className={`${jakarta.variable} ${outfit.variable}`}>
+    <html lang={contentTag} className={`${jakarta.variable} ${outfit.variable}`}>
       <head>
         <JsonLd data={siteJsonLd} />
       </head>
@@ -128,12 +155,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/*
           Yayın öncesi şeridi.
 
-          Bu bileşen yazılmıştı ama HİÇBİR YERE BAĞLANMAMIŞTI. Oysa
+          Bu bileşen yazılmıştı, yorumu da yazılmıştı -- ama JSX HİÇBİR ZAMAN
+          eklenmemişti: yorum, kodun yapmadığı bir şeyi anlatıyordu.
+
           `NEXT_PUBLIC_LAUNCH_STATE=prelaunch` iken site robots.txt ile
           tamamen kapalı ve tüm sayfalar `noindex`. Şerit olmayınca bu
-          durumun tek görünür işareti de yoktu: canlıya geçtiğinizi sanıp
-          haftalarca hiç indekslenmeyen bir siteyle yaşayabilirdiniz.
+          durumun tek görünür işareti de yok: canlıya geçtiğinizi sanıp
+          haftalarca hiç indekslenmeyen bir siteyle yaşayabilirsiniz.
         */}
+        {isPrelaunch && <PrelaunchBanner />}
         {/*
           Favori sağlayıcısı Header'ı da SARAR: başlıktaki favori sayacı ve
           ürün kartlarındaki kalpler aynı listeyi okumalı. Yalnızca `main`

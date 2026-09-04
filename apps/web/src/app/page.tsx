@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { DataUnavailable } from '@/components/DataUnavailable';
 import { FlashDeals } from '@/components/FlashDeals';
 import { categoryIcon } from '@/components/Icons';
 import { SearchBar } from '@/components/SearchBar';
@@ -27,19 +28,74 @@ export const metadata: Metadata = {
   alternates: { canonical: '/' },
 };
 
-export default async function HomePage() {
-  const [deals, categories, vendors, trendingPage] = await Promise.all([
-    getFlashDeals(3),
-    getCategories(),
-    getVendors(),
-    searchProducts({ sort: 'offers', limit: 8 }),
-  ]);
-  const trending = trendingPage.results;
+/**
+ * Bir veri çağrısının sonucu: değer geldi mi, yoksa kaynağa mı ulaşılamadı?
+ *
+ * NEDEN AYRI BİR TİP
+ * `.catch(() => [])` kolaydır ama BİLGİ KAYBEDER: boş dizi "veri yok" ile
+ * "veriye ulaşamadık"ı aynı şeye indirger. Ana sayfa tam olarak bu ikisini
+ * ayırmak zorunda -- kesinti sırasında ziyaretçiye "katalog boş" demek,
+ * ona gerçek olmayan bir şey söylemektir.
+ */
+type Fetched<T> = { ok: true; value: T } | { ok: false };
 
-  /* Katalogda hicbir urun yoksa sayfa hero'dan sonra bosluga dusuyordu.
-     O durumda ziyaretciye ne oldugunu, saticiya ne yapmasi gerektigini
-     soyleyen bir lansman bolumu gosterilir. Uydurma urun konmaz. */
-  const catalogEmpty = trending.length === 0 && deals.length === 0;
+/** Bir veri çağrısını yakalar, loglar ve sonucu SINIFLANDIRIR (madde 24). */
+async function fetched<T>(what: string, promise: Promise<T>): Promise<Fetched<T>> {
+  try {
+    return { ok: true, value: await promise };
+  } catch (error: unknown) {
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        msg: 'Ana sayfa bölümü veri kaynağına ulaşamadı',
+        section: what,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+    return { ok: false };
+  }
+}
+
+export default async function HomePage() {
+  /*
+   * ANA SAYFA ARTIK KESİNTİDE ÇÖKMÜYOR.
+   *
+   * Önceden `getCategories()` doğrudan bekleniyordu; veritabanına
+   * ulaşılamadığında hata yukarı çıkıyor ve ana sayfanın TAMAMI 500'e
+   * düşüyordu (ölçüldü). Aynı anda `/urun`, `/kategori`, `/magaza`
+   * sayfaları düzgünce "veri yok" diyerek ayakta kalıyordu -- yani en çok
+   * ziyaret edilen sayfa, sitenin en dirençsiz sayfasıydı.
+   *
+   * Şimdi her bölüm kendi başına yakalanıyor. Hero ve arama kutusu her
+   * hâlükârda çiziliyor: arama `/arama` sayfasına gider ve o sayfa zaten
+   * kesintiye dayanıklı.
+   */
+  const [dealsRes, categoriesRes, vendorsRes, trendingRes] = await Promise.all([
+    fetched('kampanyalar', getFlashDeals(3)),
+    fetched('kategoriler', getCategories()),
+    fetched('magazalar', getVendors()),
+    fetched('one-cikanlar', searchProducts({ sort: 'offers', limit: 8 })),
+  ]);
+
+  const deals = dealsRes.ok ? dealsRes.value : [];
+  const categories = categoriesRes.ok ? categoriesRes.value : [];
+  const vendors = vendorsRes.ok ? vendorsRes.value : [];
+  const trending = trendingRes.ok ? trendingRes.value.results : [];
+
+  /*
+   * ÜÇ AYRI DURUM, ÜÇ AYRI MESAJ.
+   *
+   *   1) veri geldi, içinde ürün var      → normal vitrin
+   *   2) veri geldi, katalog gerçekten boş → lansman bölümü
+   *   3) veriye ULAŞILAMADI                → kesinti bildirimi
+   *
+   * 2 ile 3'ü karıştırmak, geçici bir kesintide ziyaretçiye "burada hiç
+   * ürün yok" demek olurdu. Kataloğun boş OLDUĞUNU ancak kataloğu
+   * gerçekten okuyabildiysek söyleyebiliriz.
+   */
+  const catalogUnavailable = !trendingRes.ok && !categoriesRes.ok;
+  const catalogEmpty =
+    !catalogUnavailable && trending.length === 0 && deals.length === 0;
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
@@ -115,6 +171,12 @@ export default async function HomePage() {
         )}
       </section>
 
+      {catalogUnavailable && (
+        <DataUnavailable
+          title="Ürünleri şu an listeleyemiyoruz"
+          description="Veri kaynağımıza geçici olarak ulaşamıyoruz. Size eski veya yanlış bir fiyat göstermektense hiç göstermemeyi tercih ediyoruz. Arama kutusu çalışmaya devam ediyor."
+        />
+      )}
       {catalogEmpty && <LaunchState />}
 
       {/* --- Firsatlar -----------------------------------------------------

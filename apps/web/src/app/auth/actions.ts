@@ -14,6 +14,63 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
 import { createClient } from '@/lib/supabase/server';
+import { tuketButce } from '@/lib/rateBudget';
+import { hashWithDailySalt } from '@/lib/clientHash';
+
+/**
+ * HIZ SINIRI — kaba kuvvet ve credential stuffing kapısı.
+ *
+ * Giriş eylemi kullanıcı numaralandırmaya karşı zaten korumalıydı ("E-posta
+ * veya parola hatalı" — hangisinin yanlış olduğunu söylemiyor). Ama deneme
+ * SAYISI sınırsızdı: bir sözlük saldırısı için tek gereken zamandı.
+ *
+ * İKİ AYRI KOVA SAYILIYOR ve ikisi farklı saldırıyı durduruyor:
+ *
+ *   IP kovası     — tek kaynaktan yapılan sözlük saldırısı
+ *   E-POSTA kovası — çok sayıda IP'den TEK hesaba yapılan saldırı
+ *                    (dağıtık kaba kuvvet; IP sınırı bunu hiç görmez)
+ *
+ * E-posta HAM SAKLANMAZ: günlük tuzlanmış özeti kova anahtarı olur. Böylece
+ * sayaç tablosu, hangi adreslerin denendiğinin listesine dönüşmez.
+ *
+ * SINIR AŞILINCA MESAJ AYNI KALMIYOR ama hesap varlığını da ele vermiyor:
+ * "çok fazla deneme" demek, hangi hesabın var olduğunu söylemez.
+ */
+async function girisDenemesiSayilabilir(
+  email: string,
+): Promise<{ izin: boolean; mesaj?: string }> {
+  const { headers } = await import('next/headers');
+  const istekBasliklari = new Headers(await headers());
+
+  const ip = await tuketButce('giris', istekBasliklari);
+  if (!ip.izin) {
+    return {
+      izin: false,
+      mesaj:
+        ip.sebep === 'olculemedi'
+          ? 'Giriş şu an yapılamıyor. Lütfen biraz sonra tekrar deneyin.'
+          : 'Çok fazla giriş denemesi yapıldı. Lütfen 15 dakika sonra tekrar deneyin.',
+    };
+  }
+
+  /*
+   * Hesap bazlı kova. `tuketButce` kova anahtarını IP'den kuruyor; burada
+   * e-posta özetini sahte bir başlık olarak geçiriyoruz ki aynı sayaç
+   * mekanizması ikinci boyut için de kullanılsın.
+   */
+  const eposta = new Headers();
+  eposta.set('x-forwarded-for', `eposta:${hashWithDailySalt(email.toLowerCase())}`);
+
+  const hesap = await tuketButce('giris', eposta);
+  if (!hesap.izin) {
+    return {
+      izin: false,
+      mesaj: 'Bu hesap için çok fazla deneme yapıldı. Lütfen 15 dakika sonra tekrar deneyin.',
+    };
+  }
+
+  return { izin: true };
+}
 
 export interface AuthResult {
   error?: string;
@@ -39,6 +96,11 @@ export async function signIn(_prev: AuthResult, formData: FormData): Promise<Aut
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? 'Bilgiler doğrulanamadı.' };
   }
+
+  // Sayım, parola kontrolünden ÖNCE: reddedilecek bir denemeyi kimlik
+  // sağlayıcısına göndermenin anlamı yok ve gönderirsek sınır sızdırır.
+  const kapi = await girisDenemesiSayilabilir(parsed.data.email);
+  if (!kapi.izin) return { error: kapi.mesaj };
 
   const supabase = await createClient();
   if (!supabase) return { error: 'Kimlik doğrulama yapılandırılmamış (demo modu).' };
@@ -74,6 +136,26 @@ export async function signUp(_prev: AuthResult, formData: FormData): Promise<Aut
 
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? 'Bilgiler doğrulanamadı.' };
+  }
+
+  /*
+   * Kayıt hız sınırı.
+   *
+   * Kayıt, girişten daha pahalı: her deneme bir DOĞRULAMA E-POSTASI
+   * tetikler. Sınırsız bırakılırsa site, kendi alan adından üçüncü kişilere
+   * spam gönderen bir araca dönüşür ve gönderim itibarı yanar.
+   */
+  {
+    const { headers } = await import('next/headers');
+    const butce = await tuketButce('kayit', new Headers(await headers()));
+    if (!butce.izin) {
+      return {
+        error:
+          butce.sebep === 'olculemedi'
+            ? 'Kayıt şu an yapılamıyor. Lütfen biraz sonra tekrar deneyin.'
+            : 'Çok fazla kayıt denemesi yapıldı. Lütfen bir süre sonra tekrar deneyin.',
+      };
+    }
   }
 
   const supabase = await createClient();

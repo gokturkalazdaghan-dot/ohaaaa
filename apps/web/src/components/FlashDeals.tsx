@@ -24,7 +24,7 @@ export function FlashDeals({ deals }: { deals: FlashDeal[] }) {
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-2xl font-black tracking-tight sm:text-3xl">
-            <BoltIcon className="h-7 w-7 text-oha" />
+            <BoltIcon className="h-7 w-7 text-brand" />
             <span className="text-gradient-oha">Günün En Oha Fiyatı</span>
           </h2>
           <p className="mt-1.5 text-sm text-muted">
@@ -66,7 +66,7 @@ function HeadlineDeal({ deal }: { deal: FlashDeal }) {
           arka plan hareketi, sık görülen bir öge üzerinde hiçbir şey
           anlatmaz; yalnızca dikkati fiyattan çalar ve pil harcar.
         */
-        className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-oha/25 blur-3xl"
+        className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-brand/25 blur-3xl"
         aria-hidden="true"
       />
 
@@ -85,7 +85,7 @@ function HeadlineDeal({ deal }: { deal: FlashDeal }) {
         )}
 
         <div className="mt-6 flex flex-wrap items-baseline gap-3">
-          <span className="tabular text-4xl font-black text-oha">
+          <span className="tabular text-4xl font-black text-brand">
             {formatMoney(deal.dealPriceCents)}
           </span>
           <span className="tabular text-lg text-subtle line-through">
@@ -106,7 +106,7 @@ function HeadlineDeal({ deal }: { deal: FlashDeal }) {
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-2">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-oha to-brand transition-[width] duration-700"
+                className="h-full rounded-full bg-brand transition-[width] duration-700"
                 style={{ width: `${Math.min(sold, 100)}%` }}
               />
             </div>
@@ -123,16 +123,16 @@ function SecondaryDeal({ deal }: { deal: FlashDeal }) {
   return (
     <Link
       href={deal.groupSlug ? `/urun/${deal.groupSlug}` : '/arama'}
-      className="card flex items-center gap-4 p-4 transition-[transform,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:border-oha/45"
+      className="card flex items-center gap-4 p-4 transition-[transform,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:border-brand/45"
     >
-      <div className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-oha/25 to-brand/25 text-lg font-black text-oha">
+      <div className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-brand/15 text-lg font-black text-brand">
         {percent !== null ? `%${percent}` : '!'}
       </div>
 
       <div className="min-w-0 flex-1">
         <p className="line-clamp-2 text-sm font-medium">{deal.title}</p>
         <div className="mt-1.5 flex items-baseline gap-2">
-          <span className="tabular text-base font-bold text-oha">
+          <span className="tabular text-base font-bold text-brand">
             {formatMoney(deal.dealPriceCents)}
           </span>
           <span className="tabular text-xs text-subtle line-through">
@@ -178,9 +178,9 @@ function Countdown({ endsAt }: { endsAt: string }) {
       ].map((unit) => (
         <div
           key={unit.label}
-          className="flex min-w-12 flex-col items-center rounded-xl border border-oha/30 bg-oha/10 px-2 py-1.5"
+          className="flex min-w-12 flex-col items-center rounded-xl border border-brand/30 bg-brand/10 px-2 py-1.5"
         >
-          <span className="tabular text-lg font-bold leading-none text-oha">
+          <span className="tabular text-lg font-bold leading-none text-brand">
             {String(unit.value).padStart(2, '0')}
           </span>
           <span className="text-3xs text-muted">{unit.label}</span>

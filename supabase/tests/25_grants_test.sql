@@ -17,7 +17,7 @@
 \set ON_ERROR_STOP on
 
 begin;
-select plan(52);
+select plan(53);
 
 -- ---------------------------------------------------------------------------
 -- 1) TRUNCATE hiçbir role, hiçbir tabloda verilmemiş olmalı.
@@ -52,13 +52,33 @@ select is_empty(
 -- ---------------------------------------------------------------------------
 -- 2) anon: yalnızca vitrin, yalnızca okuma.
 -- ---------------------------------------------------------------------------
+-- TABLO düzeyinde okunabilenler.
+--
+-- `products` ve `merchants` bu listede DEĞİL ve bu kasıtlı: ikisinde de
+-- yetki artık SÜTUN düzeyinde veriliyor (bkz. 20260903130000). Sebep,
+-- merchants.postback_secret'in tablo düzeyi SELECT üzerinden anon'a açık
+-- olmasıydı. `has_table_privilege` bu iki tabloda artık false döner --
+-- ama vitrin okumaya devam eder, çünkü ihtiyaç duyduğu sütunlar tek tek
+-- verilmiştir. Sütun düzeyindeki iddialar 69_secret_columns_test.sql'de.
 select ok(
   has_table_privilege('anon', 'public.' || t, 'SELECT'),
   'anon ' || t || ' tablosunu okuyabilir'
 ) from unnest(array[
-  'categories','product_groups','products','vendors',
-  'flash_deals','merchants','price_points'
+  'categories','product_groups','vendors',
+  'flash_deals','price_points'
 ]) as t;
+
+-- Sütun düzeyinde okunanlar: tablo yetkisi YOK ama vitrin çalışıyor.
+select ok(
+  not has_table_privilege('anon', 'public.' || t, 'SELECT'),
+  'anon ' || t || ' tablosunu TABLO duzeyinde okuyamaz (sutun bazli yetki var)'
+) from unnest(array['products','merchants']) as t;
+
+select ok(
+  has_column_privilege('anon', 'public.products', 'price_cents', 'SELECT')
+  and has_column_privilege('anon', 'public.merchants', 'display_name', 'SELECT'),
+  'anon vitrin sutunlarini okuyabiliyor'
+);
 
 -- anon HİÇBİR yere yazamaz. Yazma yetkisinin olmaması, RLS'in doğru
 -- kurulmuş olmasından bağımsız bir güvencedir.

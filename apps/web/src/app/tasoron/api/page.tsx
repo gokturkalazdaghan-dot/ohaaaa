@@ -121,7 +121,7 @@ const ENDPOINTS: Endpoint[] = [
 ];
 
 const METHOD_STYLES = {
-  GET: 'bg-electric/12 text-electric',
+  GET: 'bg-brand/12 text-brand',
   POST: 'bg-success/12 text-success',
   PATCH: 'bg-warning/12 text-warning',
   DELETE: 'bg-danger/12 text-danger',
@@ -307,7 +307,7 @@ export default function ApiDocsPage() {
             <strong className="text-fg">3. Eşleşme yoksa</strong> — yeni bir kanonik ürün açılır.
           </li>
         </ol>
-        <p className="mt-4 rounded-xl border border-electric/25 bg-electric/8 p-3 text-xs leading-relaxed text-electric-soft">
+        <p className="mt-4 rounded-xl border border-brand/25 bg-brand/8 p-3 text-xs leading-relaxed text-brand-soft">
           GTIN göndermek doğrudan satışınıza yansır: barkodlu ürünler karşılaştırma kartında
           rakiplerinizle yan yana görünür ve en iyi toplam fiyatı verdiğinizde ilk sırada
           listelenirsiniz.

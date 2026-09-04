@@ -35,7 +35,7 @@ const STATUS_META: Record<
   },
   accepted: {
     label: 'Onaylandı',
-    className: 'bg-electric/12 text-electric',
+    className: 'bg-brand/12 text-brand',
     hint: 'Mağaza siparişinizi aldı, hazırlığa geçecek.',
   },
   preparing: {
@@ -45,7 +45,7 @@ const STATUS_META: Record<
   },
   shipped: {
     label: 'Kargoda',
-    className: 'bg-cyan/12 text-cyan',
+    className: 'bg-brand/12 text-brand',
     hint: 'Gönderi yola çıktı.',
   },
   delivered: {

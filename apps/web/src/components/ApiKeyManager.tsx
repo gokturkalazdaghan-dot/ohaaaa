@@ -7,7 +7,7 @@ import { API_SCOPES, type ApiScope } from '@ohaaaa/shared';
 import { AlertIcon, CheckIcon, CopyIcon, KeyIcon, TrashIcon } from './Icons';
 import { apiBaseUrl } from '@/lib/env';
 
-interface ApiKeyRow {
+export interface ApiKeyRow {
   id: string;
   name: string;
   environment: 'live' | 'test';
@@ -28,38 +28,21 @@ const SCOPE_LABELS: Record<ApiScope, string> = {
   'orders:write': 'Sipariş durumu güncelleme',
 };
 
-/** Panelde başlangıçta görünen örnek anahtarlar. */
-const INITIAL_KEYS: ApiKeyRow[] = [
-  {
-    id: 'key-1',
-    name: 'Üretim — ERP senkronu',
-    environment: 'live',
-    key_prefix: 'ohk_live_9f2c1a7b3d4e5f60',
-    last_four: 'a91c',
-    scopes: ['products:read', 'products:write', 'orders:read', 'orders:write'],
-    created_at: '2026-05-14T09:12:00.000Z',
-    expires_at: null,
-    revoked: false,
-    lastUsedAt: new Date(Date.now() - 4 * 60_000).toISOString(),
-    requestCount: 184_209,
-  },
-  {
-    id: 'key-2',
-    name: 'Test ortamı',
-    environment: 'test',
-    key_prefix: 'ohk_test_1b8e44cc90aa2210',
-    last_four: '77de',
-    scopes: ['products:read', 'products:write'],
-    created_at: '2026-07-02T14:40:00.000Z',
-    expires_at: null,
-    revoked: false,
-    lastUsedAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
-    requestCount: 1_402,
-  },
-];
+/*
+ * SAHTE ANAHTAR YOK.
+ *
+ * Burada `INITIAL_KEYS` adında iki UYDURMA anahtar duruyordu -- "Üretim —
+ * ERP senkronu", 184.209 istek, gerçekçi bir önek. Panele giren satıcı,
+ * hiç oluşturmadığı iki anahtarı KENDİ anahtarı sanıyordu. Sahte kullanım
+ * sayısı ayrıca "bu entegrasyon çalışıyor" izlenimi veriyordu.
+ *
+ * Liste artık sunucudan, o satıcının GERÇEK anahtarlarıyla geliyor; hiç
+ * anahtar yoksa boş durum gösterilir. Boş bir liste, uydurma bir listeden
+ * iyidir.
+ */
 
-export function ApiKeyManager() {
-  const [keys, setKeys] = useState<ApiKeyRow[]>(INITIAL_KEYS);
+export function ApiKeyManager({ initialKeys }: { initialKeys: ApiKeyRow[] }) {
+  const [keys, setKeys] = useState<ApiKeyRow[]>(initialKeys);
   const [creating, setCreating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -239,6 +222,19 @@ export function ApiKeyManager() {
         </button>
       )}
 
+      {/*
+        BOŞ DURUM.
+        Liste sahte anahtarlarla doldurulduğu sürece bu duruma hiç
+        düşülmüyordu; gerçek veriye geçince ilk karşılaşılan ekran bu oldu.
+        Boş bir <ul>, satıcıya sayfanın bozuk olduğunu düşündürür.
+      */}
+      {keys.length === 0 && (
+        <p className="rounded-2xl border border-line bg-surface-2 p-5 text-sm leading-relaxed text-muted">
+          Henüz API anahtarınız yok. Kataloğunuzu kendi sisteminizden otomatik
+          göndermek için yukarıdan bir anahtar oluşturun.
+        </p>
+      )}
+
       <ul className="space-y-3">
         {keys.map((key) => (
           <li
@@ -371,7 +367,7 @@ function RevealedKey({
               type="button"
               onClick={copy}
               className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                copied ? 'bg-success text-[#0b0b0d]' : 'bg-surface-2 text-fg hover:bg-surface-hover'
+                copied ? 'bg-success text-on-success' : 'bg-surface-2 text-fg hover:bg-surface-hover'
               }`}
             >
               {copied ? <CheckIcon className="h-3.5 w-3.5" /> : <CopyIcon className="h-3.5 w-3.5" />}

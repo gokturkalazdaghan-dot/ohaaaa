@@ -122,7 +122,7 @@ export default function VendorProductsPage() {
         </table>
       </div>
 
-      <p className="rounded-xl border border-electric/25 bg-electric/8 p-4 text-xs leading-relaxed text-electric-soft">
+      <p className="rounded-xl border border-brand/25 bg-brand/8 p-4 text-xs leading-relaxed text-brand-soft">
         <strong className="font-semibold">Rekabet sütunu</strong> aynı kanonik ürüne teklif veren
         diğer mağazalarla kargo dahil toplam maliyetinizi karşılaştırır. “En ucuz” olduğunuz
         ürünler karşılaştırma listesinde ilk sırada gösterilir.

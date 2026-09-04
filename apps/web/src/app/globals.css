@@ -1,86 +1,149 @@
 @import 'tailwindcss';
 
 /*
- * Ohaaaa vitrin.
- * Siyah zemin + turuncu vurgu. Cam, glow, gradyan yazı yok.
+ * Ohaaaa vitrin — turuncu + bej.
  *
- * NEDEN KOYU
- * Koli bandı siyah zemin üzerine beyaz basılıyor; site, favicon ve arma
- * aynı dili konuşsun diye zemin de koyu. Turuncu marka rengi korundu:
- * bant ve favicon zaten üretildi, marka rengini değiştirmek onları da
- * çöpe atmak olurdu.
+ * ZEMİN NEDEN BEJ, MARKA İŞARETİ NEDEN SİYAH KALIYOR
+ * Önceki hâli tamamen koyuydu ve gerekçesi yazılıydı: koli bandı siyah
+ * zemine basılıyor, favicon ve arma da öyle. O gerekçe hâlâ geçerli --
+ * ama YALNIZCA MARKA İŞARETİ için. Bant, favicon ve arma siyah+turuncu
+ * kalıyor; üretilmiş hiçbir materyal çöpe gitmiyor.
  *
- * KOYU ZEMİNİN BEDELİ — ÜRÜN FOTOĞRAFLARI
- * Ürün fotoğrafları beyaz fonda çekilir. Koyu kartın içinde beyaz fonlu
- * bir fotoğraf ada gibi durur. Bu yüzden kart görsel alanının zemini
- * --surface-photo ile AÇIK tutulur: fotoğraf kendi fonuna oturur, kart
- * koyu kalır. Renkli zeminde fotoğrafın renk algısı da kayardı; nötr
- * açık gri bunu yapmaz.
+ * Site zemini ayrı bir karar. Yakın-siyah bir vitrin, premium ticaretten
+ * çok teknoloji ürünü gibi okunuyor; sıcak bej ise editorial ve ürün
+ * fotoğrafıyla uyumlu. Marka işareti bej üzerinde de aynı işareti kalır.
+ *
+ * BEJ NEDEN GRİ DEĞİL
+ * Nötr gri, ürün fotoğraflarının beyaz fonuyla çakışır ve arayüzü "boş"
+ * gösterir. Sıcak bej (#faf6f1) fotoğrafın beyazından ayrışır, turuncuyla
+ * aynı sıcaklık ailesinde durur ve kâğıt hissi verir.
+ *
+ * TURUNCU İKİ AYRI İŞ YAPIYOR
+ *   --brand      : METİN ve kenarlık olarak kullanılan turuncu. Zemine göre
+ *                  değişir, çünkü kontrast zemine bağlıdır.
+ *   --brand-cta  : DOLGU olarak kullanılan turuncu; üstünde beyaz yazı
+ *                  4.86:1 verir. İki temada da aynı.
+ *
+ * Açık zeminde #e9692a beyazımsı bej üstünde 3.0:1 kalıyor -- küçük yazı
+ * için WCAG AA sınırının altında. Bu yüzden açık temada --brand tuğla
+ * kırmızısına (#c13515) iner; koyu temada parlak turuncuya çıkar. Aynı
+ * marka, farklı zemin.
  */
 
 :root {
-  --bg: #0b0b0d;
-  --bg-elevated: #141419;
-  --surface: #141419;
-  --surface-2: #1c1c23;
-  --surface-hover: #23232b;
-  --line: #2a2a33;
-  --line-strong: #3a3a45;
-
-  /* Ürün görsellerinin oturduğu açık zemin. Bkz. yukarıdaki not. */
-  --surface-photo: #f4f4f6;
-
-  --text: #ffffff;
-  --text-muted: #b4b4c0;
-  --text-subtle: #8a8a99;
+  /* --- Açık tema (varsayılan): sıcak bej ------------------------------- */
+  --bg: #faf6f1;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f3ede4;
+  --surface-hover: #ece4d8;
+  --line: #e2d8ca;
+  --line-strong: #cbbda9;
 
   /*
-   * Marka turuncusu koyu zeminde AÇILDI. Açık zemindeki tuğla kırmızısı
-   * (#c13515) siyah üstünde koyu kalıp okunmuyordu; armanın disk rengi
-   * (#e9692a) hem daha parlak hem armayla birebir aynı.
+   * Ürün görsellerinin oturduğu zemin. Açık temada zaten açık; yine de
+   * AYRI bir token: fotoğrafın kendi beyazından bir tık farklı olması,
+   * görselin sınırını belli eder.
    */
-  --brand: #e9692a;
-  --brand-strong: #c13515;
+  --surface-photo: #f7f4ef;
 
+  --text: #1c1611;
+  --text-muted: #5f5347;
   /*
-   * DOLGU olarak kullanılan marka rengi.
-   *
-   * `--brand` (#e9692a) beyaz yazıyla yalnızca 3.1:1 kontrast verir; WCAG AA
-   * küçük yazı için 4.5:1 ister. Yani sitedeki her dolu marka düğmesi —
-   * "Ara", "Uygula", "Sepete ekle", "Mağazaya git" — sınırın altındaydı.
-   * Bu, dekoratif bir ayrıntı değil: birincil eylem düğmelerinin okunmaması
-   * demek.
-   *
-   * #b84f14 aynı turuncu ailede kalır ve beyazla 4.86:1 verir. `--brand`
-   * yazı ve kenarlık rengi olarak (koyu zemin üstünde) aynen korunur —
-   * orada kontrast zaten yüksek.
+   * Bu üç değer TAHMİNLE değil ÖLÇÜLEREK seçildi; ilk denemede axe üçünü de
+   * düşürdü (3.88 / 4.03 / 4.45 — hepsi 4.5 sınırının altında). Her renk,
+   * ÜZERİNE DÜŞTÜĞÜ EN ZOR zemine göre hesaplandı: bej zemin, beyaz kart,
+   * ve marka/uyarı tonlu yüzeyler.
    */
+  --text-subtle: #6b6053;   /* en zor zeminde 4.92:1 */
+
+  --brand: #ab2c10;        /* marka tonlu yüzeyde bile 5.44:1 */
+  --brand-strong: #8f2409;
   --brand-cta: #b84f14;
-  --brand-soft: #f08b55;
-  --electric: #e9692a;
-  --electric-soft: #f08b55;
-  --cyan: #e9692a;
-  --oha: #e9692a;
-  --oha-soft: #f08b55;
+  /*
+   * Açık temada `brand-soft` METİN olarak da kullanılıyor (bağlantılar).
+   * Parlak turuncu beyaz kartta 3.22:1 kalıyordu. Bu değer, en zor zemin
+   * olan beyaz kartta 5.25:1 verir.
+   */
+  --brand-soft: #bd4416;
 
   /*
-   * Durum renkleri koyu zemin için AÇILDI. Açık zemine göre seçilmiş koyu
-   * yeşil/sarı/kırmızı siyah üstünde okunmuyordu.
+   * Yeşil, kendi tonlu yüzeyinin (#e3f0e8) üstünde ölçüldü — ve ayrıca
+   * %85 opaklıkta kullanıldığı yer var, o da hesaba katıldı: 4.88:1.
    */
-  --success: #4ade80;
-  --warning: #fbbf24;
-  --danger: #f87171;
+  --success: #0f5d2c;
+  /*
+   * DOLU yeşil rozetin ÜZERİNDEKİ yazı rengi.
+   *
+   * Açık temada yeşil koyu (beyaz yazı ister), koyu temada açık (koyu yazı
+   * ister). Rozetlerde renk sabit yazılmıştı (`text-[#0b0b0d]`) ve tema
+   * çevrilince koyu yeşil üstünde koyu yazı çıktı — axe 2.45:1 ile yakaladı.
+   * Zıt renk de temaya bağlı bir token olmalı.
+   */
+  --on-success: #ffffff;
+  --warning: #7d4a05;      /* uyarı tonlu yüzeyde 6.02:1 */
+  --danger: #b91c1c;
 
   --glow-brand: none;
   --glow-oha: none;
-  --ring: #e9692a;
+  --ring: #ab2c10;
 
   /*
-   * Tarayıcıya "bu sayfa koyu" demek şart: kaydırma çubuğu, form denetimleri
-   * ve otomatik doldurma renkleri buna göre çizilir. Söylenmezse beyaz bir
-   * kaydırma çubuğu ve beyaz zeminli girdi kutuları çıkar.
+   * Tarayıcıya iki temayı da desteklediğimizi söylüyoruz: kaydırma çubuğu,
+   * form denetimleri ve otomatik doldurma renkleri buna göre çizilir.
    */
-  color-scheme: dark;
+  color-scheme: light dark;
+}
+
+/*
+ * --- Koyu tema -------------------------------------------------------------
+ * Silinmedi, korundu. Ama SICAK kaldı: mavi-siyah bir koyu tema tam da
+ * kaçındığımız "teknoloji ürünü" hissini geri getirir. Zemin kahverengiye
+ * çalan bir siyah, yüzeyler de öyle.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12100e;
+    --bg-elevated: #1b1815;
+    --surface: #1b1815;
+    --surface-2: #24201c;
+    --surface-hover: #2e2925;
+    --line: #332d27;
+    --line-strong: #463e35;
+
+    /* Koyu kartta beyaz fonlu fotoğraf ada gibi durmasın diye açık kalır. */
+    --surface-photo: #f7f4ef;
+
+    --text: #f7f3ee;
+    --text-muted: #bdb2a5;
+    --text-subtle: #8f8478;
+
+    /* Koyu zeminde parlak turuncu okunuyor; tuğla kırmızısı kalırdı. */
+    --brand: #e9692a;
+    --brand-strong: #c13515;
+    --brand-cta: #b84f14;
+    --brand-soft: #f08b55;
+
+    --success: #4ade80;
+    --on-success: #0b0b0d;   /* açık yeşilin üstünde koyu yazı */
+    --warning: #fbbf24;
+    --danger: #f87171;
+
+    --ring: #e9692a;
+
+    /*
+     * KOYU ZEMİNDE GÖLGE İŞE YARAMAZ: siyah üstünde siyah gölge görünmez.
+     * Yükseklik iki şeyle anlatılır — yüzey rengi bir tık açılır ve üst
+     * kenarda ince bir ışık çizgisi (inset) ışığın yukarıdan geldiğini
+     * söyler. Gölge derinlik için korunur ama tek başına taşıyıcı değildir.
+     */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5),
+                 inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.55), 0 10px 24px rgba(0, 0, 0, 0.45),
+                 inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.6), 0 20px 48px rgba(0, 0, 0, 0.55),
+                 inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  }
 }
 
 @theme inline {
@@ -119,12 +182,8 @@
   --color-brand-strong: var(--brand-strong);
   --color-brand-cta: var(--brand-cta);
   --color-brand-soft: var(--brand-soft);
-  --color-electric: var(--electric);
-  --color-electric-soft: var(--electric-soft);
-  --color-cyan: var(--cyan);
-  --color-oha: var(--oha);
-  --color-oha-soft: var(--oha-soft);
   --color-success: var(--success);
+  --color-on-success: var(--on-success);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
   --font-sans: var(--font-jakarta), -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -146,12 +205,14 @@
  * tasiyici degildir.
  */
 :root {
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5),
-               inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.55), 0 10px 24px rgba(0, 0, 0, 0.45),
-               inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  --shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.6), 0 20px 48px rgba(0, 0, 0, 0.55),
-               inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  /*
+   * AÇIK ZEMİN: gölge gerçekten iş yapar, kart altına düştüğü gölgeyle
+   * ayrışır. Gölge SOĞUK DEĞİL sıcak: nötr siyah bir gölge bej zeminde
+   * kirli gri bir hâle bırakır.
+   */
+  --shadow-sm: 0 1px 2px rgba(60, 40, 20, 0.06);
+  --shadow-md: 0 2px 6px rgba(60, 40, 20, 0.07), 0 10px 24px rgba(60, 40, 20, 0.05);
+  --shadow-lg: 0 4px 10px rgba(60, 40, 20, 0.08), 0 20px 48px rgba(60, 40, 20, 0.07);
 }
 
 @layer base {

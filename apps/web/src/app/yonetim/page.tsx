@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { formatMoney } from '@ohaaaa/shared';
 
 import { AlertIcon, ChartIcon, ShieldIcon, StoreIcon } from '@/components/Icons';
+import { getSourceHealth, getSystemAlerts, type SourceHealth, type SystemAlert } from '@/data/health';
 import { getSessionUser } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 
@@ -79,8 +80,23 @@ export default async function AdminOverviewPage() {
   const conversionRate =
     data.clicks > 0 ? ((data.conversions.count / data.clicks) * 100).toFixed(2) : '0.00';
 
+  /*
+   * Sağlık verisi PANELİ DÜŞÜREMEZ. Kendi kendini izleyen bir sistemde,
+   * izleme katmanının hatası tüm paneli kaybettirmemeli.
+   */
+  const [alarmlar, saglik] = await Promise.all([getSystemAlerts(), getSourceHealth()]);
+
   return (
     <div className="space-y-6">
+      {/*
+        SİSTEM DURUMU EN ÜSTTE.
+
+        Denetimde ölçüldü: alım hattı aylardır hiç çalışmamıştı ve panelde
+        bunu söyleyen hiçbir şey yoktu. Bir arıza ancak GÖRÜLDÜĞÜ yerde
+        tamir edilir; sorgulanabilir olması yetmez.
+      */}
+      <SistemDurumu alarmlar={alarmlar} saglik={saglik} />
+
       {(pendingCount ?? 0) > 0 && (
         <a
           href="/yonetim/basvurular"
@@ -106,6 +122,24 @@ export default async function AdminOverviewPage() {
         <span className="text-fg">
           <strong className="font-semibold">Satıcı belgeleri</strong> — vergi levhası
           ve imza sirkülerini inceleyin.
+        </span>
+      </a>
+
+      {/*
+        Tahsilat sayfası.
+
+        Bu panodaki "komisyon" rakamı AĞIN BEYANIDIR; hesaba geçen para
+        değildir. İkisi aynı sayfada aynı büyüklükte durursa okuyucu ikisini
+        aynı sanar. Tahsilat ayrı bir sayfada ve buradan bağlanıyor.
+      */}
+      <a
+        href="/yonetim/tahsilat"
+        className="flex items-center gap-3 rounded-xl border border-line bg-surface p-4 text-sm transition-colors hover:border-brand/40"
+      >
+        <ChartIcon className="h-5 w-5 shrink-0 text-brand" />
+        <span className="text-fg">
+          <strong className="font-semibold">Tahsilat</strong> — hesaba gerçekten geçen
+          tutar. Aşağıdaki komisyon rakamı ağın beyanıdır, tahsilat değildir.
         </span>
       </a>
 
@@ -250,7 +284,7 @@ function StatCard({
   hint?: string;
 }) {
   const toneClasses = {
-    info: 'text-electric bg-electric/12',
+    info: 'text-brand bg-brand/12',
     success: 'text-success bg-success/12',
     warning: 'text-warning bg-warning/12',
   }[tone];
@@ -268,5 +302,98 @@ function StatCard({
         {hint && <p className="text-2xs text-subtle">{hint}</p>}
       </div>
     </article>
+  );
+}
+
+
+/**
+ * Sistem durumu şeridi.
+ *
+ * ÜÇ DURUM AYRI:
+ *   null       → izleme okunamadı (alarm YOK demek DEĞİL)
+ *   boş dizi   → gerçekten alarm yok
+ *   dolu dizi  → müdahale gerekiyor
+ *
+ * İlkini "her şey yolunda" diye göstermek, izleme sisteminin
+ * yapabileceği en kötü hata olurdu.
+ */
+function SistemDurumu({
+  alarmlar,
+  saglik,
+}: {
+  alarmlar: SystemAlert[] | null;
+  saglik: SourceHealth[] | null;
+}) {
+  if (alarmlar === null) {
+    return (
+      <section className="rounded-xl border border-warning/25 bg-warning/8 p-4 text-sm text-warning">
+        <AlertIcon className="mb-2 h-5 w-5" />
+        Sistem durumu okunamadı. Bu, <strong>alarm olmadığı anlamına
+        gelmez</strong> — izleme katmanının kendisine ulaşılamıyor.
+      </section>
+    );
+  }
+
+  if (alarmlar.length === 0) {
+    return (
+      <section className="rounded-xl border border-success/25 bg-success/8 p-4 text-sm text-success">
+        Etkin alarm yok.{' '}
+        {saglik && saglik.length > 0 && (
+          <span className="text-muted">
+            {saglik.length} kaynak izleniyor.
+          </span>
+        )}
+      </section>
+    );
+  }
+
+  const kritik = alarmlar.filter((a) => a.severity === 'critical');
+
+  return (
+    <section
+      className={`rounded-xl border p-4 ${
+        kritik.length > 0
+          ? 'border-brand/35 bg-brand/8'
+          : 'border-warning/25 bg-warning/8'
+      }`}
+    >
+      <h2 className="flex items-center gap-2 text-sm font-semibold">
+        <AlertIcon className="h-5 w-5 shrink-0" />
+        Sistem durumu — {alarmlar.length} etkin uyarı
+        {kritik.length > 0 && ` (${kritik.length} kritik)`}
+      </h2>
+
+      <ul className="mt-3 space-y-2">
+        {alarmlar.map((alarm) => (
+          <li key={`${alarm.code}-${alarm.subject}`} className="text-sm leading-relaxed">
+            <span
+              className={`mr-2 rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                alarm.severity === 'critical'
+                  ? 'bg-brand text-white'
+                  : 'bg-warning/20 text-warning'
+              }`}
+            >
+              {alarm.severity === 'critical' ? 'kritik' : 'uyarı'}
+            </span>
+            <code className="font-mono text-xs text-muted">{alarm.code}</code>{' '}
+            <strong className="text-fg">{alarm.subject}</strong> — {alarm.detail}
+          </li>
+        ))}
+      </ul>
+
+      {saglik !== null && saglik.length > 0 && (
+        <ul className="mt-4 space-y-1 border-t border-line pt-3 text-xs text-muted">
+          {saglik.map((kaynak) => (
+            <li key={kaynak.sourceSlug}>
+              <code className="font-mono">{kaynak.sourceSlug}</code> ({kaynak.market}) —{' '}
+              {kaynak.detail}
+              {kaynak.runCount === 0
+                ? ' Hiç çalışma kaydı yok.'
+                : ` ${kaynak.runCount} çalışma kaydı.`}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

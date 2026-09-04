@@ -12,6 +12,8 @@ import { describeSignatureError } from '@ohaaaa/shared/product-sync';
 import type { IngestRepository } from './pipeline.js';
 import { canonicalSignature } from './pipeline.js';
 import type { IngestSummary, NormalizedOffer, SourceConfig } from './types.js';
+import { isAuthType } from './auth.js';
+import { redact } from './http/redact.js';
 
 /** Tek sorguda gönderilecek en fazla satır. Daha büyüğü istek sınırını aşar. */
 const UPSERT_BATCH_SIZE = 500;
@@ -107,7 +109,7 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
       return result;
     },
 
-    async upsertOffers(merchantId, sourceId, rows) {
+    async upsertOffers(merchantId, sourceId, rows, market) {
       if (rows.length === 0) return { created: 0, updated: 0 };
 
       // Hangilerinin yeni olduğunu bilmek için önce mevcutları oku.
@@ -140,11 +142,23 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
         price_cents: row.priceCents,
         compare_at_price_cents: row.compareAtPriceCents,
         currency: row.currency,
+        // Pazar KAYNAKTAN gelir, fiyattan tahmin edilmez. Şema ayrıca
+        // pazar ile para biriminin uyumunu zorunlu kılıyor
+        // (products_market_currency_uyumlu).
+        market,
+        // Bir sonraki turda "değişti mi" sorusunu yanıtlayacak olan özet.
+        fingerprint: row.fingerprint,
         stock: row.stock,
         shipping_fee_cents: row.shippingFeeCents,
         // Stok yoksa vitrine çıkmaz; feed 'active' dese bile.
         status: row.stock > 0 ? 'active' : 'out_of_stock',
         last_seen_at: now,
+        // YENİ satırlarda `touchSeen` henüz eşleşecek bir kayıt bulamaz;
+        // damgalar burada da yazılıyor ki ilk turdan itibaren tazelik
+        // ölçülebilsin.
+        price_checked_at: now,
+        stock_checked_at: now,
+        offer_checked_at: now,
       }));
 
       for (const batch of chunk(payload, UPSERT_BATCH_SIZE)) {
@@ -159,6 +173,75 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
       return { created, updated: rows.length - created };
     },
 
+    /**
+     * Bu kaynağın bilinen parmak izleri.
+     *
+     * Parmak izi NULL olan satırlar haritaya girmez: onlar delta ile hiç
+     * işlenmemiş eski kayıtlardır ve NEW sayılıp bir kez yazılarak
+     * parmak izi kazanmaları doğru davranış -- "değişmedi" diyip
+     * atlamak, onları sonsuza dek izsiz bırakırdı.
+     */
+    async getFingerprints(sourceId) {
+      const harita = new Map<string, string>();
+      const SAYFA = 1000;
+
+      /*
+       * SAYFALAMA ZORUNLU. PostgREST varsayılan olarak sonuçları
+       * sınırlıyor; tek çağrı bir kaynağın on binlerce teklifini
+       * döndürmez ve sessizce eksik bir "önceki durum" haritası,
+       * değişmemiş ürünleri NEW gibi gösterirdi.
+       */
+      for (let offset = 0; ; offset += SAYFA) {
+        const { data, error } = await supabase
+          .from('products')
+          .select('external_id, fingerprint')
+          .eq('source_id', sourceId)
+          .not('fingerprint', 'is', null)
+          .range(offset, offset + SAYFA - 1);
+
+        if (error) throw new Error(`Parmak izleri okunamadı: ${error.message}`);
+        if (!data || data.length === 0) break;
+
+        for (const row of data) {
+          harita.set(String(row.external_id), String(row.fingerprint));
+        }
+
+        if (data.length < SAYFA) break;
+      }
+
+      return harita;
+    },
+    /**
+     * Görülen tekliflere "gördük ve doğruladık" damgası.
+     *
+     * Dört damga birden yazılıyor çünkü bir feed satırı bu bilgilerin
+     * hepsini aynı anda taşıyor: fiyat, stok ve teklifin kendisi tek bir
+     * gözlemden geliyor. Ayrı ayrı yazmak, aynı gözlemi üç farklı ana
+     * bölmek olurdu.
+     *
+     * `last_price_change_at` BURADA YAZILMAZ -- onu tetikleyici, fiyat
+     * gerçekten değiştiğinde atıyor.
+     */
+    async touchSeen(sourceId, externalIds, checkedAt) {
+      if (externalIds.length === 0) return;
+
+      const damga = checkedAt.toISOString();
+
+      for (const batch of chunk(externalIds, UPSERT_BATCH_SIZE)) {
+        const { error } = await supabase
+          .from('products')
+          .update({
+            last_seen_at: damga,
+            price_checked_at: damga,
+            stock_checked_at: damga,
+            offer_checked_at: damga,
+          })
+          .eq('source_id', sourceId)
+          .in('external_id', batch);
+
+        if (error) throw new Error(`Görülme damgası yazılamadı: ${error.message}`);
+      }
+    },
     async markStale(sourceId, runStartedAt) {
       /*
        * Bu çalışmada görülmeyen teklifler stoksuz işaretlenir — SİLİNMEZ.
@@ -177,6 +260,21 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
       return data?.length ?? 0;
     },
 
+    async saveRefreshPlan(sourceId, plan) {
+      const { error } = await supabase
+        .from('sources')
+        .update({
+          next_refresh_at: plan.nextRefreshAt.toISOString(),
+          refresh_class: plan.freshnessClass,
+          // Gerekçeler saklanıyor: sebebini taşımayan bir zamanlama
+          // kararı hata ayıklanamaz.
+          refresh_reasons: plan.reasons,
+          refresh_planned_at: new Date().toISOString(),
+        })
+        .eq('id', sourceId);
+
+      if (error) throw new Error(`Yenileme planı yazılamadı: ${error.message}`);
+    },
     async startRun(sourceId) {
       const { data, error } = await supabase
         .from('ingest_runs')
@@ -200,8 +298,20 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
           items_updated: summary.itemsUpdated,
           items_skipped: summary.itemsSkipped,
           items_failed: summary.itemsFailed,
+          // Delta sonucu: kaynağın ne yaptığı. Testlerden elle değil,
+          // gerçek sınıflandırmadan geliyor.
+          items_new: summary.itemsNew,
+          items_changed: summary.itemsChanged,
+          items_unchanged: summary.itemsUnchanged,
+          items_deleted: summary.itemsDeleted,
+          snapshot_complete: summary.snapshotComplete,
           sample_errors: summary.sampleErrors,
-          error: summary.error ?? null,
+          // Veritabanına düz metin kimlik bilgisi YAZILMAZ; `runSource`
+          // zaten temizliyor, bu sütun son savunma hattı.
+          error: summary.error === null || summary.error === undefined
+            ? null
+            : redact(summary.error),
+          error_class: summary.errorClass ?? null,
         })
         .eq('id', runId);
 
@@ -223,7 +333,10 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
         .update({
           last_run_at: new Date().toISOString(),
           last_status: summary.status,
-          last_error: summary.error ?? null,
+          last_error: summary.error === null || summary.error === undefined
+            ? null
+            : redact(summary.error),
+          last_error_class: summary.errorClass ?? null,
           last_item_count: summary.itemsSeen,
         })
         .eq('id', summary.sourceId);
@@ -234,18 +347,26 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
 /** Alım için etkin kaynakları, mağaza bilgileriyle birlikte okur. */
 export async function loadSources(
   supabase: SupabaseClient,
-  filter: { slug?: string } = {},
+  /*
+   * `id` süzgeci SOURCE_SYNC işleyicisi için eklendi: iş yükü yalnızca
+   * kaynak kimliği taşıyor ve kaynak veritabanından YENİDEN çözülüyor.
+   * İkinci bir yükleyici yazmak, "etkin kaynak" ve "aktif satıcı"
+   * koşullarını iki yerde tutmak olurdu.
+   */
+  filter: { slug?: string; id?: string } = {},
 ): Promise<SourceConfig[]> {
   let query = supabase
     .from('sources')
     .select(
-      `id, slug, merchant_id, kind, endpoint_url, field_mapping, currency,
+      `id, slug, merchant_id, kind, endpoint_url, field_mapping, currency, market,
+       auth_type, auth_secret_ref,
        merchant:merchants!inner ( id, status, homepage_url, deeplink_template )`,
     )
     .eq('is_enabled', true)
     .eq('merchants.status', 'active');
 
   if (filter.slug) query = query.eq('slug', filter.slug);
+  if (filter.id) query = query.eq('id', filter.id);
 
   const { data, error } = await query;
   if (error) throw new Error(`Kaynaklar okunamadı: ${error.message}`);
@@ -272,7 +393,10 @@ export async function loadSources(
       endpointUrl: row.endpoint_url ? String(row.endpoint_url) : null,
       fieldMapping: (row.field_mapping ?? {}) as SourceConfig['fieldMapping'],
       currency: String(row.currency ?? 'TRY'),
+      market: (String(row.market ?? 'TR') as SourceConfig['market']),
       allowedHosts: host ? [host] : [],
+      authType: isAuthType(row.auth_type) ? row.auth_type : 'query',
+      authSecretRef: row.auth_secret_ref ? String(row.auth_secret_ref) : null,
     };
   });
 }

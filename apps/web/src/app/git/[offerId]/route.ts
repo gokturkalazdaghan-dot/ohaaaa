@@ -20,7 +20,7 @@
  * mümkün olmaz.
  */
 
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 
 import {
@@ -30,6 +30,7 @@ import {
   generateSubId,
 } from '@ohaaaa/shared/affiliate';
 
+import { hashWithDailySalt, clientIp } from '@/lib/clientHash';
 import { isSupabaseConfigured } from '@/lib/env';
 import { demoMerchants, demoProductGroups } from '@/data/demo';
 
@@ -194,21 +195,15 @@ async function recordClick(input: {
     const supabase = getServiceClient();
 
     const headers = input.request.headers;
-    const salt = dailySalt();
-
-    const ip =
-      headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-      headers.get('x-real-ip') ??
-      null;
-
+    const ip = clientIp(headers);
     const userAgent = headers.get('user-agent');
 
     const { error } = await supabase.rpc('record_click', {
       p_product_id: input.offerId,
       p_subid: input.subid,
       p_session_id: input.request.cookies.get('ohaaaa_sid')?.value ?? null,
-      p_ip_hash: ip ? hashWithSalt(ip, salt) : null,
-      p_ua_hash: userAgent ? hashWithSalt(userAgent, salt) : null,
+      p_ip_hash: ip ? hashWithDailySalt(ip) : null,
+      p_ua_hash: userAgent ? hashWithDailySalt(userAgent) : null,
       p_referrer: headers.get('referer'),
       p_placement: input.request.nextUrl.searchParams.get('k') ?? 'product_page',
       p_device: detectDevice(userAgent),
@@ -238,21 +233,10 @@ async function recordClick(input: {
   }
 }
 
-/**
- * Günlük dönen tuz.
- *
- * Sabit bir tuz, IP özetlerini kalıcı bir kullanıcı kimliğine çevirirdi.
- * Günlük döndürmek, aynı gün içindeki tekilleştirmeyi korurken günler arası
- * takibi imkânsız kılar.
+/*
+ * Tuzlama ve özetleme ortak yardımcıya taşındı (lib/clientHash.ts):
+ * aynı mantık üç ayrı dosyada yazılmıştı ve üçü aynı şeyi yapmıyordu.
  */
-function dailySalt(): string {
-  const secret = process.env.CLICK_HASH_SECRET ?? 'ohaaaa-varsayilan-tuz';
-  return `${secret}:${new Date().toISOString().slice(0, 10)}`;
-}
-
-function hashWithSalt(value: string, salt: string): string {
-  return createHash('sha256').update(`${salt}:${value}`).digest('hex').slice(0, 32);
-}
 
 function detectDevice(userAgent: string | null): string {
   if (!userAgent) return 'unknown';

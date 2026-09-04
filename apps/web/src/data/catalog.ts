@@ -685,8 +685,19 @@ export async function getFlashDeals(limit = 3): Promise<FlashDeal[]> {
       .limit(limit);
 
     if (error) {
-      console.error("Kampanyalar okunamadı:", error.message);
-      return demoFlashDeals.slice(0, limit);
+      /*
+       * KESİNTİDE DEMO VERİYE DÜŞÜLMEZ.
+       *
+       * Buradaki eski hâli `demoFlashDeals`e düşüyordu ve bu, katalogdaki
+       * BÜTÜN diğer okumalardan farklıydı (hepsi throw eder). Sonuç:
+       * gerçek bir Supabase kesintisinde ana sayfa UYDURMA kampanya
+       * fiyatları gösterirdi -- hem de "indirim" iddiasıyla.
+       *
+       * Fırsat şeridi vitrinin süsü; sayfanın gövdesi değil. Bu yüzden
+       * hata yukarı fırlatılır ve çağıran taraf şeridi hiç çizmez.
+       * Boş bir şerit, uydurma bir indirimden iyidir.
+       */
+      throw new Error(`Kampanyalar okunamadı: ${error.message}`);
     }
 
     return (data ?? []).map((row: Record<string, unknown>): FlashDeal => {

@@ -51,12 +51,33 @@ jobs:
       - run: npm run build --workspace @ohaaaa/shared
       - run: npm run build --workspace @ohaaaa/ingest
 
+      # ZAMANLAYICI KIPI (--schedule)
+      #
+      # Onceki hal her calismada TUM etkin kaynaklari sirayla aliyordu.
+      # Artik yalnizca `next_refresh_at <= now()` olanlar kuyruga giriyor
+      # ve worker onlari isliyor. Fiyati gunde bes kez degisen bir urun
+      # ile yilda bir degisen bir yedek parca artik ayni muameleyi
+      # gormuyor.
+      #
+      # DURUSTCE BIR SINIR: bu is 6 saatte bir tetikleniyor, dolayisiyla
+      # uyarlanabilir planin onerdigi 5 dakikalik araliklar PRATIKTE 6
+      # saatte bir uygulanabiliyor. Cron sikligi, planin tavani. Daha sik
+      # tetikleme bir maliyet karari; kod tarafi hazir.
+      #
+      # Elle tek kaynak calistirmak icin eski dogrudan kip korundu:
+      # `--source=<slug>` verildiginde zamanlayici atlanir.
       - name: Alımı çalıştır
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           OHAAAA_USER_AGENT: 'OhaaaaBot/1.0 (+https://ohaaaa.com/bot; iletisim@ohaaaa.com)'
+          # Ortaklık feed'i jetonu. `sources.endpoint_url` sütununda yalnızca
+          # ${OHAAAA_FEED_TOKEN} yer tutucusu durur; gerçek değer buradan gelir
+          # ve veritabanına hiç yazılmaz. Depo sırrı tanımlı değilse boş gelir
+          # ve yer tutucu kullanan kaynak açık bir hatayla durur -- sessizce
+          # kimliksiz istek atıp 401'i "ağ arızası" sanmaz.
+          OHAAAA_FEED_TOKEN: ${{ secrets.OHAAAA_FEED_TOKEN }}
         run: |
           node packages/ingest/dist/cli.js \
-            ${{ inputs.source && format('--source={0}', inputs.source) || '' }} \
+            ${{ inputs.source && format('--source={0}', inputs.source) || '--schedule' }} \
             ${{ inputs.dry_run && '--dry-run' || '' }}
