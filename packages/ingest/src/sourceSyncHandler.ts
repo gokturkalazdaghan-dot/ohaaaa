@@ -1,5 +1,6 @@
 import { PermanentJobError, type JobHandler, type QueueJob } from '@ohaaaa/shared';
 
+import { isPermanentClass } from './errors.js';
 import { runSource, type Fetcher, type IngestRepository } from './pipeline.js';
 import type { IngestSummary, SourceConfig } from './types.js';
 
@@ -94,7 +95,40 @@ export function createSourceSyncHandler(deps: SourceSyncDeps): JobHandler {
      * denemek, zaten yavaşlatılmış bir kaynağı hemen tekrar dövmek olurdu.
      */
     if (summary.status === 'failed') {
-      throw new Error(summary.error ?? 'Alım başarısız oldu.');
+      const mesaj = summary.error ?? 'Alım başarısız oldu.';
+
+      /*
+       * HATANIN SINIFI, YENİDEN DENEME KARARINI VERİR.
+       *
+       * Önce her başarısız tur düz `Error` olarak fırlatılıyordu ve kuyruk
+       * hepsini GEÇİCİ sayıyordu. Bunun ölçülebilir bedeli şuydu: eksik bir
+       * ortam değişkeni ya da yanlış bir alan haritası -- tekrar denenince
+       * kesinlikle aynı sonucu verecek hatalar -- üstel geri çekilmeyle beş
+       * kez deneniyor, kaynak saatler boyunca "yeniden denenecek" görünüyor
+       * ve ancak sonunda ölü mektuba düşüyordu. 401 alan bir kaynakta bu,
+       * sağlayıcıya dört kez daha kimliksiz istek göndermek demekti.
+       *
+       * Sınıflandırma tanımadığı hatayı GEÇİCİ bırakır: ters varsayım,
+       * düzelebilecek bir arızayı ilk denemede kalıcı işaretleyip kaynağı
+       * sessizce öldürürdü.
+       */
+      /*
+       * ÖRNEK KARARI TABLODAN ÖNCE GELİR.
+       *
+       * Aynı sınıf iki karar verebilir: 404 kalıcı, 503 geçicidir. Yalnızca
+       * sınıf tablosuna bakmak 503'ü kalıcı sayıyordu; test bunu yakaladı.
+       * Tablo yalnızca özette karar yoksa (eski kayıt, elle üretilmiş özet)
+       * geri düşüş olarak kullanılıyor.
+       */
+      const kalici =
+        summary.errorPermanent ??
+        (summary.errorClass ? isPermanentClass(summary.errorClass) : false);
+
+      if (kalici) {
+        throw new PermanentJobError(`[${summary.errorClass}] ${mesaj}`);
+      }
+
+      throw new Error(`[${summary.errorClass ?? 'UNKNOWN_ERROR'}] ${mesaj}`);
     }
   };
 }

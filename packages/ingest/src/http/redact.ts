@@ -24,6 +24,8 @@
  * arasındaki fark teşhis edilebilirlikle edilemezlik arasındaki farktır.
  */
 
+import { IngestError } from '../errors.js';
+
 /**
  * Bilinen gizli değerler.
  *
@@ -57,11 +59,6 @@ export function registerSecret(value: string | undefined | null): void {
 /** Yalnızca test içindir: kayıt defterini boşaltır. */
 export function clearSecretsForTest(): void {
   gizliDegerler.clear();
-}
-
-/** Düzenli ifade içinde güvenli kullanım için kaçış. */
-function kacir(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -166,8 +163,17 @@ export function expandSecretPlaceholders(
   });
 
   if (eksik.length > 0) {
-    throw new Error(
+    /*
+     * YAPILANDIRMA HATASI, AĞ HATASI DEĞİL.
+     *
+     * Ortam değişkeni eklenmeden hiçbir yeniden deneme başarılı olamaz.
+     * Geçici saymak, operatör secret'ı eklemeden önce kaynağı beş kez
+     * boşuna denemek ve saatler sonra ölü mektupta bulmak olurdu.
+     */
+    throw new IngestError(
+      'CONFIG_ERROR',
       `Kaynak adresindeki gizli değişken(ler) ortamda tanımlı değil: ${eksik.join(', ')}`,
+      true,
     );
   }
 

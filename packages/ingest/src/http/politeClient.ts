@@ -181,7 +181,10 @@ export function createPoliteClient(options: PoliteClientOptions) {
     state.nextAllowedAt = now() + delay;
   }
 
-  async function get(targetUrl: string): Promise<FetchResult> {
+  async function get(
+    targetUrl: string,
+    options: { headers?: Record<string, string> } = {},
+  ): Promise<FetchResult> {
     const url = new URL(targetUrl);
     const host = url.host;
     const state = stateFor(host);
@@ -217,10 +220,16 @@ export function createPoliteClient(options: PoliteClientOptions) {
       try {
         const response = await withTimeout(
           doFetch(targetUrl, {
+            /*
+             * Çağıranın başlıkları SONA konuyor ama user-agent'ı ezemez:
+             * kimliğimizi gizlemek robots uyumunu anlamsız kılardı ve bu
+             * projede bot kimliği pazarlık konusu değil.
+             */
             headers: {
-              'user-agent': config.userAgent,
               accept: 'text/csv, application/xml, application/json;q=0.9, */*;q=0.5',
               'accept-encoding': 'gzip, deflate',
+              ...(options.headers ?? {}),
+              'user-agent': config.userAgent,
             },
             redirect: 'follow',
           }),

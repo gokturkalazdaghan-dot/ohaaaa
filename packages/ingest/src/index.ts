@@ -1,6 +1,8 @@
 /** @ohaaaa/ingest — ürün veri alım hattı. */
 
 export * from './types.js';
+export * from './errors.js';
+export * from './auth.js';
 export * from './pipeline.js';
 export * from './normalize.js';
 export * from './supabaseRepository.js';

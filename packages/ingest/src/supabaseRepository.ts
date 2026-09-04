@@ -12,6 +12,7 @@ import { describeSignatureError } from '@ohaaaa/shared/product-sync';
 import type { IngestRepository } from './pipeline.js';
 import { canonicalSignature } from './pipeline.js';
 import type { IngestSummary, NormalizedOffer, SourceConfig } from './types.js';
+import { isAuthType } from './auth.js';
 import { redact } from './http/redact.js';
 
 /** Tek sorguda gönderilecek en fazla satır. Daha büyüğü istek sınırını aşar. */
@@ -310,6 +311,7 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
           error: summary.error === null || summary.error === undefined
             ? null
             : redact(summary.error),
+          error_class: summary.errorClass ?? null,
         })
         .eq('id', runId);
 
@@ -334,6 +336,7 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
           last_error: summary.error === null || summary.error === undefined
             ? null
             : redact(summary.error),
+          last_error_class: summary.errorClass ?? null,
           last_item_count: summary.itemsSeen,
         })
         .eq('id', summary.sourceId);
@@ -356,6 +359,7 @@ export async function loadSources(
     .from('sources')
     .select(
       `id, slug, merchant_id, kind, endpoint_url, field_mapping, currency, market,
+       auth_type, auth_secret_ref,
        merchant:merchants!inner ( id, status, homepage_url, deeplink_template )`,
     )
     .eq('is_enabled', true)
@@ -391,6 +395,8 @@ export async function loadSources(
       currency: String(row.currency ?? 'TRY'),
       market: (String(row.market ?? 'TR') as SourceConfig['market']),
       allowedHosts: host ? [host] : [],
+      authType: isAuthType(row.auth_type) ? row.auth_type : 'query',
+      authSecretRef: row.auth_secret_ref ? String(row.auth_secret_ref) : null,
     };
   });
 }

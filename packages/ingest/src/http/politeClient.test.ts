@@ -427,3 +427,75 @@ test('ağ hatası tükendiğinde jeton son hata metnine girmez', async () => {
   assert.ok(hata);
   assert.ok(!hata!.message.includes(HTTP_JETONU), `jeton sızdı: ${hata!.message}`);
 });
+
+// --- Çağıran başlıkları ---------------------------------------------------
+
+test('çağıranın başlıkları isteğe eklenir', async () => {
+  let gorulen: Record<string, string> = {};
+
+  const impl = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    gorulen = Object.fromEntries(
+      Object.entries((init?.headers ?? {}) as Record<string, string>),
+    );
+    if (url.endsWith('/robots.txt')) return new Response('', { status: 200 });
+    return new Response('id,title\n1,X', { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const clock = fakeClock();
+  const client = createPoliteClient({
+    userAgent: UA,
+    minDelayMs: 0,
+    timeoutMs: 5000,
+    maxRetries: 0,
+    circuitBreakerThreshold: 5,
+    fetchImpl: impl,
+    now: clock.now,
+    sleep: clock.sleep,
+  });
+
+  await client.get('https://feed.example/x.csv', {
+    headers: { authorization: 'Bearer sahte-deger-testte' },
+  });
+
+  assert.equal(gorulen.authorization, 'Bearer sahte-deger-testte');
+});
+
+/*
+ * KİMLİĞİMİZ EZİLEMEZ.
+ *
+ * Çağıran user-agent gönderirse istek kimliğimizi gizleyebilirdi; bu,
+ * robots.txt uyumunu anlamsız kılar ve bot kimliği bu projede pazarlık
+ * konusu değil. Bu yüzden user-agent çağıranın başlıklarından SONRA
+ * yazılıyor.
+ */
+test('çağıran user-agent başlığını EZEMEZ', async () => {
+  let gorulen: Record<string, string> = {};
+
+  const impl = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    gorulen = Object.fromEntries(
+      Object.entries((init?.headers ?? {}) as Record<string, string>),
+    );
+    if (url.endsWith('/robots.txt')) return new Response('', { status: 200 });
+    return new Response('x', { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const clock = fakeClock();
+  const client = createPoliteClient({
+    userAgent: UA,
+    minDelayMs: 0,
+    timeoutMs: 5000,
+    maxRetries: 0,
+    circuitBreakerThreshold: 5,
+    fetchImpl: impl,
+    now: clock.now,
+    sleep: clock.sleep,
+  });
+
+  await client.get('https://feed.example/x.csv', {
+    headers: { 'user-agent': 'Mozilla/5.0 (gizlenmis)' },
+  });
+
+  assert.equal(gorulen['user-agent'], UA);
+});

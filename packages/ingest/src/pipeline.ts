@@ -40,6 +40,8 @@ import { parseJson } from './adapters/json.js';
 import { parseXml } from './adapters/xml.js';
 import { normalizeRecords } from './normalize.js';
 import { planNextRefresh } from './refreshSignals.js';
+import { buildAuthHeaders } from './auth.js';
+import { classifyIngestError, IngestError } from './errors.js';
 import { expandSecretPlaceholders, redactError } from './http/redact.js';
 
 /**
@@ -114,7 +116,15 @@ export interface IngestRepository {
 }
 
 export interface Fetcher {
-  get(url: string): Promise<{ body: string; contentType: string | null }>;
+  /**
+   * `headers` İSTEĞE BAĞLI: `query` kimlik doğrulamasında hiç
+   * gönderilmez ve mevcut getiriciler (testlerdeki sahteler dâhil) imza
+   * değişmeden çalışmaya devam eder.
+   */
+  get(
+    url: string,
+    options?: { headers?: Record<string, string> },
+  ): Promise<{ body: string; contentType: string | null }>;
 }
 
 const ADAPTERS = {
@@ -159,16 +169,24 @@ export async function runSource(
 
   try {
     if (source.kind === 'manual') {
-      throw new Error('Elle yönetilen kaynak otomatik alınamaz.');
+      throw new IngestError(
+        'CONFIG_ERROR',
+        'Elle yönetilen kaynak otomatik alınamaz.',
+        true,
+      );
     }
 
     const adapter = ADAPTERS[source.kind as keyof typeof ADAPTERS];
     if (!adapter) {
-      throw new Error(`Bu kaynak türü için adaptör yok: ${source.kind}`);
+      throw new IngestError(
+        'CONFIG_ERROR',
+        `Bu kaynak türü için adaptör yok: ${source.kind}`,
+        true,
+      );
     }
 
     if (!source.endpointUrl) {
-      throw new Error('Kaynak adresi tanımlı değil.');
+      throw new IngestError('CONFIG_ERROR', 'Kaynak adresi tanımlı değil.', true);
     }
 
     /*
@@ -187,7 +205,14 @@ export async function runSource(
      * bilgisi gerektirmeyen açık feed'ler için ek bir kural yok.
      */
     const adres = expandSecretPlaceholders(source.endpointUrl);
-    const { body } = await deps.fetcher.get(adres);
+
+    /*
+     * Başlık tabanlı kimlik doğrulama (bearer/basic) da ortamdan okunur ve
+     * üretilen değer maskeleme defterine yazılır. `query` yönteminde bu
+     * boş nesne döner -- iki yol tek çağrı noktasından geçsin diye.
+     */
+    const basliklar = buildAuthHeaders(source);
+    const { body } = await deps.fetcher.get(adres, { headers: basliklar });
 
     // --- 2) Ayrıştır ---------------------------------------------------------
     const parsed = adapter(body);
@@ -225,8 +250,16 @@ export async function runSource(
     // bozulduysa) bütün kataloğu stoksuz işaretlemek felakettir. Boş sonuç
     // başarı değil, hata olarak raporlanır ve bayatlatma ÇALIŞTIRILMAZ.
     if (records.length === 0) {
-      throw new Error(
+      /*
+       * GEÇİCİ sayılıyor: sağlayıcının yarım yayınladığı ya da o an
+       * boş dönen bir dosya yaygın bir durumdur ve bir sonraki turda
+       * düzelir. Kalıcı saymak, düzelecek bir arızada kaynağı tek
+       * denemede öldürmek olurdu -- katalog zaten korunuyor.
+       */
+      throw new IngestError(
+        'PARSER_ERROR',
         'Feed boş döndü. Katalog korundu; kaynağı kontrol edin.',
+        false,
       );
     }
 
@@ -240,9 +273,16 @@ export async function runSource(
     summary.sampleErrors.push(...errors.slice(0, MAX_SAMPLE_ERRORS));
 
     if (offers.length === 0) {
-      throw new Error(
+      /*
+       * KALICI: alan haritası düzeltilmeden hiçbir tur bu satırı geçemez.
+       * Yeniden denemek, aynı feed'i aynı yanlış haritayla beş kez
+       * indirmek olurdu.
+       */
+      throw new IngestError(
+        'VALIDATION_ERROR',
         `${records.length} kalemin hiçbiri doğrulamayı geçemedi. ` +
           `Alan haritası (field_mapping) yanlış olabilir.`,
+        true,
       );
     }
 
@@ -374,6 +414,9 @@ export async function runSource(
      * ayrıştırıcı ya da Supabase istemcisi kendi metnini üretebilir).
      */
     summary.error = redactError(error);
+    const siniflandirma = classifyIngestError(error);
+    summary.errorClass = siniflandirma.errorClass;
+    summary.errorPermanent = siniflandirma.permanent;
   } finally {
     summary.durationMs = now().getTime() - startedMs;
     summary.sampleErrors = summary.sampleErrors.slice(0, MAX_SAMPLE_ERRORS);

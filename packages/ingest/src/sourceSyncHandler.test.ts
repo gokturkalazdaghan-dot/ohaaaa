@@ -384,3 +384,131 @@ test('PermanentJobError doğru tipte fırlatılıyor', () => {
   assert.equal(hata.name, 'PermanentJobError');
   assert.ok(hata instanceof Error);
 });
+
+/* --- Hata sınıfı → kuyruk kararı ---------------------------------------- */
+
+/*
+ * BU TESTLERİN VAR OLMA SEBEBİ ÖLÇÜLEBİLİR BİR KUSURDU.
+ *
+ * İşleyici her başarısız turu düz `Error` olarak fırlatıyordu ve kuyruk
+ * hepsini GEÇİCİ sayıyordu. Yani düzelmesi imkânsız bir hata -- eksik ortam
+ * değişkeni, yanlış alan haritası, 401 -- üstel geri çekilmeyle beş kez
+ * deneniyor, kaynak saatlerce "yeniden denenecek" görünüyor ve ancak sonunda
+ * ölü mektuba düşüyordu. 401 durumunda bu, sağlayıcıya dört kez daha
+ * kimliksiz istek göndermek demekti.
+ *
+ * Testler `fail(..., permanent)` bayrağına bakıyor çünkü kuyruğun yeniden
+ * deneyip denemeyeceğini belirleyen tek şey odur.
+ */
+
+/** Belirli bir hatayı fırlatan getirici. */
+const patlayanFetcher = (hata: unknown): Fetcher => ({
+  get: async () => {
+    throw hata;
+  },
+});
+
+async function turCalistir(fetcherOverride: Fetcher, sourceOverride: SourceConfig = SOURCE) {
+  const ingest = ingestRepository();
+  const q = queue([job()]);
+
+  await runWorkerOnce({
+    repository: q.repository,
+    handlers: {
+      SOURCE_SYNC: createSourceSyncHandler({
+        loadSource: async () => sourceOverride,
+        repository: ingest.repository,
+        fetcher: fetcherOverride,
+      }),
+    },
+  });
+
+  return { q, ingest };
+}
+
+test('401 KALICI olarak başarısız olur — sağlayıcıya tekrar kimliksiz istek gitmez', async () => {
+  const { PermanentHttpError } = await import('./http/politeClient.js');
+  const { q, ingest } = await turCalistir(
+    patlayanFetcher(new PermanentHttpError(401, 'https://magaza.example/feed.csv')),
+  );
+
+  assert.equal(q.calls.failed.length, 1);
+  assert.equal(q.calls.failed[0]!.permanent, true);
+  assert.match(q.calls.failed[0]!.error, /AUTH_ERROR/);
+  // Sınıf özete ve oradan veritabanına gider.
+  assert.equal(ingest.calls.finished.at(-1)!.errorClass, 'AUTH_ERROR');
+});
+
+test('eksik ortam değişkeni KALICI — secret eklenmeden hiçbir deneme geçemez', async () => {
+  const { q, ingest } = await turCalistir(fetcher(CSV), {
+    ...SOURCE,
+    endpointUrl: 'https://magaza.example/feed.csv?token=${OHAAAA_YOK_BOYLE_BIR_DEGISKEN}',
+  });
+
+  assert.equal(q.calls.failed[0]!.permanent, true);
+  assert.match(q.calls.failed[0]!.error, /CONFIG_ERROR/);
+  // Değişken ADI görünür (güvenli), değeri değil.
+  assert.match(q.calls.failed[0]!.error, /OHAAAA_YOK_BOYLE_BIR_DEGISKEN/);
+  assert.equal(ingest.calls.finished.at(-1)!.errorClass, 'CONFIG_ERROR');
+});
+
+test('yanlış alan haritası KALICI — aynı feed beş kez indirilmez', async () => {
+  const { q, ingest } = await turCalistir(fetcher(CSV), {
+    ...SOURCE,
+    fieldMapping: { ...SOURCE.fieldMapping, price: 'boyle_bir_kolon_yok' },
+  });
+
+  assert.equal(q.calls.failed[0]!.permanent, true);
+  assert.match(q.calls.failed[0]!.error, /VALIDATION_ERROR/);
+  assert.equal(ingest.calls.finished.at(-1)!.errorClass, 'VALIDATION_ERROR');
+});
+
+test('robots yasağı KALICI — yasak yeniden denenerek yok sayılmaz', async () => {
+  const { RobotsDisallowedError } = await import('./http/politeClient.js');
+  const { q } = await turCalistir(
+    patlayanFetcher(new RobotsDisallowedError('https://magaza.example/feed.csv')),
+  );
+
+  assert.equal(q.calls.failed[0]!.permanent, true);
+  assert.match(q.calls.failed[0]!.error, /SECURITY_ERROR/);
+});
+
+/*
+ * KARŞI YÖN AYNI DERECEDE ÖNEMLİ.
+ *
+ * Her şeyi kalıcı yapan bir düzeltme, düzelebilecek arızalarda kaynağı ilk
+ * denemede öldürürdü. Bu testler geri çekilmenin hâlâ çalıştığını kanıtlıyor.
+ */
+test('ağ hatası GEÇİCİ kalır — yeniden deneme çalışmaya devam eder', async () => {
+  const { q, ingest } = await turCalistir(patlayanFetcher(new Error('ECONNRESET')));
+
+  assert.equal(q.calls.failed[0]!.permanent, false);
+  assert.match(q.calls.failed[0]!.error, /NETWORK_ERROR/);
+  assert.equal(ingest.calls.finished.at(-1)!.errorClass, 'NETWORK_ERROR');
+});
+
+test('5xx GEÇİCİ kalır — sunucu toparlanabilir', async () => {
+  const { q } = await turCalistir(patlayanFetcher(new Error('HTTP 503')));
+
+  assert.equal(q.calls.failed[0]!.permanent, false);
+  assert.match(q.calls.failed[0]!.error, /HTTP_ERROR/);
+});
+
+test('tanınmayan hata GEÇİCİ kalır — temkinli varsayım', async () => {
+  const { q } = await turCalistir(patlayanFetcher(new Error('bilinmeyen bir şey')));
+
+  assert.equal(q.calls.failed[0]!.permanent, false);
+  assert.match(q.calls.failed[0]!.error, /UNKNOWN_ERROR/);
+});
+
+/*
+ * Boş feed GEÇİCİ: sağlayıcının yarım yayınladığı dosya yaygındır ve bir
+ * sonraki turda düzelir. Katalog zaten korunuyor (bayatlatma çalışmıyor).
+ */
+test('boş feed GEÇİCİ — katalog korunur ama kaynak öldürülmez', async () => {
+  const { q, ingest } = await turCalistir(fetcher('id,title,price,link\n'));
+
+  assert.equal(q.calls.failed[0]!.permanent, false);
+  assert.match(q.calls.failed[0]!.error, /PARSER_ERROR/);
+  assert.equal(ingest.calls.finished.at(-1)!.errorClass, 'PARSER_ERROR');
+});
