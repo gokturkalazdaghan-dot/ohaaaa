@@ -130,6 +130,14 @@ const YASAK_ADLAR = [
   'CRON_SECRET',
   'RESEND_API_KEY',
   'postback_secret',
+  /*
+   * Alım hattının sırları. Liste yalnızca web uygulamasının bildiği
+   * adlarla yazılmıştı; oysa bir sır istemciye ADIYLA sızmaz, bir
+   * ortam değişkenine NEXT_PUBLIC_ öneki konarak sızar. O hata bu iki
+   * ad için de aynen mümkündü ve kontrol onları hiç aramıyordu.
+   */
+  'OHAAAA_FEED_TOKEN',
+  'OHAAAA_PIPELINE_TEST_TOKEN',
 ];
 
 let bundleTarandi = 0;

@@ -8,6 +8,8 @@
  * sanılmasın.
  */
 
+import { isBusinessComplete, missingBusinessFields } from './legal';
+
 export const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 export const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
@@ -124,6 +126,7 @@ export const searchConsoleVerification =
   process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION ?? '';
 
 // --- Yayın durumu ----------------------------------------------------------
+// `legal.ts` yalnizca ortam degiskeni okur; dongusel bagimlilik yok.
 /**
  * Sitenin yayın aşaması.
  *
@@ -146,3 +149,52 @@ export const launchState: LaunchState =
   process.env.NEXT_PUBLIC_LAUNCH_STATE === 'prelaunch' ? 'prelaunch' : 'live';
 
 export const isPrelaunch = launchState === 'prelaunch';
+
+/**
+ * Yayin durumu ile isletme kunyesi TUTARLI MI?
+ *
+ * Bu fonksiyon bir kapi degil, bir OLCU. Yukaridaki varsayilan `live` --
+ * yani sistem bu noktada FAIL-OPEN. Bunu sessizce fail-closed'a cevirmek
+ * siteyi bir anda arama motorlarindan dusururdu; o bir SEO karari ve site
+ * sahibinin vermesi gerekir.
+ *
+ * Ama sessiz kalmak da dogru degildi: `.env.example` yillarca "ayarlanmazsa
+ * prelaunch kabul edilir" yaziyordu ve bu YANLISTI. Belge fail-closed
+ * soyluyor, kod fail-open davraniyordu -- iki taraf da kendi icinde
+ * tutarliydi, aralarindaki fark ancak kodu okuyarak goruluyordu.
+ *
+ * Artik uyumsuzluk olculebilir: `live` iken kunye eksikse bu fonksiyon
+ * `false` doner ve sunucu gunlugune yapisal bir uyari dusulur (bkz.
+ * `warnIfLaunchStateInconsistent`). 6563 sayili Kanun, e-ticaret hizmet
+ * saglayicisinin kimlik bilgilerini yayimlamasini zorunlu kilar; kayitli
+ * bir isletme yokken indekslenmek duzeltilse bile arsivlerde kalir.
+ */
+export function isLaunchStateConsistent(): boolean {
+  if (isPrelaunch) return true;
+  return isBusinessComplete();
+}
+
+/** Uyari YALNIZCA BIR KEZ yazilir; her istekte gunlugu doldurmasin. */
+let launchWarningEmitted = false;
+
+/**
+ * Tutarsizligi sunucu gunlugune bir kez bildirir.
+ *
+ * Kullaniciya bir sey gostermez -- onu zaten `LegalIncompleteNotice`
+ * yapiyor. Buradaki muhatap operator: "site canli ve indekslenebilir ama
+ * kunye bos" durumunun bir yerde YAZILI olmasi gerekiyor.
+ */
+export function warnIfLaunchStateInconsistent(): void {
+  if (launchWarningEmitted || isLaunchStateConsistent()) return;
+  launchWarningEmitted = true;
+
+  console.warn(
+    JSON.stringify({
+      level: 'warn',
+      msg: 'Yayin durumu "live" ama isletme kunyesi eksik -- site indekslenebilir durumda',
+      launch_state: launchState,
+      missing_business_fields: missingBusinessFields(),
+      hint: 'Kunye tamamlanana kadar NEXT_PUBLIC_LAUNCH_STATE=prelaunch tercih edilebilir.',
+    }),
+  );
+}

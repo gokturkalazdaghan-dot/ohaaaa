@@ -52,6 +52,24 @@ export function Footer() {
                 KVKK
               </Link>
             </li>
+            {/*
+              ORTAKLIK ACIKLAMASI FOOTER'DA OLMAK ZORUNDA.
+
+              Sayfa vardi, sitemap'te vardi, uc yasal metnin icinden
+              baglantiliydi ve ana sayfadaki guven bloguna konmustu -- ama
+              site GENELINDE erisilebilir degildi. Bir urun sayfasindan ya
+              da kategori sayfasindan ulasmanin yolu yoktu.
+
+              Ortaklik iliskisinin aciklanmasi bir nezaket degil yukumluluk:
+              ortaklik aglari (Awin dahil) ve reklam duzenlemeleri
+              aciklamanin "acik ve kolay ulasilabilir" olmasini sart kosar.
+              Footer her sayfada oldugu icin bu sartin karsilandigi tek yer.
+            */}
+            <li>
+              <Link href="/ortaklik-aciklamasi" className="text-muted hover:text-fg">
+                Ortaklık açıklaması
+              </Link>
+            </li>
           </ul>
         </div>
       </div>

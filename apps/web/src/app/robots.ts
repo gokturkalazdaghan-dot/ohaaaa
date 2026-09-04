@@ -18,9 +18,16 @@
 
 import type { MetadataRoute } from 'next';
 
-import { isPrelaunch, siteUrl } from '@/lib/env';
+import { isPrelaunch, siteUrl, warnIfLaunchStateInconsistent } from '@/lib/env';
 
 export default function robots(): MetadataRoute.Robots {
+  /*
+   * Yayin durumunun sonucu tam olarak BURADA belirir: bu dosya sitenin
+   * indekslenip indekslenmeyecegine karar veriyor. Tutarsizligin
+   * bildirilecegi en dogru yer de burasi.
+   */
+  warnIfLaunchStateInconsistent();
+
   // Üretim dışı ortamların indekslenmesi, asıl siteyle mükerrer içerik üretir.
   const isProduction =
     process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
