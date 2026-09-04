@@ -206,3 +206,107 @@ test('komisyon tahmini aşağı yuvarlanır ve teklif oranı önceliklidir', () 
   // Yuvarlama daima aşağı: gerçekleşmemiş geliri şişirmeyiz.
   assert.equal(estimateCommission(999, null, 0.07), 69);
 });
+
+// ---------------------------------------------------------------------------
+// ÇÖZÜLMEMİŞ YER TUTUCU — sessiz gelir kaybı koruması
+// ---------------------------------------------------------------------------
+// Bu blok bir güvenlik testi değil, bir GELİR testi. Senaryo gerçek: Awin
+// şablonu `{awinmid}` içerir ve o değer her reklamveren için farklıdır.
+// Operatör onu gerçek değeriyle değiştirmeyi unutursa, koruma olmadan
+// yönlendirme YAPILIR, tıklama kaydedilir ve ağ bozuk bir mid alır --
+// hiçbir hata görünmeden komisyon kaybedilir.
+
+test('Awin sablonunda {awinmid} cozulmemisse yonlendirme URETILMEZ', () => {
+  assert.throws(
+    () =>
+      buildAffiliateUrl({
+        template:
+          'https://www.awin1.com/cread.php?awinmid={awinmid}' +
+          '&awinaffid=3074081&clickref={subid}&ued={url_encoded}',
+        productUrl: 'https://magaza.example/p/1',
+        trackingId: '3074081',
+        subid: 'abcdefghijklmnop',
+        allowedHosts: ['magaza.example', 'awin1.com'],
+      }),
+    (error: unknown) =>
+      error instanceof AffiliateLinkError &&
+      error.code === 'unresolved_placeholder' &&
+      error.message.includes('{awinmid}'),
+    'awinmid cozulmemisken AffiliateLinkError bekleniyordu',
+  );
+});
+
+test('bilinmeyen herhangi bir yer tutucu da reddedilir', () => {
+  for (const yerTutucu of ['{merchant_id}', '{campaign}', '{}', '{ bosluklu }']) {
+    assert.throws(
+      () =>
+        buildAffiliateUrl({
+          template: `https://ag.example/go?x=${yerTutucu}&u={url_encoded}`,
+          productUrl: 'https://magaza.example/p/1',
+          trackingId: 'ohaaaa',
+          subid: 'abcdefghijklmnop',
+          allowedHosts: ['magaza.example', 'ag.example'],
+        }),
+      (error: unknown) =>
+        error instanceof AffiliateLinkError && error.code === 'unresolved_placeholder',
+      `${yerTutucu} reddedilmeliydi`,
+    );
+  }
+});
+
+test('awinmid GERCEK degeriyle yazildiginda URL uretilir', () => {
+  const url = buildAffiliateUrl({
+    // 12345 burada bir ORNEK: gercek awinmid Awin panelinden gelir ve
+    // sablona duz metin olarak yazilir. Test yalnizca yer tutucu KALMAMIS
+    // olmasini olcuyor, degerin dogrulugunu degil.
+    template:
+      'https://www.awin1.com/cread.php?awinmid=12345' +
+      '&awinaffid=3074081&clickref={subid}&ued={url_encoded}',
+    productUrl: 'https://magaza.example/p/1',
+    trackingId: '3074081',
+    subid: 'abcdefghijklmnop',
+    allowedHosts: ['magaza.example', 'awin1.com'],
+  });
+
+  assert.match(url, /^https:\/\/www\.awin1\.com\/cread\.php\?/);
+  assert.ok(url.includes('awinmid=12345'), 'gercek awinmid korunmali');
+  assert.ok(url.includes('awinaffid=3074081'), 'yayinci kimligi korunmali');
+  assert.ok(url.includes('clickref=abcdefghijklmnop'), 'subid clickref olarak gecmeli');
+  assert.ok(!/\{[^{}]*\}/.test(url), 'uretilen adreste yer tutucu kalmamali');
+});
+
+test('YANLIS POZITIF YOK: urun adresindeki sus parantez reddedilmez', () => {
+  /*
+   * Olculdu: new URL('https://m.example/p?q={x}').toString() sus parantezi
+   * sorgu dizesinde KORUR. Denetim uretilen adres uzerinde yapilsaydi bu
+   * mesru magaza adresi reddedilir ve ters yonde gelir kaybi olurdu.
+   * Denetim sablon uzerinde oldugu icin gecmeli.
+   */
+  const url = buildAffiliateUrl({
+    template: 'https://ag.example/go?u={url_encoded}&s={subid}',
+    productUrl: 'https://magaza.example/p?variant={renk}',
+    trackingId: 'ohaaaa',
+    subid: 'abcdefghijklmnop',
+    allowedHosts: ['magaza.example', 'ag.example'],
+  });
+
+  assert.ok(url.startsWith('https://ag.example/go?'));
+  assert.ok(url.includes('s=abcdefghijklmnop'));
+});
+
+test('cozulmemis yer tutucu host denetiminden ONCE yakalanir', () => {
+  // Sablonun alan adi izinli listede OLMASA bile once yer tutucu hatasi
+  // gelmeli: hata mesaji operatore asil sorunu soylemeli.
+  assert.throws(
+    () =>
+      buildAffiliateUrl({
+        template: 'https://izinsiz.example/go?m={awinmid}&u={url}',
+        productUrl: 'https://magaza.example/p/1',
+        trackingId: 'ohaaaa',
+        subid: 'abcdefghijklmnop',
+        allowedHosts: ['magaza.example'],
+      }),
+    (error: unknown) =>
+      error instanceof AffiliateLinkError && error.code === 'unresolved_placeholder',
+  );
+});
