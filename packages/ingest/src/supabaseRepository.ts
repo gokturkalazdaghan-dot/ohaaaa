@@ -12,6 +12,7 @@ import { describeSignatureError } from '@ohaaaa/shared/product-sync';
 import type { IngestRepository } from './pipeline.js';
 import { canonicalSignature } from './pipeline.js';
 import type { IngestSummary, NormalizedOffer, SourceConfig } from './types.js';
+import { redact } from './http/redact.js';
 
 /** Tek sorguda gönderilecek en fazla satır. Daha büyüğü istek sınırını aşar. */
 const UPSERT_BATCH_SIZE = 500;
@@ -304,7 +305,11 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
           items_deleted: summary.itemsDeleted,
           snapshot_complete: summary.snapshotComplete,
           sample_errors: summary.sampleErrors,
-          error: summary.error ?? null,
+          // Veritabanına düz metin kimlik bilgisi YAZILMAZ; `runSource`
+          // zaten temizliyor, bu sütun son savunma hattı.
+          error: summary.error === null || summary.error === undefined
+            ? null
+            : redact(summary.error),
         })
         .eq('id', runId);
 
@@ -326,7 +331,9 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
         .update({
           last_run_at: new Date().toISOString(),
           last_status: summary.status,
-          last_error: summary.error ?? null,
+          last_error: summary.error === null || summary.error === undefined
+            ? null
+            : redact(summary.error),
           last_item_count: summary.itemsSeen,
         })
         .eq('id', summary.sourceId);

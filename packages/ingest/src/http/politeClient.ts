@@ -17,6 +17,7 @@
  */
 
 import { crawlDelayFor, isAllowed, parseRobotsTxt, type RobotsTxt } from './robots.js';
+import { maskUrl } from './redact.js';
 
 export interface PoliteClientOptions {
   /**
@@ -46,8 +47,20 @@ export const DEFAULT_OPTIONS: Omit<PoliteClientOptions, 'userAgent'> = {
 };
 
 export class RobotsDisallowedError extends Error {
-  constructor(readonly url: string) {
-    super(`robots.txt bu adrese erişimi yasaklıyor: ${url}`);
+  /*
+   * ADRES MASKELENEREK MESAJA GİRER.
+   *
+   * Bu mesaj `summary.error` üzerinden veritabanına (`ingest_runs.error`,
+   * `sources.last_error`) ve CI günlüğüne yazılıyor. Feed adresi jetonu
+   * sorgu dizisinde taşıdığında, maskesiz mesaj jetonu üç ayrı yere
+   * kopyalardı. `url` alanı ham kalır -- çağıran gerekirse kullanır ama
+   * mesaj artık taşımaz.
+   */
+  constructor(readonly url: string, reason?: string) {
+    super(
+      `robots.txt bu adrese erişimi yasaklıyor: ${maskUrl(url)}` +
+        (reason ? ` (${reason})` : ''),
+    );
     this.name = 'RobotsDisallowedError';
   }
 }
@@ -60,7 +73,7 @@ export class RobotsDisallowedError extends Error {
  */
 export class PermanentHttpError extends Error {
   constructor(readonly status: number, readonly url: string) {
-    super(`HTTP ${status} — ${url}`);
+    super(`HTTP ${status} — ${maskUrl(url)}`);
     this.name = 'PermanentHttpError';
   }
 }
@@ -180,8 +193,15 @@ export function createPoliteClient(options: PoliteClientOptions) {
     const robots = await loadRobots(url.origin, host);
 
     if (robots === false) {
+      /*
+       * Açıklama AYRI parametre olarak veriliyor. Önceden adres ve
+       * açıklama tek dizgide birleştirilip kurucuya veriliyordu; maskeleme
+       * eklendiğinde bu dizgi geçerli bir adres olmadığı için ya tamamen
+       * maskelenir ya da açıklama sorgu dizisine karışırdı.
+       */
       throw new RobotsDisallowedError(
-        `${targetUrl} (robots.txt alınamadı; güvenli varsayım: yasak)`,
+        targetUrl,
+        'robots.txt alınamadı; güvenli varsayım: yasak',
       );
     }
 
@@ -250,7 +270,7 @@ export function createPoliteClient(options: PoliteClientOptions) {
     state.consecutiveFailures += 1;
     throw lastError instanceof Error
       ? lastError
-      : new Error(`İstek başarısız: ${targetUrl}`);
+      : new Error(`İstek başarısız: ${maskUrl(targetUrl)}`);
   }
 
   return {

@@ -40,6 +40,7 @@ import { parseJson } from './adapters/json.js';
 import { parseXml } from './adapters/xml.js';
 import { normalizeRecords } from './normalize.js';
 import { planNextRefresh } from './refreshSignals.js';
+import { expandSecretPlaceholders, redactError } from './http/redact.js';
 
 /**
  * Veritabanı işlemleri. Arayüz olarak tanımlıdır: hattın tamamı gerçek bir
@@ -170,8 +171,23 @@ export async function runSource(
       throw new Error('Kaynak adresi tanımlı değil.');
     }
 
-    // --- 1) Getir ------------------------------------------------------------
-    const { body } = await deps.fetcher.get(source.endpointUrl);
+    /*
+     * --- 1) Getir ------------------------------------------------------------
+     *
+     * KİMLİK BİLGİSİ ADRESTEN DEĞİL ORTAMDAN GELİR.
+     *
+     * `sources.endpoint_url` sütununda jetonun kendisi değil şablonu durur
+     * (`...?token=${OHAAAA_FEED_TOKEN}`). Gerçek değer burada, çalışma
+     * anında ortamdan okunur; böylece veritabanında, yedeklerde ve panelde
+     * düz metin bir kimlik bilgisi hiç bulunmaz. Genişletme aynı anda
+     * değeri maskeleme defterine yazar: bu noktadan sonra hiçbir hata
+     * metni ya da günlük satırı onu taşıyamaz.
+     *
+     * Yer tutucu içermeyen adres bu işlemden DEĞİŞMEDEN geçer -- kimlik
+     * bilgisi gerektirmeyen açık feed'ler için ek bir kural yok.
+     */
+    const adres = expandSecretPlaceholders(source.endpointUrl);
+    const { body } = await deps.fetcher.get(adres);
 
     // --- 2) Ayrıştır ---------------------------------------------------------
     const parsed = adapter(body);
@@ -350,7 +366,14 @@ export async function runSource(
         : 'success';
   } catch (error) {
     summary.status = 'failed';
-    summary.error = error instanceof Error ? error.message : String(error);
+    /*
+     * SON BARİYER. Hata metinleri `politeClient` içinde zaten maskelenerek
+     * üretiliyor; burada bir kez daha temizleniyor çünkü bu alan doğrudan
+     * `ingest_runs.error` ve `sources.last_error` sütunlarına yazılıyor ve
+     * hata her zaman bizim ürettiğimiz sınıflardan gelmiyor (fetch, JSON
+     * ayrıştırıcı ya da Supabase istemcisi kendi metnini üretebilir).
+     */
+    summary.error = redactError(error);
   } finally {
     summary.durationMs = now().getTime() - startedMs;
     summary.sampleErrors = summary.sampleErrors.slice(0, MAX_SAMPLE_ERRORS);

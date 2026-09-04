@@ -866,3 +866,116 @@ test('YOKLAMA: plan yazımı çökerse alım yine başarılı sayılır', async 
     summary.sampleErrors.some((e) => e.reason.includes('Yenileme planı yazılamadı')),
   );
 });
+
+// --- Kimlik bilgisi sızıntısı --------------------------------------------
+
+/*
+ * BU TESTİN VAR OLMA SEBEBİ SOMUT BİR SIZINTIYDI.
+ *
+ * Bağlanacak ilk gerçek feed'e yapılacak ilk isteğin EN OLASI sonucu
+ * 401/403'tür. O hatanın metni `summary.error`'a, oradan da
+ * `ingest_runs.error` ile `sources.last_error` sütunlarına (veritabanında
+ * düz metin) ve CLI çıktısıyla CI günlüğüne yazılıyor. Ortaklık ağı feed
+ * adresleri jetonu sorgu dizisinde taşır; maskeleme eklenmeden önce bu
+ * zincir jetonu üç ayrı yere kopyalardı.
+ *
+ * Aşağıdaki jeton UYDURMADIR; testin iddiası "bu dizgi çıktıda yok".
+ */
+const SIZINTI_JETONU = 'tk_ornek_9f4c2b7e51a08d63';
+
+test('feed adresindeki jeton başarısız turun hata metnine SIZMAZ', async () => {
+  const { repository, calls } = fakeRepository();
+
+  const jetonluKaynak: SourceConfig = {
+    ...SOURCE,
+    endpointUrl: `https://magaza.example/feed.csv?token=${SIZINTI_JETONU}`,
+  };
+
+  const summary = await runSource(jetonluKaynak, {
+    repository,
+    fetcher: {
+      async get(url: string) {
+        // Gerçek istemcinin 4xx'te ürettiği hatanın aynısı: metin adresi taşır.
+        throw new (await import('./http/politeClient.js')).PermanentHttpError(401, url);
+      },
+    },
+  });
+
+  assert.equal(summary.status, 'failed');
+  assert.ok(summary.error, 'hata metni yazılmalı');
+  assert.ok(
+    !summary.error!.includes(SIZINTI_JETONU),
+    `jeton hata metnine sızdı: ${summary.error}`,
+  );
+
+  // Teşhis KAYBOLMAMALI: hangi adresin ve hangi durumun başarısız olduğu görünür.
+  assert.ok(summary.error!.includes('401'), summary.error);
+  assert.ok(summary.error!.includes('magaza.example'), summary.error);
+
+  // Aynı metin depoya da bu haliyle gider.
+  const yazilan = calls.finished.at(-1);
+  assert.ok(yazilan);
+  assert.ok(!String(yazilan!.error).includes(SIZINTI_JETONU));
+});
+
+/*
+ * Yer tutucu ORTAMDAN doldurulur: jeton `sources.endpoint_url` sütununda
+ * düz metin olarak DURMAZ.
+ */
+test('endpoint_url yer tutucusu ortamdan doldurulup isteğe geçer', async () => {
+  const { repository } = fakeRepository();
+  process.env.OHAAAA_PIPELINE_TEST_TOKEN = SIZINTI_JETONU;
+
+  let istenenAdres = '';
+
+  try {
+    const summary = await runSource(
+      {
+        ...SOURCE,
+        endpointUrl:
+          'https://magaza.example/feed.csv?token=${OHAAAA_PIPELINE_TEST_TOKEN}',
+      },
+      {
+        repository,
+        fetcher: {
+          async get(url: string) {
+            istenenAdres = url;
+            return { body: CSV, url, status: 200, contentType: 'text/csv' };
+          },
+        },
+      },
+    );
+
+    // İstek GERÇEK jetonla gitmeli, yoksa sunucu reddederdi.
+    assert.equal(
+      istenenAdres,
+      `https://magaza.example/feed.csv?token=${SIZINTI_JETONU}`,
+    );
+    assert.equal(summary.status, 'success');
+  } finally {
+    delete process.env.OHAAAA_PIPELINE_TEST_TOKEN;
+  }
+});
+
+test('tanımsız gizli değişken turu açık bir hatayla düşürür', async () => {
+  const { repository } = fakeRepository();
+
+  const summary = await runSource(
+    {
+      ...SOURCE,
+      endpointUrl: 'https://magaza.example/feed.csv?token=${OHAAAA_TANIMSIZ_JETON}',
+    },
+    {
+      repository,
+      fetcher: {
+        async get() {
+          throw new Error('Bu getirici HİÇ çağrılmamalıydı.');
+        },
+      },
+    },
+  );
+
+  assert.equal(summary.status, 'failed');
+  // Değişken ADI söylenir (güvenli); operatör neyi tanımlayacağını bilir.
+  assert.ok(summary.error?.includes('OHAAAA_TANIMSIZ_JETON'), summary.error);
+});

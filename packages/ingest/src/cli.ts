@@ -24,6 +24,7 @@ import { createQueueRepository, scheduleDueSources } from './queueRepository.js'
 import { createSourceSyncHandler } from './sourceSyncHandler.js';
 import { createSupabaseRepository, loadSources } from './supabaseRepository.js';
 import { createPoliteClient } from './http/politeClient.js';
+import { redact, redactError } from './http/redact.js';
 import type { IngestSummary } from './types.js';
 
 const USER_AGENT =
@@ -206,7 +207,8 @@ async function main(): Promise<void> {
 
     console.log(line);
 
-    if (summary.error) console.log(`    hata: ${summary.error}`);
+    // CI günlüğü kalıcıdır ve repoya erişebilen herkes okur.
+    if (summary.error) console.log(`    hata: ${redact(summary.error)}`);
 
     for (const sample of summary.sampleErrors.slice(0, 5)) {
       console.log(`    - ${sample.externalId ?? '(genel)'}: ${sample.reason}`);
@@ -273,6 +275,6 @@ function dryRunRepository() {
 }
 
 main().catch((error: unknown) => {
-  console.error('Alım hattı çöktü:', error instanceof Error ? error.message : error);
+  console.error('Alım hattı çöktü:', redactError(error));
   process.exit(1);
 });

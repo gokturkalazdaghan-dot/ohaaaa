@@ -71,6 +71,12 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           OHAAAA_USER_AGENT: 'OhaaaaBot/1.0 (+https://ohaaaa.com/bot; iletisim@ohaaaa.com)'
+          # Ortaklık feed'i jetonu. `sources.endpoint_url` sütununda yalnızca
+          # ${OHAAAA_FEED_TOKEN} yer tutucusu durur; gerçek değer buradan gelir
+          # ve veritabanına hiç yazılmaz. Depo sırrı tanımlı değilse boş gelir
+          # ve yer tutucu kullanan kaynak açık bir hatayla durur -- sessizce
+          # kimliksiz istek atıp 401'i "ağ arızası" sanmaz.
+          OHAAAA_FEED_TOKEN: ${{ secrets.OHAAAA_FEED_TOKEN }}
         run: |
           node packages/ingest/dist/cli.js \
             ${{ inputs.source && format('--source={0}', inputs.source) || '--schedule' }} \
