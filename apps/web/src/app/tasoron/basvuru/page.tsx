@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 import { VendorApplicationForm } from '@/components/VendorApplicationForm';
+import { requireMarketplaceMode } from '@/lib/commerceGuard';
 
 export const metadata: Metadata = {
   title: 'Taşeron başvurusu',
@@ -9,6 +10,8 @@ export const metadata: Metadata = {
 };
 
 export default function VendorApplicationPage() {
+  requireMarketplaceMode();
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
       <h1 className="text-3xl font-bold tracking-tight text-fg">Taşeron başvurusu</h1>

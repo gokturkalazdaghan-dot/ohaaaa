@@ -4,6 +4,7 @@ import { AccountMenu } from './AccountMenu';
 import { StoreIcon } from './Icons';
 import { getSessionUser } from '@/lib/auth';
 import { isSupabaseConfigured } from '@/lib/env';
+import { isAffiliateOnly } from '@/lib/env';
 
 /**
  * Üst bardaki oturum bölümü.
@@ -21,6 +22,9 @@ import { isSupabaseConfigured } from '@/lib/env';
 export async function UserMenu() {
   // Demo modunda auth akışı yoktur; panel örnek verilerle gezilebilir.
   if (!isSupabaseConfigured() || process.env.NEXT_PHASE === 'phase-production-build') {
+    // Ortaklik kipinde satici CTA'si yok; basligin bu koseesi bos kalir.
+    if (isAffiliateOnly) return null;
+
     return (
       <Link
         href="/tasoron"
@@ -38,14 +42,16 @@ export async function UserMenu() {
   if (!user) {
     return (
       <div className="flex items-center gap-1.5 sm:gap-2">
-        <Link
-          href="/tasoron"
-          className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm font-medium text-muted transition-colors hover:text-fg sm:px-3"
-          aria-label="Satıcı Ol"
-        >
-          <StoreIcon className="h-4 w-4 sm:hidden" />
-          <span className="hidden sm:inline">Satıcı Ol</span>
-        </Link>
+        {isAffiliateOnly ? null : (
+          <Link
+            href="/tasoron"
+            className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm font-medium text-muted transition-colors hover:text-fg sm:px-3"
+            aria-label="Satıcı Ol"
+          >
+            <StoreIcon className="h-4 w-4 sm:hidden" />
+            <span className="hidden sm:inline">Satıcı Ol</span>
+          </Link>
+        )}
         <Link
           href="/giris"
           className="rounded-xl border border-line bg-surface px-3.5 py-2 text-sm font-medium transition-colors hover:border-brand/40"
@@ -68,14 +74,21 @@ export async function UserMenu() {
    * (siparişler, adresler, değerlendirmeler) ise hiçbir yerden bağlı
    * değildi.
    */
-  const links = [
-    { href: '/siparislerim', label: 'Siparişlerim' },
-    { href: '/favoriler', label: 'Favorilerim' },
-    { href: '/adreslerim', label: 'Adreslerim' },
-    { href: '/degerlendirmelerim', label: 'Değerlendirmelerim' },
-  ];
+  /*
+   * Ortaklik kipinde hesap menusu de daralir: siparis, adres ve
+   * degerlendirme pazar yeri kavramlaridir. Favoriler KALIR -- fiyat
+   * takibi ortaklik modelinin kendi ozelligi, satisla ilgisi yok.
+   */
+  const links = isAffiliateOnly
+    ? [{ href: '/favoriler', label: 'Favorilerim' }]
+    : [
+        { href: '/siparislerim', label: 'Siparişlerim' },
+        { href: '/favoriler', label: 'Favorilerim' },
+        { href: '/adreslerim', label: 'Adreslerim' },
+        { href: '/degerlendirmelerim', label: 'Değerlendirmelerim' },
+      ];
 
-  if (user.role === 'vendor') {
+  if (!isAffiliateOnly && user.role === 'vendor') {
     links.push({ href: '/tasoron/panel', label: 'Mağaza panelim' });
   }
   if (user.role === 'admin') {

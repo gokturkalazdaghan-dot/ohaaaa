@@ -125,6 +125,35 @@ export const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? '';
 export const searchConsoleVerification =
   process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION ?? '';
 
+// --- Ticari kip -------------------------------------------------------------
+/**
+ * Ohaaaa uretimde HANGI is modeli olarak gorunuyor?
+ *
+ *   affiliate : Karsilastirma + ortaklik yayincisi. Satin alma magazanin
+ *               kendi sitesinde tamamlanir. Sepet, odeme, siparisler ve
+ *               satici basvurusu yuzeyleri GIZLENIR.
+ *   hybrid    : Mevcut hal. Pazar yeri yuzeyleri de gorunur.
+ *
+ * NEDEN BAYRAK, NEDEN SILME DEGIL?
+ * Sema pazar yeri ile ortakligi BILEREK cift yollu tasiyor
+ * (`fulfillment_kind = 'marketplace' | 'affiliate'`). Route'lari, tablolari
+ * ve `create_order`'i silmek geri donusu pahali bir karar olurdu; oysa asil
+ * sorun teknik degil KONUMLANDIRMA: ziyaretci ve ortaklik agi denetcisi
+ * ayni anda hem karsilastirici hem satici goruyor. Bayrak yalnizca
+ * GORUNURLUGU kapatir; kod yerinde kalir ve tek bir ortam degiskeniyle
+ * geri gelir.
+ *
+ * VARSAYILAN 'affiliate': urun karari bu yonde verildi. Pazar yeri
+ * yuzeyini geri acmak icin NEXT_PUBLIC_COMMERCE_MODE=hybrid yazilir.
+ */
+export type CommerceMode = 'affiliate' | 'hybrid';
+
+export const commerceMode: CommerceMode =
+  process.env.NEXT_PUBLIC_COMMERCE_MODE === 'hybrid' ? 'hybrid' : 'affiliate';
+
+/** Pazar yeri yuzeyleri gizli mi? */
+export const isAffiliateOnly = commerceMode === 'affiliate';
+
 // --- Yayın durumu ----------------------------------------------------------
 // `legal.ts` yalnizca ortam degiskeni okur; dongusel bagimlilik yok.
 /**

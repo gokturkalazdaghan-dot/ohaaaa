@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { FEED_FIELDS } from '@ohaaaa/shared';
 
 import { apiBaseUrl } from '@/lib/env';
+import { requireMarketplaceMode } from '@/lib/commerceGuard';
 
 export const metadata: Metadata = {
   title: 'API dokümantasyonu',
@@ -128,6 +129,8 @@ const METHOD_STYLES = {
 } as const;
 
 export default function ApiDocsPage() {
+  requireMarketplaceMode();
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-14 sm:px-6">
       <h1 className="text-3xl font-black tracking-tight sm:text-4xl">Taşeron API’si</h1>

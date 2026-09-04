@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 
 import { CheckoutFlow } from '@/components/CheckoutFlow';
 import { getSavedAddresses } from '@/data/catalog';
+import { requireMarketplaceMode } from '@/lib/commerceGuard';
 
 export const metadata: Metadata = {
   title: 'Ödeme',
@@ -20,6 +21,8 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic';
 
 export default async function CheckoutPage() {
+  requireMarketplaceMode();
+
   // Misafir alışverişi destekleniyor: giriş yoksa liste boş döner ve form
   // eskisi gibi elle doldurulur.
   const addresses = await getSavedAddresses();

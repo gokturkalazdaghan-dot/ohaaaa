@@ -14,7 +14,13 @@ import { DemoBanner } from '@/components/DemoBanner';
 import { PrelaunchBanner } from '@/components/PrelaunchBanner';
 import { JsonLd } from '@/components/JsonLd';
 import { isDemoMode } from '@/data/catalog';
-import { gaMeasurementId, isPrelaunch, searchConsoleVerification, siteUrl } from '@/lib/env';
+import {
+  gaMeasurementId,
+  isAffiliateOnly,
+  isPrelaunch,
+  searchConsoleVerification,
+  siteUrl,
+} from '@/lib/env';
 import { getRequestLocale } from '@/lib/locale';
 
 import './globals.css';
@@ -174,7 +180,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <Header userMenu={<UserMenu />} categoryNav={<CategoryNav />} />
           <main id="icerik">{children}</main>
           <Footer />
-          <CartDrawer />
+          {isAffiliateOnly ? null : <CartDrawer />}
         </FavoritesProvider>
         <ConsentBanner />
         {gaMeasurementId && <Analytics measurementId={gaMeasurementId} />}

@@ -4,6 +4,7 @@ import { getSavedAddresses } from '@/data/catalog';
 
 import { AddressForm } from './AddressForm';
 import { deleteAddress, makeDefaultAddress } from './actions';
+import { requireMarketplaceMode } from '@/lib/commerceGuard';
 
 export const metadata: Metadata = {
   title: 'Adreslerim',
@@ -15,6 +16,8 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic';
 
 export default async function AddressesPage() {
+  requireMarketplaceMode();
+
   const addresses = await getSavedAddresses();
 
   return (

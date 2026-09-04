@@ -15,8 +15,25 @@ import { NextResponse } from 'next/server';
 import { checkoutSchema, summarizeCart, type CartItem } from '@ohaaaa/shared';
 
 import { createClient } from '@/lib/supabase/server';
+import { isAffiliateOnly } from '@/lib/env';
 
 export async function POST(request: Request) {
+  /*
+   * ORTAKLIK KIPINDE SIPARIS UC NOKTASI YOK.
+   *
+   * Sepet arayuzu gizlendi diye uc nokta kapanmaz: `/api/checkout`'a
+   * dogrudan POST atilabilirdi. Gorunurluk bir savunma degildir.
+   *
+   * 404 donuyoruz, 403 degil: 403 "burada bir sey var" der ve kapatilmis
+   * yuzeyin varligini dogrular. Bu kipte uc nokta kavramsal olarak yok.
+   */
+  if (isAffiliateOnly) {
+    return NextResponse.json(
+      { error: { code: 'not_found', message: 'Bulunamadı.' } },
+      { status: 404 },
+    );
+  }
+
   let payload: unknown;
 
   try {

@@ -19,7 +19,7 @@
 import type { MetadataRoute } from 'next';
 
 import { getCategories, getVendors, searchProducts } from '@/data/catalog';
-import { siteUrl } from '@/lib/env';
+import { isAffiliateOnly, siteUrl } from '@/lib/env';
 
 /** Tek haritaya sığdırılacak en fazla ürün. */
 const MAX_PRODUCTS = 45_000;
@@ -32,6 +32,40 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // --- Statik sayfalar -------------------------------------------------------
   // priority değerleri göreli önemi bildirir; Google bunu bir ipucu olarak
   // kullanır, emir olarak değil.
+  /*
+   * Ortaklik kipinde pazar yeri adresleri haritaya GIRMEZ. Sayfalarin
+   * kendisi 404 donuyor; haritada durmalari arama motoruna olmayan bir
+   * sayfayi bildirmek olurdu.
+   */
+  const marketplacePages: MetadataRoute.Sitemap = isAffiliateOnly
+    ? []
+    : [
+        {
+          url: `${siteUrl}/tasoron`,
+          lastModified: now,
+          changeFrequency: 'monthly',
+          priority: 0.6,
+        },
+        {
+          url: `${siteUrl}/tasoron/api`,
+          lastModified: now,
+          changeFrequency: 'monthly',
+          priority: 0.4,
+        },
+        {
+          url: `${siteUrl}/tasoron/basvuru`,
+          lastModified: now,
+          changeFrequency: 'monthly',
+          priority: 0.5,
+        },
+        {
+          url: `${siteUrl}/tasoron/marka`,
+          lastModified: now,
+          changeFrequency: 'monthly',
+          priority: 0.4,
+        },
+      ];
+
   const staticPages: MetadataRoute.Sitemap = [
     { url: `${siteUrl}/`, lastModified: now, changeFrequency: 'daily', priority: 1 },
     { url: `${siteUrl}/hakkimizda`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
@@ -45,24 +79,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'yearly',
       priority: 0.4,
     },
-    { url: `${siteUrl}/tasoron`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
     { url: `${siteUrl}/bot`, lastModified: now, changeFrequency: 'yearly', priority: 0.2 },
-    { url: `${siteUrl}/tasoron/api`, lastModified: now, changeFrequency: 'monthly', priority: 0.4 },
-    {
-      url: `${siteUrl}/tasoron/basvuru`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.5,
-    },
-    /* Marka kiti sayfası: satıcı adayının başvurudan ÖNCE aradığı sayfa
-       ("karşılığında ne veriyorum?"). Yalnızca site içinden bağlantılıydı,
-       arama motoruna hiç bildirilmiyordu. */
-    {
-      url: `${siteUrl}/tasoron/marka`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.4,
-    },
     /* Yasal sayfa: diğer üçü (gizlilik, koşullar, ortaklık) listedeyken
        KVKK aydınlatma metni atlanmıştı. */
     { url: `${siteUrl}/kvkk`, lastModified: now, changeFrequency: 'yearly', priority: 0.3 },
@@ -125,7 +142,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: 0.6,
       }));
 
-    return [...staticPages, ...categoryPages, ...vendorPages, ...productPages];
+    return [...staticPages, ...marketplacePages, ...categoryPages, ...vendorPages, ...productPages];
   } catch (error) {
     // Katalog okunamazsa BOŞ harita döndürmek, Google'a "sitede sayfa yok"
     // demektir. Statik sayfalarla dönmek çok daha güvenlidir.
@@ -137,6 +154,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       }),
     );
 
-    return staticPages;
+    return [...staticPages, ...marketplacePages];
   }
 }

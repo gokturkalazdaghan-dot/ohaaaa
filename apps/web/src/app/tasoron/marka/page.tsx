@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { ContentPage } from '@/components/ContentPage';
+import { requireMarketplaceMode } from '@/lib/commerceGuard';
 
 export const metadata: Metadata = {
   title: 'Marka kullanım kılavuzu',
@@ -56,6 +57,8 @@ const RULES_NO = [
 ];
 
 export default function BrandKitPage() {
+  requireMarketplaceMode();
+
   return (
     <ContentPage
       title="Marka Kullanım Kılavuzu"
