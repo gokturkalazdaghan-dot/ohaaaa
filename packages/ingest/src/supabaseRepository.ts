@@ -20,6 +20,39 @@ const UPSERT_BATCH_SIZE = 500;
 
 export function createSupabaseRepository(supabase: SupabaseClient): IngestRepository {
   return {
+    /**
+     * Feed kategori slug'larini MEVCUT kategori kayitlarina cozer.
+     *
+     * `categories.slug` citext'tir: karsilastirma zaten buyuk/kucuk harf
+     * duyarsiz. Yine de donen harita `categorySlugKey` ile ayni bicimde
+     * anahtarlanir, boylece cagiran taraf DB'nin yazim bicimine bagli
+     * kalmaz.
+     *
+     * Yalnizca ETKIN kategoriler cozulur: pasife alinmis bir kategoriye
+     * urun yazmak, vitrinde gorunmeyen ama siniflandirilmis sayilan
+     * satirlar uretirdi -- olcumu bozan sessiz bir ara durum.
+     */
+    async findCategoryIdsBySlug(slugs) {
+      const result = new Map<string, string>();
+      if (slugs.length === 0) return result;
+
+      for (const batch of chunk(slugs, 500)) {
+        const { data, error } = await supabase
+          .from('categories')
+          .select('id, slug')
+          .eq('is_active', true)
+          .in('slug', batch);
+
+        if (error) throw new Error(`Kategoriler okunamadi: ${error.message}`);
+
+        for (const row of data ?? []) {
+          if (row.slug) result.set(String(row.slug).toLowerCase(), String(row.id));
+        }
+      }
+
+      return result;
+    },
+
     async findGroupsByGtin(gtins) {
       const result = new Map<string, string>();
       if (gtins.length === 0) return result;
@@ -88,6 +121,9 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
         brand: group.brand,
         gtin: group.gtin,
         image_url: group.imageUrl,
+        // Kanonik urunun kategorisi. Cozulemediyse null: vitrin kartinda
+        // gorunmez ama urun kaybolmaz ve sonradan siniflandirilabilir.
+        category_id: group.categoryId,
       }));
 
       for (const batch of chunk(rows, UPSERT_BATCH_SIZE)) {
@@ -133,6 +169,11 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
         merchant_id: merchantId,
         source_id: sourceId,
         group_id: row.groupId,
+        // E5: burasi eksikti. Feed'in kategori degeri okunuyor ve parmak
+        // izine giriyordu ama HICBIR ZAMAN yazilmiyordu; `/kategori/*`
+        // sayfalari `category_id` uzerinden filtreledigi icin basarili bir
+        // alimin ardindan bile bos kaliyorlardi.
+        category_id: row.categoryId,
         external_id: row.externalId,
         title: row.title,
         description: row.description,

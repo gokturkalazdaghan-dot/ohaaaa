@@ -14,7 +14,27 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { safeInternalPath } from '@ohaaaa/shared';
+/*
+ * DERIN ICE AKTARIM (deep import) — BARREL DEGIL.
+ *
+ * Onceki hal `from '@ohaaaa/shared'` idi. O barrel (`src/index.ts`) paketin
+ * TAMAMINI yeniden disa aktariyor; icinde `dataengine/delta.ts` de var ve o
+ * dosya `node:crypto` cagiriyor. Middleware Edge runtime'da calistigi icin
+ * derleme her seferinde su uyariyi veriyordu:
+ *
+ *   A Node.js module is loaded ('node:crypto') which is not supported in
+ *   the Edge Runtime.
+ *
+ * `createHash` middleware yolunda HIC cagrilmiyor -- yani calisan bir hata
+ * degildi. Ama uyariyi bastirmak ya da gormezden gelmek, gercekten Edge'de
+ * calisamayacak bir sey eklendiginde onu da sessizlestirirdi.
+ *
+ * `safeInternalPath` `src/types.ts` icinde ve o dosyanin tek ice aktarimi
+ * `import type` -- yani derlemede tamamen siliniyor. Derin ice aktarim
+ * boylece calisma zamaninda HICBIR bagimlilik getirmiyor. Runtime,
+ * davranis ve guvenlik degismedi; yalnizca paket sinirlari daraldi.
+ */
+import { safeInternalPath } from '@ohaaaa/shared/types';
 
 /**
  * İçerik Güvenlik Politikası (CSP).

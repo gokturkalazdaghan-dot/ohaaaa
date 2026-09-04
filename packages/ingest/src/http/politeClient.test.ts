@@ -499,3 +499,46 @@ test('çağıran user-agent başlığını EZEMEZ', async () => {
 
   assert.equal(gorulen['user-agent'], UA);
 });
+
+/*
+ * ZAMAN AŞIMI
+ *
+ * `timeoutMs` yapılandırması vardı ve iki yerde uygulanıyordu, ama hiçbir test
+ * onu sınamıyordu. Yanıt vermeyen bir sağlayıcı, testsiz bir zaman aşımıyla
+ * alım turunu süresiz askıda bırakabilirdi: worker kirası dolar, iş yetim
+ * kalır, kaynak saatlerce "çalışıyor" görünürdü.
+ *
+ * Burada GERÇEK setTimeout kullanılır (withTimeout sahte saati kullanmaz),
+ * bu yüzden süre kasten çok kısa tutulmuştur.
+ */
+test('yanıt vermeyen sunucuda istek zaman aşımına uğrar', async () => {
+  const clock = fakeClock();
+
+  // robots.txt çözülür (404 = serbest), asıl istek ASILI KALIR.
+  const impl = async (url: string) => {
+    if (url.endsWith('/robots.txt')) {
+      return new Response('', { status: 404 });
+    }
+    return new Promise<Response>(() => {
+      /* bilerek hiç çözülmüyor */
+    });
+  };
+
+  const client = createPoliteClient({
+    userAgent: UA,
+    minDelayMs: 0,
+    timeoutMs: 25,
+    maxRetries: 0,
+    circuitBreakerThreshold: 5,
+    fetchImpl: impl as unknown as typeof fetch,
+    now: clock.now,
+    sleep: clock.sleep,
+  });
+
+  await assert.rejects(
+    () => client.get('https://yavas.example/feed.csv'),
+    (error: unknown) =>
+      error instanceof Error && /[Zz]aman aşımı/.test(error.message),
+    'zaman aşımı hatası fırlatılmalı, istek süresiz beklememeli',
+  );
+});

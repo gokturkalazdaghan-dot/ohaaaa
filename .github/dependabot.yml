@@ -1,0 +1,39 @@
+# ============================================================================
+# Bagimlilik ve is akisi guncellemeleri
+# ----------------------------------------------------------------------------
+# NEDEN `github-actions` EKOSISTEMI DE VAR?
+# Is akislari `actions/checkout@v4` gibi DEGISEBILIR etiketler kullaniyor.
+# `v4` bir surum degil bir TAKMA AD: bakimci her yeni yayinda onu tasir.
+# Yani bugun denetledigimiz kod, yarin haber vermeden baska bir kod olabilir.
+#
+# Guvenli hal, eylemleri commit SHA'sina sabitlemektir. SHA sabitlemenin
+# bilinen bedeli ise guncellemelerin durmasidir: sabitlenmis bir SHA, kritik
+# bir yama ciktiginda da eski kalir. Dependabot tam olarak bu bedeli oder --
+# yeni surum ciktiginda SHA'yi guncelleyen bir PR acar ve degisiklik insan
+# incelemesinden gecer.
+#
+# Bu dosya olmadan SHA sabitleme, guvenligi artirirken bakimi kilitleyen bir
+# takas olurdu. Birlikte anlamlilar.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'ci'
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'deps'
+    # Guvenlik yamalari haricinde surekli surum PR'i acmasin diye yalnizca
+    # ana surum yukseltmeleri gruplanir; gunluk gurultuyu azaltir.
+    groups:
+      minor-ve-yama:
+        update-types: ['minor', 'patch']

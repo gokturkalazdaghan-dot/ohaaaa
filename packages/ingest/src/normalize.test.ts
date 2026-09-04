@@ -199,3 +199,43 @@ test('geçersiz uzunluktaki GTIN reddedilir', () => {
   assert.equal(normalizeGtin(''), null);
   assert.equal(normalizeGtin(null), null);
 });
+
+/*
+ * ÇOK PARA BİRİMLİ FEED'LER
+ *
+ * Ohaaaa global bir platformdur ve ortaklık ağları tek bir feed'de birden çok
+ * para birimi taşıyabilir. Kaynağın varsayılanı yalnızca feed sessiz kaldığında
+ * geçerlidir; feed kendi para birimini söylüyorsa O geçerlidir.
+ *
+ * Ters davranış sessiz ve pahalı olurdu: 100 EUR'luk bir ürün 100 TRY sanılıp
+ * karşılaştırmanın tepesine otururdu.
+ */
+test('feed kendi para birimini söylüyorsa kaynağın varsayılanını EZER', () => {
+  const mapping: FieldMapping = { ...MAPPING, currency: 'cur' };
+
+  const { offers } = normalizeRecords(
+    [record({ cur: 'eur' })],
+    mapping,
+    OPTIONS, // defaultCurrency: TRY
+  );
+
+  assert.equal(offers[0]?.currency, 'EUR', 'feed değeri kazanmalı');
+  assert.equal(offers[0]?.priceCents, 129_990, 'tutar ÇEVRİLMEZ, olduğu gibi kalır');
+});
+
+test('feed para birimi taşımıyorsa kaynağın para birimi kullanılır', () => {
+  const mapping: FieldMapping = { ...MAPPING, currency: 'cur' };
+
+  // Alan haritada tanımlı ama kayıtta yok.
+  const { offers } = normalizeRecords([record()], mapping, OPTIONS);
+
+  assert.equal(offers[0]?.currency, 'TRY');
+});
+
+test('para birimi büyük harfe normalize edilir ve boşluk kırpılır', () => {
+  const mapping: FieldMapping = { ...MAPPING, currency: 'cur' };
+
+  const { offers } = normalizeRecords([record({ cur: '  gbp  ' })], mapping, OPTIONS);
+
+  assert.equal(offers[0]?.currency, 'GBP');
+});

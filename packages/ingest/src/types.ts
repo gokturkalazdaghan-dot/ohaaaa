@@ -119,6 +119,15 @@ export interface IngestSummary {
    */
   itemsUnchanged: number;
   /**
+   * Kategorisi COZULEMEDIGI icin `category_id` bos yazilan kalemler.
+   *
+   * Sifirdan buyuk bir deger arizanin kendisi degildir -- feed'in kategori
+   * sozlugu bizimkiyle ortusmuyor olabilir. Ama SESSIZ kalmasi arizadir:
+   * bu sayi olmadan "ingest basarili" ile "urunler hicbir kategori
+   * sayfasinda gorunmuyor" ayni gorunur. Tam da E5 boyle kacmisti.
+   */
+  itemsUnclassified: number;
+  /**
    * Kaynakta artık bulunmayan kalemler.
    *
    * `snapshotComplete` false iken bu HER ZAMAN 0'dır -- ve o sıfır

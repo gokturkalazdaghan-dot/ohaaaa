@@ -49,7 +49,13 @@ const CSV = [
 /** Alım deposu — dış sınır. */
 function ingestRepository() {
   const calls = {
-    upserted: [] as Array<NormalizedOffer & { groupId: string | null; fingerprint: string }>,
+    upserted: [] as Array<
+      NormalizedOffer & {
+        groupId: string | null;
+        fingerprint: string;
+        categoryId: string | null;
+      }
+    >,
     refreshPlans: [] as Array<{ sourceId: string; nextRefreshAt: Date; freshnessClass: string }>,
     finished: [] as IngestSummary[],
   };
@@ -59,6 +65,9 @@ function ingestRepository() {
       return new Map<string, string>();
     },
     async touchSeen() {},
+    async findCategoryIdsBySlug() {
+      return new Map<string, string>();
+    },
     async findGroupsByGtin() {
       return new Map();
     },

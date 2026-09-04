@@ -15,7 +15,7 @@
  * günlükleri ayrıdır ve tek kişilik bir operasyonda gözetimi çok daha kolaydır.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 import { runWorkerOnce } from '@ohaaaa/shared';
 
@@ -186,7 +186,7 @@ async function main(): Promise<void> {
   });
 
   const repository = options.dryRun
-    ? dryRunRepository()
+    ? dryRunRepository(supabase)
     : createSupabaseRepository(supabase);
 
   const summaries: IngestSummary[] = [];
@@ -233,8 +233,36 @@ function statusIcon(status: IngestSummary['status']): string {
 }
 
 /** Yazma yapmayan sahte depo — alan haritası doğrulamak için. */
-function dryRunRepository() {
+function dryRunRepository(supabase: SupabaseClient) {
   return {
+    /*
+     * Kategori cozumlemesi kuru calismada da GERCEK katalogtan okunur.
+     *
+     * Bu bir SELECT; kuru calismanin "hicbir sey yazma" sozunu bozmaz.
+     * Bos harita dondurmek daha kolay olurdu ama operatore YALAN soylerdi:
+     * her kalem "siniflandirilamadi" gorunur ve gercek bir feed'i baglamadan
+     * once "kac urun kategori sayfalarinda gorunecek" sorusu -- kuru
+     * calismanin cevaplamasi gereken en onemli sorulardan biri --
+     * cevapsiz kalirdi.
+     */
+    async findCategoryIdsBySlug(slugs: string[]) {
+      const result = new Map<string, string>();
+      if (slugs.length === 0) return result;
+
+      const { data, error } = await supabase
+        .from('categories')
+        .select('id, slug')
+        .eq('is_active', true)
+        .in('slug', slugs);
+
+      if (error) throw new Error(`Kategoriler okunamadi: ${error.message}`);
+
+      for (const row of data ?? []) {
+        if (row.slug) result.set(String(row.slug).toLowerCase(), String(row.id));
+      }
+
+      return result;
+    },
     /*
      * Kuru çalışmada BOŞ harita dönüyor ve bu kasıtlı: her kalem NEW
      * görünür, yani operatör "bu feed'de ne var" sorusunun tam cevabını

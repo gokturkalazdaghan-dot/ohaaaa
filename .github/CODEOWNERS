@@ -1,0 +1,36 @@
+# ============================================================================
+# Kod sahipligi
+# ----------------------------------------------------------------------------
+# Bu dosya TEK BASINA bir kapi DEGILDIR. GitHub, CODEOWNERS'i yalnizca
+# "Require review from Code Owners" branch koruma kurali acikken zorunlu
+# kilar; aksi halde sadece inceleme talebi olusturur.
+#
+# Yine de simdi ekleniyor: koruma acildigi anda hangi yollarin insan
+# incelemesi isteyecegi burada YAZILI olsun. Sonradan yazilan bir liste,
+# korumayi acan kisinin o an akil ettikleriyle sinirli kalir.
+#
+# Asagidaki yollar para ve guvenlik tasiyor; hepsi ayni sahibe bagli ama
+# ayri satirlarda duruyorlar ki ekip buyudugunde tek tek devredilebilsinler.
+# ============================================================================
+
+# Varsayilan
+*                                   @gokturkalazdaghan-dot
+
+# --- Para yolu --------------------------------------------------------------
+/apps/web/src/app/git/              @gokturkalazdaghan-dot
+/apps/web/src/app/api/postback/     @gokturkalazdaghan-dot
+/packages/shared/src/affiliate.ts   @gokturkalazdaghan-dot
+/packages/shared/src/providers/     @gokturkalazdaghan-dot
+
+# --- Yetki ve veritabani ----------------------------------------------------
+/supabase/migrations/               @gokturkalazdaghan-dot
+/supabase/tests/                    @gokturkalazdaghan-dot
+/apps/web/src/middleware.ts         @gokturkalazdaghan-dot
+/apps/web/src/lib/supabase/         @gokturkalazdaghan-dot
+
+# --- Dagitim ve sir yuzeyi --------------------------------------------------
+/.github/workflows/                 @gokturkalazdaghan-dot
+/.github/CODEOWNERS                 @gokturkalazdaghan-dot
+/apps/web/next.config.ts            @gokturkalazdaghan-dot
+/apps/web/vercel.json               @gokturkalazdaghan-dot
+/scripts/verify-secrets.mjs         @gokturkalazdaghan-dot
