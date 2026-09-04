@@ -189,6 +189,74 @@ check(
   micBox ? `${Math.round(micBox.width)}x${Math.round(micBox.height)}` : 'buton yok',
 );
 
+// --- Marka kilidi: Ohaaaa.com ---------------------------------------------
+/*
+ * NEDEN BU KONTROL BURADA
+ *
+ * `verify-brand.mjs` kaynak dosyalarda "Ohaaaa" dizgisini sayar. Ama arma
+ * her harfi ayrı `<span>` olarak çizer -- kaynakta böyle bir dizgi geçmez,
+ * yani yazım denetçisi armayı GÖREMEZ. Rampa dizisinden bir eleman düşse
+ * ya da eklense hiçbir denetçi uyarmaz; site sessizce eksik veya fazla
+ * a'lı bir marka adı yayınlar.
+ *
+ * Bu yüzden ÇİZİLEN metni okuyoruz. Ayrıca:
+ *  - Eski `OHA` mobil kısaltması geri gelirse yakalanır.
+ *  - Dört a'nın kademeli büyümesi gerçekten ölçülür (punto dizisi artan mı).
+ *  - "Turuncu zemin, beyaz yazı" kuralı hesaplanmış stilden doğrulanır.
+ */
+for (const [genislik, etiket] of [[320, 'en dar'], [390, 'mobil'], [1280, 'masaüstü']]) {
+  await page.setViewportSize({ width: genislik, height: 900 });
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+
+  const arma = page.locator('header a[aria-label*="Ohaaaa"]').first();
+  const metin = ((await arma.textContent()) ?? '').replace(/\s+/g, '');
+  check(metin === 'Ohaaaa.com', `Arma ${etiket} ekranda "Ohaaaa.com" yazıyor`, `okunan="${metin}"`);
+  check(!/OHA/.test(metin), `Arma ${etiket} ekranda OHA kısaltması göstermiyor`, `okunan="${metin}"`);
+
+  // Dört a soldan sağa BÜYÜMELİ. Eşitlik de hata: kademe kaybolmuş demektir.
+  const puntolar = await arma.evaluate((el) =>
+    [...el.querySelectorAll('span > span')]
+      .filter((s) => s.textContent === 'a')
+      .map((s) => parseFloat(getComputedStyle(s).fontSize)),
+  );
+  const artan = puntolar.length === 4 && puntolar.every((v, i) => i === 0 || v > puntolar[i - 1]);
+  check(artan, `Arma ${etiket} ekranda dört a kademeli büyüyor`, `puntolar=[${puntolar.join(', ')}]`);
+
+  /*
+   * `.com` GÖRÜLEBİLİR PUNTODA MI?
+   *
+   * İlk uygulamada `.com` oranı büyük format armadan (0,42em) aynen
+   * alınmıştı; başlıkta 6,7px'e düşüyor ve okunmuyordu. Marka adının
+   * `.com`'suz görünmesi kural ihlali olduğu için bu bir yazım hatası
+   * kadar ciddi. Eşik 8px: altına düşerse punto basamakları bozulmuş
+   * demektir.
+   */
+  const comPunto = await arma.evaluate((el) => {
+    const s = [...el.querySelectorAll('span > span')];
+    const com = s.find((x) => x.textContent === '.com');
+    return com ? parseFloat(getComputedStyle(com).fontSize) : 0;
+  });
+  check(comPunto >= 8, `Arma ${etiket} ekranda ".com" okunabilir puntoda`, `${comPunto.toFixed(1)}px`);
+
+  // Arma satırı taşırmamalı: eski tasarımda mobilde kısaltmaya sebep olan kısıt.
+  const tasma = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  check(tasma <= 0, `Arma ${etiket} ekranda yatay taşma yaratmıyor`, `${tasma}px taşma`);
+
+  const renkler = await arma.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { zemin: s.backgroundColor, yazi: s.color };
+  });
+  check(
+    renkler.zemin === 'rgb(184, 79, 20)' && renkler.yazi === 'rgb(255, 255, 255)',
+    `Arma ${etiket} ekranda turuncu zemin + beyaz yazı`,
+    `zemin=${renkler.zemin} yazı=${renkler.yazi}`,
+  );
+}
+
+await page.setViewportSize({ width: 390, height: 844 });
+
 // --- Mobilde filtreler kapalı başlamalı ------------------------------------
 /*
  * Filtreler açık başladığında kategori listesi ve fiyat kutuları ilk ekranın

@@ -3,99 +3,119 @@
 import Link from 'next/link';
 
 /**
- * Ohaaaa arması — kelime işareti ve OHA monogramı.
+ * Ohaaaa.com arma kilidi.
  *
- * İKİ TASARIM KURALI, İKİSİ DE ÖLÇÜLEREK BULUNDU
+ * RESMİ MARKA ADI TEK: `Ohaaaa.com`. Kısaltılmaz, `.com`'suz yazılmaz.
+ * Eskiden dar ekranda `OHA` monogramı çiziliyordu; o kısaltma kaldırıldı.
+ * Mobil ile masaüstü artık AYNI kelime işaretini gösterir, yalnızca punto
+ * farklıdır.
  *
- * 1) OH BİRLEŞİK. O ile H bağımsız iki harf gibi durmamalı. Bu, negatif
- *    kern ile sağlanıyor: H'nin sol dikmesi O'nun sağ gövdesinin içine
- *    giriyor. Değer tahminle seçilmedi -- dört kademe (-0,10 / -0,15 /
- *    -0,20 / -0,25) 14px'ten 52px'e kadar ölçüldü:
- *      -0,10  harfler ayrı duruyor, bağ yok
- *      -0,15  değiyor ama kaynaşmıyor
- *      -0,20  gerçekten kaynaşıyor ve 14px'te hâlâ "OH" okunuyor  ← seçilen
- *      -0,25  O kesilmeye başlıyor, "Œ" gibi okunuyor
+ * ÜÇ TASARIM KURALI
  *
- * 2) DÖRT A SOLDAN SAĞA BÜYÜR. Sesin yükselmesini yazıya çeviriyor.
- *    Rampa yine ölçülerek seçildi: daha yumuşak bir dizi (.82 .90 1.0 1.10)
- *    fark edilmiyordu, daha sert olanı (.64 .82 1.0 1.28) çocuk markası
- *    hissi veriyordu. Seçilen dizi belirgin ama kontrollü.
+ * 1) TURUNCU ZEMİN, BEYAZ YAZI. Arma bir levha olarak çizilir. Zemin
+ *    `--brand-cta` (#b84f14) -- globals.css'te zaten "DOLGU olarak
+ *    kullanılan turuncu; üstünde beyaz yazı" diye tanımlı token bu. Beyaza
+ *    karşı ölçülen kontrast 5,04:1, yani AA sınırının üstünde. Metin rengi
+ *    olarak kullanılan `--brand` DEĞİL: o açık zeminde okunmak için koyu
+ *    seçilmiş, dolgu üstünde beyazla yeterli kontrast vermiyor.
  *
- * NEDEN CANLI METİN, ÇİZİM DEĞİL?
- * Önce geometrik primitiflerle (daire + dikdörtgen) çizildi ve ölçüldü:
- * üç harf ağır konturlarla üst üste binince "OHA" değil "GIVA" gibi
- * okunuyordu. Gerçek harf formları 16px'te bile doğru okunuyor. Ayrıca
- * canlı metin kullanıcının yazı tipi ayarıyla ölçekleniyor.
+ * 2) O + h BİRLEŞİK. Negatif kern ile h'nin sol dikmesi O'nun gövdesine
+ *    yaklaşır. Değer ölçülerek bulundu: ilk denemede -0,20em kullanıldı
+ *    (eski büyük harfli `OH` için ölçülmüş değer) ama küçük harfli `h` ile
+ *    300px'te "Oh" tek bir lekeye dönüştü. -0,12em'de harfler değiyor,
+ *    bağ kuruluyor ve 14px'e kadar "Oh" okunmaya devam ediyor.
  *
- * Yazı tipi Outfit — favicon ve arma da aynı harflerle çizildiği için
- * başlık ile sekme ikonu aynı dili konuşuyor.
+ * 3) DÖRT KÜÇÜK a KADEMELİ BÜYÜR. İlk a normal punto, son a görsel zirve.
+ *    Rampa uydurulmadı: eski armadaki ölçülmüş [0,70 0,85 1,00 1,20] dizisi
+ *    1/0,70 ile ölçeklendi. Oranlar korunuyor, dizi "ilk a normal" olacak
+ *    şekilde 1,00'den başlıyor.
+ *
+ * NEDEN CANLI METİN, GÖRSEL DEĞİL
+ * Kullanıcının yazı tipi boyutu ayarıyla ölçekleniyor, tema/piksel
+ * yoğunluğundan bağımsız keskin kalıyor ve ek ağ isteği getirmiyor.
+ *
+ * Buradaki sayılar `scripts/verify-brand.mjs` ile korunuyor: harf dizisi
+ * ayrı `<span>`'lere bölündüğü için kaynakta "Ohaaaa" dizgisi geçmez,
+ * yani yazım denetçisi a sayısını göremez. O yüzden `verify-browser.mjs`
+ * ÇİZİLEN metni okuyup `Ohaaaa.com` olduğunu ayrıca doğruluyor.
  */
+
+/** O → h kerni. h'nin dikmesi O'nun gövdesine girer. */
+const OH_KERN = -0.12;
+
+/** h → ilk a kerni. h iki yandan da bağlı kalsın diye. */
+const HA_KERN = -0.045;
 
 /**
- * H'nin İKİ YANI DA bağlı.
- *
- * O ile H arasındaki kern (-0,20em) daha önce ölçülmüştü. Ama H'nin sağ
- * tarafı açıkta kalıyordu: O ile H birleşik, A ise ayrı duruyordu. H'nin
- * ortada olması, iki yandan da bağlı olmasını gerektiriyor -- aksi halde
- * "birleşik OH + ayrı AAAA" gibi iki parça okunuyor.
- *
- * H→A kerni de aynı yöntemle ölçüldü (14px–52px, dört kademe):
- *    0      H ve A ayrı duruyor
- *   -0,06   değiyor
- *   -0,12   birleşiyor, 14px'te hâlâ okunuyor          ← seçilen
- *   -0,18   "HA" tek bir şekle dönüşüyor, okunurluk kayboluyor
+ * Dört a'nın göreli puntosu — soldan sağa büyür, son a zirve.
+ * Eski [0,70 0,85 1,00 1,20] rampasının 1/0,70 ile ölçeklenmişi.
  */
-const OH_KERN = '-0.2em';
-const HA_KERN = '-0.12em';
-
-/** Dört A'nın göreli boyutu — soldan sağa büyür. */
-const A_RAMPA = [0.7, 0.85, 1.0, 1.2] as const;
+const A_RAMPA = [1.0, 1.21, 1.43, 1.71] as const;
 
 /**
- * OHA monogramı.
+ * a'lar arası düzeltme (taban em cinsinden).
  *
- * Favicon, mobil başlık, uygulama ikonu ve sosyal avatar için. Tek parça
- * bir marka işareti gibi çalışması, OH birleşmesinden geliyor: üç harf
- * yan yana dizilmiş gibi değil, bağlı bir işaret gibi okunuyor.
+ * Harf büyüdükçe kendi yan boşlukları da büyür; düzeltme olmadan son
+ * çiftin arası ilk çiftinkinden gözle görülür şekilde açılıyor. Negatif
+ * düzeltme ritmi eşitliyor.
  */
-export function Monogram({ className = '' }: { className?: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      /*
-        `display` SINIFI BURADA YOK ve bu kasıtlı.
-        Önce base sınıfta `inline-flex` vardı; çağıran taraf `hidden`
-        geçtiğinde ikisi aynı özgüllükte çakışıyor ve stil sırasına göre
-        `inline-flex` kazanıyordu. Sonuç mobil başlıkta "OHAAAAOHA" idi --
-        kelime ve monogram aynı anda çiziliyordu (ölçüldü). Display kararı
-        artık tek yerde: çağıran tarafta.
-      */
-      className={`items-baseline font-bold leading-none tracking-tight ${className}`}
-      style={{ fontFamily: 'var(--font-outfit), sans-serif' }}
-    >
-      <span style={{ letterSpacing: OH_KERN }}>O</span>
-      <span style={{ letterSpacing: HA_KERN }}>H</span>
-      <span>A</span>
-    </span>
-  );
+const AA_DUZELTME = -0.02;
+
+/**
+ * `.com` puntosu ve ondan önceki boşluk (taban em cinsinden).
+ *
+ * Oran 0,42 ile başlamıştı (büyük format armada dengeli duruyordu) ama
+ * başlıkta ÖLÇÜLDÜĞÜNDE `.com` 6,7px'e düşüyor ve okunmuyordu: arma
+ * "Ohaaaa" artı bir leke gibi görünüyordu. 0,52'de başlıkta 11,2px'e
+ * çıkıyor ve okunuyor; büyük formatta da hâlâ kelime işaretinin açıkça
+ * altında kalıyor. Tek oran her iki ölçekte de geçerli, bu yüzden basılı
+ * arma ile ekrandaki arma AYNI kilidi kullanıyor.
+ */
+const COM_ORAN = 0.52;
+const COM_BOSLUK = 0.075;
+
+/**
+ * `letter-spacing` yazıldığı elemanın KENDİ puntosuyla ölçeklenir.
+ * Bizim istediğimiz boşluklar ise taban em cinsinden tanımlı. Bu yüzden
+ * her değer, yazıldığı harfin kendi oranına bölünerek çevriliyor —
+ * aksi halde büyüyen a'larda boşluk da büyür ve ritim bozulur.
+ */
+function kern(tabanEm: number, harfOrani: number): string {
+  return `${(tabanEm / harfOrani).toFixed(4)}em`;
 }
 
-/** Tam kelime işareti: OHAAAA. */
+/**
+ * Kelime işareti: Ohaaaa.com.
+ *
+ * Harfler `aria-hidden`: ekran okuyucu tek tek okursa "O, h, a, a, a, a,
+ * nokta, c, o, m" duyulur. Erişilebilir ad çağıran tarafta (bağlantıda).
+ */
 export function Wordmark({ className = '' }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
-      /* `display` sınıfı yok — gerekçe Monogram'da yazılı. */
-      className={`items-baseline font-bold leading-none tracking-tight ${className}`}
+      /*
+        `display` SINIFI BURADA YOK ve bu kasıtlı. Base sınıfta `inline-flex`
+        varken çağıran taraf `hidden` geçtiğinde ikisi aynı özgüllükte
+        çakışıyor ve stil sırasına göre `inline-flex` kazanıyordu. Display
+        kararı tek yerde: çağıran tarafta.
+      */
+      className={`items-baseline font-bold leading-none ${className}`}
       style={{ fontFamily: 'var(--font-outfit), sans-serif' }}
     >
-      <span style={{ letterSpacing: OH_KERN }}>O</span>
-      <span style={{ letterSpacing: HA_KERN }}>H</span>
-      {A_RAMPA.map((oran, i) => (
-        <span key={i} style={{ fontSize: `${oran}em` }}>
-          A
-        </span>
-      ))}
+      <span style={{ letterSpacing: kern(OH_KERN, 1) }}>O</span>
+      <span style={{ letterSpacing: kern(HA_KERN, 1) }}>h</span>
+      {A_RAMPA.map((oran, i) => {
+        const sonraki = A_RAMPA[i + 1];
+        // Son a'dan sonra gelen `.com`, diğerlerinden sonra bir sonraki a.
+        const bosluk = sonraki === undefined ? COM_BOSLUK : AA_DUZELTME * sonraki;
+        return (
+          <span key={i} style={{ fontSize: `${oran}em`, letterSpacing: kern(bosluk, oran) }}>
+            a
+          </span>
+        );
+      })}
+      <span style={{ fontSize: `${COM_ORAN}em` }}>.com</span>
     </span>
   );
 }
@@ -103,26 +123,29 @@ export function Wordmark({ className = '' }: { className?: string }) {
 /**
  * Başlıktaki arma kilidi.
  *
- * Masaüstünde tam kelime, dar ekranda yalnızca monogram: 390px'lik bir
- * telefonda altı harflik kelime, aramanın ve sepetin yerini yiyordu.
+ * Erişilebilir ad BAĞLANTIDA çünkü harfler `aria-hidden`.
  *
- * Erişilebilir ad BAĞLANTIDA; harfler `aria-hidden` çünkü ekran okuyucu
- * onları tek tek okursa "O, H, A, A, A, A" duyulur.
+ * PUNTO BASAMAKLARI ÖLÇÜLEREK SEÇİLDİ, göz kararı değil. Dar ekranda üst
+ * satırda arma ile birlikte hesap, favori ve (pazar yeri modunda) sepet
+ * düğmeleri var. Gerçek tarayıcıda üç genişlikte taşma ölçüldü:
+ *
+ *   320px ekran, 1,00rem -> levha 109px, taşma 0        ← seçilen
+ *   320px ekran, 1,15rem -> levha 122px, taşma 3px      (sığmıyor)
+ *   360px ekran, 1,15rem -> levha 122px, taşma 0        ← seçilen
+ *   640px+     , 1,35rem -> levha 144px, `.com` 11,2px  ← seçilen
+ *
+ * Yani en dar telefonda arma küçülür ama kısalmaz: marka adı her ekranda
+ * tam hâliyle `Ohaaaa.com` kalır.
  */
 export function Logo({ className = '' }: { className?: string }) {
   return (
     <Link
       href="/"
-      aria-label="Ohaaaa ana sayfa"
-      /*
-        ANA KOMBİNASYON: turuncu arma, bej zemin. Koyu bir arma da geçerli
-        bir varyant ama birincil olan bu -- arma markanın tanınma noktası ve
-        turuncu, Ohaaaa'yı bir bakışta ayırt eden şey.
-      */
-      className={`group inline-flex items-center text-brand transition-opacity hover:opacity-80 ${className}`}
+      aria-label="Ohaaaa.com ana sayfa"
+      className={`inline-flex shrink-0 items-center rounded-lg px-2.5 py-1.5 text-white transition-opacity hover:opacity-90 sm:px-3 ${className}`}
+      style={{ backgroundColor: 'var(--brand-cta)' }}
     >
-      <Wordmark className="hidden text-[1.35rem] sm:inline-flex" />
-      <Monogram className="inline-flex text-[1.35rem] sm:hidden" />
+      <Wordmark className="inline-flex text-[1rem] min-[360px]:text-[1.15rem] sm:text-[1.35rem]" />
     </Link>
   );
 }
