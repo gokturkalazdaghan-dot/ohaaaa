@@ -4,7 +4,7 @@ select plan(16);
 
 insert into public.merchants
   (slug, display_name, homepage_url, network, status, deeplink_template, country_code)
-values ('kuyruk-m', 'Kuyruk Magaza', 'https://kuy.gecersiz', 'manual', 'active',
+values ('kuyruk-m', 'Kuyruk Magaza', 'https://kuy.gecersiz', 'direct', 'active',
         'https://kuy.gecersiz/g?u={url}', 'TR');
 
 insert into public.sources (merchant_id, slug, name, kind, endpoint_url, market, currency)

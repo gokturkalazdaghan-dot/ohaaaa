@@ -29,7 +29,7 @@ select is(
 insert into public.merchants
   (slug, display_name, homepage_url, network, status, deeplink_template, country_code)
 values
-  ('saglik-m', 'Saglik Magaza', 'https://sag.gecersiz', 'manual', 'active',
+  ('saglik-m', 'Saglik Magaza', 'https://sag.gecersiz', 'direct', 'active',
    'https://sag.gecersiz/g?u={url}', 'TR');
 
 insert into public.sources

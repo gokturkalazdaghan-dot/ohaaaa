@@ -6,9 +6,9 @@ select plan(9);
 insert into public.merchants
   (slug, display_name, homepage_url, network, status, deeplink_template, country_code)
 values
-  ('tr-magaza', 'TR Magaza', 'https://tr.gecersiz', 'manual', 'active',
+  ('tr-magaza', 'TR Magaza', 'https://tr.gecersiz', 'direct', 'active',
    'https://tr.gecersiz/g?u={url}', 'TR'),
-  ('de-magaza', 'DE Magaza', 'https://de.gecersiz', 'manual', 'active',
+  ('de-magaza', 'DE Magaza', 'https://de.gecersiz', 'direct', 'active',
    'https://de.gecersiz/g?u={url}', 'DE');
 
 -- --- 1) Pazar → para birimi eşlemesi --------------------------------------

@@ -224,7 +224,7 @@ insert into public.merchants
    deeplink_template, default_commission_rate, cookie_window_days, postback_secret)
 values
   ('b1000000-0000-4000-8000-000000000001', 'ornek-magaza-a', 'Örnek Mağaza A',
-   'https://magaza-a.example', 'ornek-ag', 'active', 'ohaaaa-21',
+   'https://magaza-a.example', 'direct', 'active', 'ohaaaa-21',
    'https://ag.example/c?pub={tracking_id}&sub={subid}&url={url_encoded}',
    0.0450, 30, 'seed-postback-secret-a'),
 

@@ -1,7 +1,7 @@
 /**
  * POST /api/postback/:merchant — ortaklık ağından dönüşüm bildirimi.
  *
- * Bu uç nokta GELİRİN KAYDEDİLDİĞİ yerdir. İki şey kritiktir:
+ * Bu uç nokta GELİRİN KAYDEDİLDİĞİ yerdir. Üç şey kritiktir:
  *
  *   1. İMZA DOĞRULAMA. Doğrulanmamış bir postback uç noktası, herkesin
  *      "bana 50.000 TL komisyon yaz" diyebildiği bir formdur. Raporlar
@@ -12,36 +12,22 @@
  *      `record_conversion` bunu (merchant_id, network_order_id) üzerinden
  *      çözer.
  *
- * İmza şeması: HMAC-SHA256(gövde, merchants.postback_secret), hex.
- * Ağ farklı bir şema kullanıyorsa `verifySignature` içinde ona uyarlanır —
- * ama doğrulamasız kabul YAPILMAZ.
+ *   3. DOĞRU AĞ. Hangi doğrulama ve hangi alan eşlemesinin uygulanacağı
+ *      `merchants.network` sütununa bakılarak SAĞLAYICI KAYDINDAN seçilir.
+ *      Bilinmeyen bir ağ varsayılana düşürülmez — sessizce yanlış şemayla
+ *      doğrulamak, doğrulamamakla aynı kapıya çıkar.
+ *
+ * Ağa özgü her şey (imza şeması, alan adları) `@ohaaaa/shared/providers`
+ * altındadır; bu dosya yalnızca akışı yürütür.
  */
 
-import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
-import { z } from 'zod';
+
+import { ProviderError, getProvider } from '@ohaaaa/shared/providers';
 
 import { getServiceClient } from '@/lib/supabase/service';
 
 export const dynamic = 'force-dynamic';
-
-/**
- * Ortak postback şeması.
- *
- * Ağların alan adları farklıdır; yeni bir ağ eklerken burada eşleme yapılır.
- * Tutarlar KURUŞ cinsinden beklenir; ağ ondalıklı gönderiyorsa
- * `amount_is_major: true` ile bildirilir.
- */
-const postbackSchema = z.object({
-  order_id: z.string().min(1).max(200),
-  subid: z.string().max(200).nullish(),
-  status: z.enum(['pending', 'approved', 'rejected', 'paid']),
-  amount: z.number().nonnegative(),
-  commission: z.number().nonnegative(),
-  currency: z.string().length(3).default('TRY'),
-  amount_is_major: z.boolean().default(false),
-  occurred_at: z.string().datetime().nullish(),
-});
 
 export async function POST(
   request: NextRequest,
@@ -57,7 +43,7 @@ export async function POST(
 
   const { data: merchant, error: merchantError } = await supabase
     .from('merchants')
-    .select('id, slug, status, postback_secret')
+    .select('id, slug, status, network, postback_secret')
     .eq('slug', merchantSlug)
     .maybeSingle();
 
@@ -86,23 +72,94 @@ export async function POST(
     );
   }
 
-  const signature =
-    request.headers.get('x-signature') ??
-    request.headers.get('x-hub-signature-256') ??
-    '';
+  /*
+   * SAĞLAYICI SEÇİMİ.
+   *
+   * Bilinmeyen ağ 503'tür, 400 değil: hata bildirimi gönderende değil,
+   * bizim yapılandırmamızdadır. 5xx ağın yeniden denemesini sağlar; ağ
+   * tanımlandıktan sonra aynı bildirim başarıyla işlenir ve satış kaybolmaz.
+   */
+  let provider;
+  try {
+    provider = getProvider(merchant.network);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        msg: 'Saglayici secilemedi — bildirim islenmedi',
+        merchant: merchantSlug,
+        network: merchant.network,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
 
-  if (!verifySignature(rawBody, signature, String(merchant.postback_secret))) {
+    return json(
+      {
+        error: {
+          code: 'provider_unavailable',
+          message: 'Bu mağazanın ortaklık ağı yapılandırılmamış.',
+        },
+      },
+      503,
+    );
+  }
+
+  /*
+   * DOĞRULAMA.
+   *
+   * İki başarısızlık türü AYRI yanıt alır:
+   *   • imza yanlış                → 401 (gönderen hatalı)
+   *   • şema henüz bilinmiyor      → 503 (biz hazır değiliz, tekrar dene)
+   * Aynı yanıtı vermek, açılmamış bir entegrasyonu saldırı gibi gösterirdi.
+   */
+  let verified: boolean;
+  try {
+    verified = provider.verifyPostback({
+      rawBody,
+      headers: request.headers,
+      secret: String(merchant.postback_secret),
+    });
+  } catch (error) {
+    if (error instanceof ProviderError && error.code === 'verification_unavailable') {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          msg: 'Ag dogrulamasi henuz yapilandirilmadi',
+          merchant: merchantSlug,
+          network: provider.network,
+          error: error.message,
+        }),
+      );
+
+      return json(
+        {
+          error: {
+            code: 'provider_unavailable',
+            message: 'Bu ağ için doğrulama henüz yapılandırılmadı.',
+          },
+        },
+        503,
+      );
+    }
+
+    throw error;
+  }
+
+  if (!verified) {
     console.warn(
       JSON.stringify({
         level: 'warn',
         msg: 'Geçersiz postback imzası',
         merchant: merchantSlug,
+        network: provider.network,
       }),
     );
 
     return json({ error: { code: 'unauthorized', message: 'İmza doğrulanamadı.' } }, 401);
   }
 
+  // Ayrıştırma DOĞRULAMADAN SONRA: doğrulanmamış gövdeyi ayrıştırmak,
+  // saldırganın belirlediği veriyi ortak modele sokmak demektir.
   let payload: unknown;
   try {
     payload = JSON.parse(rawBody);
@@ -110,50 +167,80 @@ export async function POST(
     return json({ error: { code: 'validation_failed', message: 'Geçersiz JSON.' } }, 400);
   }
 
-  const parsed = postbackSchema.safeParse(payload);
+  let normalized;
+  try {
+    normalized = provider.normalizePostback(payload);
+  } catch (error) {
+    if (error instanceof ProviderError) {
+      if (error.code === 'verification_unavailable') {
+        return json(
+          {
+            error: {
+              code: 'provider_unavailable',
+              message: 'Bu ağ için alan eşlemesi henüz yapılandırılmadı.',
+            },
+          },
+          503,
+        );
+      }
 
-  if (!parsed.success) {
-    return json(
-      {
-        error: {
-          code: 'validation_failed',
-          message: 'Bildirim doğrulanamadı.',
-          details: parsed.error.issues.map((issue) => ({
-            path: issue.path.join('.'),
-            message: issue.message,
-          })),
-        },
-      },
-      422,
-    );
+      return json(
+        { error: { code: 'validation_failed', message: error.message } },
+        422,
+      );
+    }
+
+    throw error;
   }
-
-  const input = parsed.data;
-
-  // Ağ TL cinsinden gönderiyorsa kuruşa çevir. Yuvarlama aşağı değil, en
-  // yakına yapılır: burada bir tahmin değil, bildirilen gerçek tutar var.
-  const toCents = (value: number) =>
-    input.amount_is_major ? Math.round(value * 100) : Math.round(value);
 
   const { data, error } = await supabase.rpc('record_conversion', {
     p_merchant_id: merchant.id,
-    p_network_order_id: input.order_id,
-    p_subid: input.subid ?? null,
-    p_status: input.status,
-    p_order_total_cents: toCents(input.amount),
-    p_commission_cents: toCents(input.commission),
-    p_currency: input.currency.toUpperCase(),
-    p_occurred_at: input.occurred_at ?? new Date().toISOString(),
+    p_network_order_id: normalized.orderId,
+    p_subid: normalized.subid,
+    p_status: normalized.status,
+    p_order_total_cents: normalized.orderTotalCents,
+    p_commission_cents: normalized.commissionCents,
+    p_currency: normalized.currency,
+    p_occurred_at: normalized.occurredAt,
     p_raw: payload,
   });
 
   if (error) {
+    /*
+     * ATIF REDDİ (OH409) GEÇİCİ BİR ARIZA DEĞİLDİR.
+     *
+     * `record_conversion`, bildirilen subid başka bir mağazanın tıklamasına
+     * aitse dönüşümü hiç oluşturmaz. Bunu 5xx ile yanıtlamak ağın aynı
+     * bildirimi sonsuza kadar yeniden denemesine yol açardı — oysa sonuç
+     * her denemede aynı olacak. 409 "bunu tekrar gönderme" demektir.
+     */
+    if (error.code === 'OH409') {
+      console.warn(
+        JSON.stringify({
+          level: 'warn',
+          msg: 'Capraz magaza atif denemesi reddedildi',
+          merchant: merchantSlug,
+          order_id: normalized.orderId,
+        }),
+      );
+
+      return json(
+        {
+          error: {
+            code: 'attribution_conflict',
+            message: 'Bildirilen subid bu mağazaya ait değil.',
+          },
+        },
+        409,
+      );
+    }
+
     console.error(
       JSON.stringify({
         level: 'error',
         msg: 'Dönüşüm kaydedilemedi',
         merchant: merchantSlug,
-        order_id: input.order_id,
+        order_id: normalized.orderId,
         error: error.message,
       }),
     );
@@ -170,35 +257,14 @@ export async function POST(
       level: 'info',
       msg: 'Dönüşüm kaydedildi',
       merchant: merchantSlug,
-      order_id: input.order_id,
-      status: input.status,
+      network: provider.network,
+      order_id: normalized.orderId,
+      status: normalized.status,
       attributed: Boolean(conversion?.click_id),
     }),
   );
 
   return json({ data: { received: true, attributed: Boolean(conversion?.click_id) } }, 200);
-}
-
-/**
- * HMAC-SHA256 imza doğrulaması, sabit zamanlı karşılaştırmayla.
- *
- * Düz `===` karşılaştırması ilk farklı baytta döner; saldırgan yanıt süresini
- * ölçerek geçerli imzayı bayt bayt türetebilir.
- */
-function verifySignature(body: string, provided: string, secret: string): boolean {
-  if (!provided) return false;
-
-  // "sha256=" öneki bazı ağlarda bulunur.
-  const cleaned = provided.startsWith('sha256=') ? provided.slice(7) : provided;
-
-  const expected = createHmac('sha256', secret).update(body, 'utf8').digest('hex');
-
-  const providedBuffer = Buffer.from(cleaned.toLowerCase(), 'utf8');
-  const expectedBuffer = Buffer.from(expected, 'utf8');
-
-  if (providedBuffer.length !== expectedBuffer.length) return false;
-
-  return timingSafeEqual(providedBuffer, expectedBuffer);
 }
 
 function json(body: unknown, status: number): NextResponse {

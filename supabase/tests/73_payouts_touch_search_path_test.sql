@@ -34,7 +34,7 @@ select ok(
 insert into public.merchants
   (slug, display_name, homepage_url, network, status, deeplink_template)
 values
-  ('kanit-magaza', 'Kanit Magaza', 'https://ornek.gecersiz', 'manual', 'active',
+  ('kanit-magaza', 'Kanit Magaza', 'https://ornek.gecersiz', 'direct', 'active',
    'https://ornek.gecersiz/git?u={url}');
 
 insert into public.payouts (merchant_id, period_start, period_end, currency, expected_cents)

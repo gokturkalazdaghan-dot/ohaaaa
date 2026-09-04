@@ -5,9 +5,9 @@ select plan(14);
 insert into public.merchants
   (slug, display_name, homepage_url, network, status, deeplink_template, country_code)
 values
-  ('sch-tr', 'SCH TR', 'https://schtr.gecersiz', 'manual', 'active',
+  ('sch-tr', 'SCH TR', 'https://schtr.gecersiz', 'direct', 'active',
    'https://schtr.gecersiz/g?u={url}', 'TR'),
-  ('sch-de', 'SCH DE', 'https://schde.gecersiz', 'manual', 'active',
+  ('sch-de', 'SCH DE', 'https://schde.gecersiz', 'direct', 'active',
    'https://schde.gecersiz/g?u={url}', 'DE');
 
 -- Seed kaynakları karışmasın: bu test yalnızca kendi kaynaklarına bakar.

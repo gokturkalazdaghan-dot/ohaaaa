@@ -26,7 +26,7 @@ insert into public.merchants
   (slug, display_name, homepage_url, network, status, deeplink_template,
    country_code)
 values
-  ('zincir-magaza', 'Zincir Magaza', 'https://zincir.gecersiz', 'manual', 'active',
+  ('zincir-magaza', 'Zincir Magaza', 'https://zincir.gecersiz', 'direct', 'active',
    'https://zincir.gecersiz/git?u={url}', 'TR');
 
 insert into public.sources
@@ -194,7 +194,7 @@ select ok(
 insert into public.merchants
   (slug, display_name, homepage_url, network, status, deeplink_template, country_code)
 values
-  ('zincir-de', 'Zincir DE', 'https://zincir.de.gecersiz', 'manual', 'active',
+  ('zincir-de', 'Zincir DE', 'https://zincir.de.gecersiz', 'direct', 'active',
    'https://zincir.de.gecersiz/g?u={url}', 'DE');
 
 insert into public.products
