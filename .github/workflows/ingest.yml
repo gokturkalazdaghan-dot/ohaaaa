@@ -28,6 +28,16 @@ on:
         type: boolean
         default: false
 
+# ----------------------------------------------------------------------------
+# JETON YETKISI: MINIMUM
+# ----------------------------------------------------------------------------
+# `permissions` yazilmadiginda depo ayarindaki VARSAYILAN uygulanir ve o
+# varsayilan yazma yetkisi tasiyabilir. Bu is yalnizca kodu okur; issue
+# acmaz, paket yayinlamaz, commit atmaz. Yetkiyi burada sabitlemek, depo
+# ayari ileride gevsetilse bile bu is akisini etkilemez.
+permissions:
+  contents: read
+
 concurrency:
   # Bir önceki çalışma bitmediyse yenisi başlamaz: aynı mağazaya eşzamanlı
   # istek göndermek nezaket ayarlarını anlamsız kılar.
@@ -41,6 +51,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # VARSAYILAN DAVRANIS: checkout, GITHUB_TOKEN'i `.git/config`
+          # icine yazar ve sonraki HER adim onu okuyabilir -- `npm ci`
+          # sirasinda calisan ucuncu taraf postinstall betikleri dahil.
+          # Bu is hicbir yere itme yapmadigi icin jetonun diskte durmasi
+          # yalnizca gereksiz bir maruziyet.
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -77,7 +94,41 @@ jobs:
           # ve yer tutucu kullanan kaynak açık bir hatayla durur -- sessizce
           # kimliksiz istek atıp 401'i "ağ arızası" sanmaz.
           OHAAAA_FEED_TOKEN: ${{ secrets.OHAAAA_FEED_TOKEN }}
+          # KULLANICI GIRDISI KABUKA DEGIL ORTAMA GIRER.
+          #
+          # Onceki hal `${{ inputs.source }}` degerini dogrudan `run:`
+          # betiginin METNINE gomuyordu. GitHub ifadeleri kabuk calismadan
+          # ONCE metin olarak yerine konur; yani `; curl ...` yazan bir
+          # girdi komutun kendisi haline gelirdi. Ustelik ayni adimin
+          # ortaminda SUPABASE_SERVICE_ROLE_KEY duruyor -- yani enjeksiyon
+          # dogrudan sir sizintisina cevrilebilirdi.
+          #
+          # `workflow_dispatch` yazma yetkisi gerektirdigi icin somuru
+          # yuzeyi dardi, ama bu bir savunma degil: ele gecirilmis bir
+          # jeton ya da bir isbirlikcinin hatasi ayni yolu acar.
+          #
+          # Duzeltme GitHub'in kendi onerdigi kalip: deger `env:` ile
+          # aktarilir, kabukta TIRNAK ICINDE degisken olarak okunur ve
+          # hicbir zaman betik metnine karismaz.
+          INPUT_SOURCE: ${{ inputs.source }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          node packages/ingest/dist/cli.js \
-            ${{ inputs.source && format('--source={0}', inputs.source) || '--schedule' }} \
-            ${{ inputs.dry_run && '--dry-run' || '' }}
+          set -euo pipefail
+
+          # Ikinci katman: slug bicimi denetlenir. Tirnak zaten enjeksiyonu
+          # kesiyor; bu, bicimsiz bir degerin CLI'ya ulasmasini da engeller.
+          if [ -n "${INPUT_SOURCE:-}" ]; then
+            if ! printf '%s' "$INPUT_SOURCE" | grep -qE '^[A-Za-z0-9._-]{1,64}$'; then
+              echo "Gecersiz kaynak slug'i. Izinli: harf, rakam, nokta, alt tire, tire (1-64)." >&2
+              exit 1
+            fi
+            args=("--source=${INPUT_SOURCE}")
+          else
+            args=("--schedule")
+          fi
+
+          if [ "${INPUT_DRY_RUN:-false}" = "true" ]; then
+            args+=("--dry-run")
+          fi
+
+          node packages/ingest/dist/cli.js "${args[@]}"

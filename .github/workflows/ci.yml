@@ -12,6 +12,18 @@ on:
     branches: ['**']
   pull_request:
 
+# ----------------------------------------------------------------------------
+# JETON YETKISI: MINIMUM
+# ----------------------------------------------------------------------------
+# Bu is akisi `pull_request` uzerinde de calisir ve depo HERKESE ACIK: bir
+# catal (fork) PR'i, calistiricida bizim kontrolumuz disindaki kodu
+# calistirir (`npm ci` bagimlilik betikleri dahil). Is akisinda hicbir sir
+# yok -- bu kasitli ve korunmasi gereken bir ozellik. `permissions` da
+# acikca yaziliyor ki depo varsayilani ileride gevsetilse bile bu is akisi
+# yalnizca okuyabilsin.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -32,6 +44,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # checkout varsayilan olarak GITHUB_TOKEN'i `.git/config`'e yazar
+          # ve sonraki her adim onu okuyabilir -- `npm ci` sirasinda calisan
+          # ucuncu taraf postinstall betikleri dahil. Bu is hicbir yere itme
+          # yapmiyor; jetonun diskte durmasi gereksiz maruziyet.
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
