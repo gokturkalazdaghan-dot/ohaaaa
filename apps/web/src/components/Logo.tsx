@@ -3,149 +3,126 @@
 import Link from 'next/link';
 
 /**
- * Ohaaaa.com arma kilidi.
+ * Ohaaaa.com arması — OHAAAA.COM kelime işareti.
  *
  * RESMİ MARKA ADI TEK: `Ohaaaa.com`. Kısaltılmaz, `.com`'suz yazılmaz.
  * Eskiden dar ekranda `OHA` monogramı çiziliyordu; o kısaltma kaldırıldı.
- * Mobil ile masaüstü artık AYNI kelime işaretini gösterir, yalnızca punto
- * farklıdır.
+ * Mobil ile masaüstü AYNI kelime işaretini gösterir, yalnızca boy farklıdır.
  *
- * ÜÇ TASARIM KURALI
+ * ONAYLANAN TASARIM ve NEREDEN GELDİĞİ
  *
- * 1) TURUNCU ZEMİN, BEYAZ YAZI. Arma bir levha olarak çizilir. Zemin
- *    `--brand-cta` (#b84f14) -- globals.css'te zaten "DOLGU olarak
- *    kullanılan turuncu; üstünde beyaz yazı" diye tanımlı token bu. Beyaza
- *    karşı ölçülen kontrast 5,04:1, yani AA sınırının üstünde. Metin rengi
- *    olarak kullanılan `--brand` DEĞİL: o açık zeminde okunmak için koyu
- *    seçilmiş, dolgu üstünde beyazla yeterli kontrast vermiyor.
+ * Referans görsel ölçülerek çözümlendi, göz kararıyla taklit edilmedi:
+ *   zemin  #fc5f00        (görselin baskın renginden okundu)
+ *   O      cap 62px       büyütülmüş baş harf
+ *   HAAAA  cap 47px       küçük kapiteller — O'nun %75,8'i
+ *   .COM   cap 17px       O'nun %27,4'ü
+ *   hepsi tek taban çizgisinde, ek harf aralığı YOK
  *
- * 2) O + h BİRLEŞİK. Negatif kern ile h'nin sol dikmesi O'nun gövdesine
- *    yaklaşır. Değer ölçülerek bulundu: ilk denemede -0,20em kullanıldı
- *    (eski büyük harfli `OH` için ölçülmüş değer) ama küçük harfli `h` ile
- *    300px'te "Oh" tek bir lekeye dönüştü. -0,12em'de harfler değiyor,
- *    bağ kuruluyor ve 14px'e kadar "Oh" okunmaya devam ediyor.
+ * Yazı tipi de tahmin edilmedi: referanstaki O, A ve M biçimleri on beş
+ * serif adayıyla piksel örtüşmesi (IoU) ölçülerek karşılaştırıldı.
+ * Liberation Serif Bold açık ara kazandı (O 0,88 / A 0,87); bu yüz Times
+ * New Roman ile metrik uyumludur, yani referans Times Bold ile çizilmiş.
+ * Doğrulama: harfler VARSAYILAN ilerlemelerle dizildiğinde üretilen
+ * mürekkep genişliği 401 birim, referansta 402 px — tracking sıfır.
  *
- * 3) DÖRT KÜÇÜK a KADEMELİ BÜYÜR. İlk a normal punto, son a görsel zirve.
- *    Rampa uydurulmadı: eski armadaki ölçülmüş [0,70 0,85 1,00 1,20] dizisi
- *    1/0,70 ile ölçeklendi. Oranlar korunuyor, dizi "ilk a normal" olacak
- *    şekilde 1,00'den başlıyor.
+ * NEDEN CANLI METİN DEĞİL, KONTUR
+ * Uygulama Outfit ve Plus Jakarta Sans yüklüyor; serif bir aile YOK. On
+ * harf için üçüncü bir yazı tipi ailesi indirmek pahalı. Konturlar 3,3 KB
+ * ve satır içi gömülü: ek ağ isteği yok, FOUT yok ve arma HER platformda
+ * birebir aynı çiziliyor — sistem serifine bırakılsa Windows, Android ve
+ * Linux'ta üç farklı arma çıkardı.
  *
- * NEDEN CANLI METİN, GÖRSEL DEĞİL
- * Kullanıcının yazı tipi boyutu ayarıyla ölçekleniyor, tema/piksel
- * yoğunluğundan bağımsız keskin kalıyor ve ek ağ isteği getirmiyor.
+ * Her yol `data-harf` taşıyor. Sebep: kontura çevrilen yazı DOM'da metin
+ * bırakmaz, yani `verify-brand.mjs` de `textContent` de A sayısını göremez.
+ * `verify-browser.mjs` bu özniteliklerden diziyi geri kurup `OHAAAA.COM`
+ * olduğunu doğruluyor.
  *
- * Buradaki sayılar `scripts/verify-brand.mjs` ile korunuyor: harf dizisi
- * ayrı `<span>`'lere bölündüğü için kaynakta "Ohaaaa" dizgisi geçmez,
- * yani yazım denetçisi a sayısını göremez. O yüzden `verify-browser.mjs`
- * ÇİZİLEN metni okuyup `Ohaaaa.com` olduğunu ayrıca doğruluyor.
+ * Yazı tipi lisansı: Liberation Serif, SIL OFL 1.1. Konturların işarete
+ * gömülmesi lisans kapsamında serbesttir.
  */
 
-/** O → h kerni. h'nin dikmesi O'nun gövdesine girer. */
-const OH_KERN = -0.12;
-
-/** h → ilk a kerni. h iki yandan da bağlı kalsın diye. */
-const HA_KERN = -0.045;
-
 /**
- * Dört a'nın göreli puntosu — soldan sağa büyür, son a zirve.
- * Eski [0,70 0,85 1,00 1,20] rampasının 1/0,70 ile ölçeklenmişi.
- */
-const A_RAMPA = [1.0, 1.21, 1.43, 1.71] as const;
-
-/**
- * a'lar arası düzeltme (taban em cinsinden).
+ * Arma zemini.
  *
- * Harf büyüdükçe kendi yan boşlukları da büyür; düzeltme olmadan son
- * çiftin arası ilk çiftinkinden gözle görülür şekilde açılıyor. Negatif
- * düzeltme ritmi eşitliyor.
+ * `--brand-cta` (#b84f14) DEĞİL: o düğme dolgusu için seçilmiş ayrı bir
+ * işlevsel token ve beyaza karşı 5,04:1 veriyor. Arma rengi referanstan
+ * geliyor ve beyaza karşı 3,10:1. Bu değer normal metin için WCAG AA
+ * eşiğinin (4,5:1) altında; WCAG 1.4.3 logo ve marka adını bu kuraldan
+ * MUAF tutuyor, ama muafiyet yalnızca armaya ait. Bu yüzden renk global
+ * token katmanına konmadı: buradan başka bir yere sızarsa gerçek bir
+ * erişilebilirlik ihlali olur.
  */
-const AA_DUZELTME = -0.02;
+const ARMA_ZEMIN = '#fc5f00';
+
+/** Mürekkep kutusu — referanstan ölçülen orana eşit (6,309:1). */
+const EN = 401.4;
+const BOY = 63.6;
 
 /**
- * `.com` puntosu ve ondan önceki boşluk (taban em cinsinden).
+ * Kelime işareti: OHAAAA.COM.
  *
- * Oran 0,42 ile başlamıştı (büyük format armada dengeli duruyordu) ama
- * başlıkta ÖLÇÜLDÜĞÜNDE `.com` 6,7px'e düşüyor ve okunmuyordu: arma
- * "Ohaaaa" artı bir leke gibi görünüyordu. 0,52'de başlıkta 11,2px'e
- * çıkıyor ve okunuyor; büyük formatta da hâlâ kelime işaretinin açıkça
- * altında kalıyor. Tek oran her iki ölçekte de geçerli, bu yüzden basılı
- * arma ile ekrandaki arma AYNI kilidi kullanıyor.
- */
-const COM_ORAN = 0.52;
-const COM_BOSLUK = 0.075;
-
-/**
- * `letter-spacing` yazıldığı elemanın KENDİ puntosuyla ölçeklenir.
- * Bizim istediğimiz boşluklar ise taban em cinsinden tanımlı. Bu yüzden
- * her değer, yazıldığı harfin kendi oranına bölünerek çevriliyor —
- * aksi halde büyüyen a'larda boşluk da büyür ve ritim bozulur.
- */
-function kern(tabanEm: number, harfOrani: number): string {
-  return `${(tabanEm / harfOrani).toFixed(4)}em`;
-}
-
-/**
- * Kelime işareti: Ohaaaa.com.
- *
- * Harfler `aria-hidden`: ekran okuyucu tek tek okursa "O, h, a, a, a, a,
- * nokta, c, o, m" duyulur. Erişilebilir ad çağıran tarafta (bağlantıda).
+ * `aria-hidden`: erişilebilir ad çağıran taraftaki bağlantıda. Ekran
+ * okuyucunun harfleri tek tek okuması ("O, H, A, A, A, A...") istenmiyor.
  */
 export function Wordmark({ className = '' }: { className?: string }) {
   return (
-    <span
+    <svg
       aria-hidden="true"
-      /*
-        `display` SINIFI BURADA YOK ve bu kasıtlı. Base sınıfta `inline-flex`
-        varken çağıran taraf `hidden` geçtiğinde ikisi aynı özgüllükte
-        çakışıyor ve stil sırasına göre `inline-flex` kazanıyordu. Display
-        kararı tek yerde: çağıran tarafta.
-      */
-      className={`items-baseline font-bold leading-none ${className}`}
-      style={{ fontFamily: 'var(--font-outfit), sans-serif' }}
+      focusable="false"
+      viewBox={`0 0 ${EN} ${BOY}`}
+      className={className}
+      fill="currentColor"
     >
-      <span style={{ letterSpacing: kern(OH_KERN, 1) }}>O</span>
-      <span style={{ letterSpacing: kern(HA_KERN, 1) }}>h</span>
-      {A_RAMPA.map((oran, i) => {
-        const sonraki = A_RAMPA[i + 1];
-        // Son a'dan sonra gelen `.com`, diğerlerinden sonra bir sonraki a.
-        const bosluk = sonraki === undefined ? COM_BOSLUK : AA_DUZELTME * sonraki;
-        return (
-          <span key={i} style={{ fontSize: `${oran}em`, letterSpacing: kern(bosluk, oran) }}>
-            a
-          </span>
-        );
-      })}
-      <span style={{ fontSize: `${COM_ORAN}em` }}>.com</span>
-    </span>
+      {/* Yazı tipi y ekseni yukarı, SVG'ninki aşağı: tek seferde çevriliyor. */}
+      <g transform={`translate(0 62.7) scale(1 -1)`}>
+        <path data-harf="O" transform="translate(-4.6 0) scale(0.04623)" d="M432.0 672.0Q432.0 353.0 519.5 216.5Q607.0 80.0 797.0 80.0Q986.0 80.0 1073.5 217.0Q1161.0 354.0 1161.0 672.0Q1161.0 989.0 1073.5 1122.0Q986.0 1255.0 797.0 1255.0Q607.0 1255.0 519.5 1122.0Q432.0 989.0 432.0 672.0ZM100.0 672.0Q100.0 1356.0 797.0 1356.0Q1141.0 1356.0 1317.0 1182.5Q1493.0 1009.0 1493.0 672.0Q1493.0 331.0 1315.0 155.5Q1137.0 -20.0 797.0 -20.0Q458.0 -20.0 279.0 155.0Q100.0 330.0 100.0 672.0Z" />
+        <path data-harf="H" transform="translate(69.0 0) scale(0.03505)" d="M35.0 0.0V74.0L207.0 100.0V1241.0L35.0 1268.0V1341.0H694.0V1268.0L522.0 1241.0V745.0H1070.0V1241.0L898.0 1268.0V1341.0H1559.0V1268.0L1386.0 1241.0V100.0L1559.0 74.0V0.0H898.0V74.0L1070.0 100.0V635.0H522.0V100.0L694.0 74.0V0.0Z" />
+        <path data-harf="A" transform="translate(124.9 0) scale(0.03505)" d="M428.0 73.0V0.0H20.0V73.0L120.0 100.0L597.0 1352.0H887.0L1362.0 100.0L1464.0 73.0V0.0H867.0V73.0L1022.0 100.0L894.0 447.0H379.0L256.0 100.0ZM641.0 1150.0 420.0 557.0H856.0Z" />
+        <path data-harf="A" transform="translate(176.7 0) scale(0.03505)" d="M428.0 73.0V0.0H20.0V73.0L120.0 100.0L597.0 1352.0H887.0L1362.0 100.0L1464.0 73.0V0.0H867.0V73.0L1022.0 100.0L894.0 447.0H379.0L256.0 100.0ZM641.0 1150.0 420.0 557.0H856.0Z" />
+        <path data-harf="A" transform="translate(228.5 0) scale(0.03505)" d="M428.0 73.0V0.0H20.0V73.0L120.0 100.0L597.0 1352.0H887.0L1362.0 100.0L1464.0 73.0V0.0H867.0V73.0L1022.0 100.0L894.0 447.0H379.0L256.0 100.0ZM641.0 1150.0 420.0 557.0H856.0Z" />
+        <path data-harf="A" transform="translate(280.4 0) scale(0.03505)" d="M428.0 73.0V0.0H20.0V73.0L120.0 100.0L597.0 1352.0H887.0L1362.0 100.0L1464.0 73.0V0.0H867.0V73.0L1022.0 100.0L894.0 447.0H379.0L256.0 100.0ZM641.0 1150.0 420.0 557.0H856.0Z" />
+        <path data-harf="." transform="translate(332.2 0) scale(0.01268)" d="M256.0 -29.0Q187.0 -29.0 138.5 19.0Q90.0 67.0 90.0 137.0Q90.0 206.0 138.0 254.5Q186.0 303.0 256.0 303.0Q325.0 303.0 373.5 255.0Q422.0 207.0 422.0 137.0Q422.0 68.0 374.0 19.5Q326.0 -29.0 256.0 -29.0Z" />
+        <path data-harf="C" transform="translate(338.7 0) scale(0.01268)" d="M815.0 -20.0Q478.0 -20.0 289.0 159.0Q100.0 338.0 100.0 655.0Q100.0 999.0 280.5 1177.5Q461.0 1356.0 814.0 1356.0Q1047.0 1356.0 1297.0 1289.0L1303.0 967.0H1213.0L1185.0 1161.0Q1053.0 1251.0 878.0 1251.0Q646.0 1251.0 539.0 1106.5Q432.0 962.0 432.0 658.0Q432.0 377.0 544.0 230.0Q656.0 83.0 870.0 83.0Q983.0 83.0 1067.5 113.0Q1152.0 143.0 1200.0 184.0L1232.0 404.0H1323.0L1317.0 64.0Q1227.0 29.0 1083.0 4.5Q939.0 -20.0 815.0 -20.0Z" />
+        <path data-harf="O" transform="translate(357.4 0) scale(0.01268)" d="M432.0 672.0Q432.0 353.0 519.5 216.5Q607.0 80.0 797.0 80.0Q986.0 80.0 1073.5 217.0Q1161.0 354.0 1161.0 672.0Q1161.0 989.0 1073.5 1122.0Q986.0 1255.0 797.0 1255.0Q607.0 1255.0 519.5 1122.0Q432.0 989.0 432.0 672.0ZM100.0 672.0Q100.0 1356.0 797.0 1356.0Q1141.0 1356.0 1317.0 1182.5Q1493.0 1009.0 1493.0 672.0Q1493.0 331.0 1315.0 155.5Q1137.0 -20.0 797.0 -20.0Q458.0 -20.0 279.0 155.0Q100.0 330.0 100.0 672.0Z" />
+        <path data-harf="M" transform="translate(377.6 0) scale(0.01268)" d="M882.0 0.0H827.0L332.0 1133.0V100.0L512.0 73.0V0.0H35.0V73.0L207.0 100.0V1242.0L35.0 1268.0V1341.0H562.0L945.0 459.0L1336.0 1341.0H1874.0V1268.0L1702.0 1242.0V100.0L1874.0 73.0V0.0H1207.0V73.0L1387.0 100.0V1133.0Z" />
+      </g>
+    </svg>
   );
 }
 
 /**
  * Başlıktaki arma kilidi.
  *
- * Erişilebilir ad BAĞLANTIDA çünkü harfler `aria-hidden`.
+ * BOYLAR ÖLÇÜLEREK SEÇİLDİ. Kısıt YATAY: dar ekranda üst satırda arma ile
+ * birlikte hesap, favori ve (pazar yeri modunda) sepet düğmeleri var.
+ * Başlık satırının yüksekliğini arama kutusu belirliyor, arma değil --
+ * yani armayı büyütmek satırı büyütmüyor, bedava. Gerçek tarayıcıda her
+ * genişlikte taşmasız en büyük ink boyu ölçüldü:
  *
- * PUNTO BASAMAKLARI ÖLÇÜLEREK SEÇİLDİ, göz kararı değil. Dar ekranda üst
- * satırda arma ile birlikte hesap, favori ve (pazar yeri modunda) sepet
- * düğmeleri var. Gerçek tarayıcıda üç genişlikte taşma ölçüldü:
+ *   320px -> en fazla 14px   (seçilen 14, sınırda; taşmayı test koruyor)
+ *   360px -> en fazla 22px   (seçilen 20, 2px pay)
+ *   390px -> en fazla 26px
+ *   640px+-> en fazla 32px   (seçilen 30, 2px pay)
  *
- *   320px ekran, 1,00rem -> levha 109px, taşma 0        ← seçilen
- *   320px ekran, 1,15rem -> levha 122px, taşma 3px      (sığmıyor)
- *   360px ekran, 1,15rem -> levha 122px, taşma 0        ← seçilen
- *   640px+     , 1,35rem -> levha 144px, `.com` 11,2px  ← seçilen
+ * Arma dar ekranda küçülür ama KISALMAZ: marka adı her ekranda tam.
  *
- * Yani en dar telefonda arma küçülür ama kısalmaz: marka adı her ekranda
- * tam hâliyle `Ohaaaa.com` kalır.
+ * `.COM` OKUNURLUĞU -- BİLİNEN SINIR
+ * Referans tasarımda `.COM`, O'nun %27,4'ü. Bu oran 512px'lik bir uygulama
+ * ikonunda dengeli ama başlık ölçeğinde `.COM` cap yüksekliği 30px inkte
+ * 8,2px'e, 320px telefonda 3,8px'e düşüyor. Yani dar ekranda `.COM` metin
+ * gibi değil doku gibi okunuyor. Bu tasarımın kendi oranından gelen bir
+ * sonuç, uygulama hatası değil. Marka adının tamamı erişilebilir adda
+ * (`aria-label`) her ölçekte eksiksiz duruyor.
  */
 export function Logo({ className = '' }: { className?: string }) {
   return (
     <Link
       href="/"
       aria-label="Ohaaaa.com ana sayfa"
-      className={`inline-flex shrink-0 items-center rounded-lg px-2.5 py-1.5 text-white transition-opacity hover:opacity-90 sm:px-3 ${className}`}
-      style={{ backgroundColor: 'var(--brand-cta)' }}
+      className={`inline-flex shrink-0 items-center rounded-lg px-2.5 py-2 text-white transition-opacity hover:opacity-90 sm:px-3 ${className}`}
+      style={{ backgroundColor: ARMA_ZEMIN }}
     >
-      <Wordmark className="inline-flex text-[1rem] min-[360px]:text-[1.15rem] sm:text-[1.35rem]" />
+      <Wordmark className="h-[14px] w-auto min-[360px]:h-5 sm:h-[30px]" />
     </Link>
   );
 }

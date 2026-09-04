@@ -193,66 +193,69 @@ check(
 /*
  * NEDEN BU KONTROL BURADA
  *
- * `verify-brand.mjs` kaynak dosyalarda "Ohaaaa" dizgisini sayar. Ama arma
- * her harfi ayrı `<span>` olarak çizer -- kaynakta böyle bir dizgi geçmez,
- * yani yazım denetçisi armayı GÖREMEZ. Rampa dizisinden bir eleman düşse
- * ya da eklense hiçbir denetçi uyarmaz; site sessizce eksik veya fazla
- * a'lı bir marka adı yayınlar.
+ * `verify-brand.mjs` kaynak dosyalarda "Ohaaaa" dizgisini sayar. Arma ise
+ * kontura çevrilmiş SVG yollarından oluşuyor: DOM'da metin yok, kaynakta
+ * dizgi yok. Yani ne yazım denetçisi ne de `textContent` A sayısını
+ * görebilir. Rampadan/diziden bir harf düşse hiçbir kontrol uyarmaz ve
+ * site sessizce eksik ya da fazla A'lı bir marka adı yayınlar.
  *
- * Bu yüzden ÇİZİLEN metni okuyoruz. Ayrıca:
- *  - Eski `OHA` mobil kısaltması geri gelirse yakalanır.
- *  - Dört a'nın kademeli büyümesi gerçekten ölçülür (punto dizisi artan mı).
+ * Bu yüzden her yol bir `data-harf` özniteliği taşıyor; burada diziyi
+ * geri kurup doğruluyoruz. Ayrıca:
+ *  - Eski `OHA` mobil kısaltması geri gelirse yakalanır (dizi tam eşleşmeli).
  *  - "Turuncu zemin, beyaz yazı" kuralı hesaplanmış stilden doğrulanır.
+ *  - Armanın taşma yaratmadığı ve boyunun küçülmediği ölçülür.
  */
+const ARMA_BOY = { 320: 14, 390: 20, 1280: 30 };
+
 for (const [genislik, etiket] of [[320, 'en dar'], [390, 'mobil'], [1280, 'masaüstü']]) {
   await page.setViewportSize({ width: genislik, height: 900 });
   await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
 
   const arma = page.locator('header a[aria-label*="Ohaaaa"]').first();
-  const metin = ((await arma.textContent()) ?? '').replace(/\s+/g, '');
-  check(metin === 'Ohaaaa.com', `Arma ${etiket} ekranda "Ohaaaa.com" yazıyor`, `okunan="${metin}"`);
-  check(!/OHA/.test(metin), `Arma ${etiket} ekranda OHA kısaltması göstermiyor`, `okunan="${metin}"`);
 
-  // Dört a soldan sağa BÜYÜMELİ. Eşitlik de hata: kademe kaybolmuş demektir.
-  const puntolar = await arma.evaluate((el) =>
-    [...el.querySelectorAll('span > span')]
-      .filter((s) => s.textContent === 'a')
-      .map((s) => parseFloat(getComputedStyle(s).fontSize)),
+  const dizi = await arma.evaluate((el) =>
+    [...el.querySelectorAll('svg [data-harf]')].map((p) => p.getAttribute('data-harf')).join(''),
   );
-  const artan = puntolar.length === 4 && puntolar.every((v, i) => i === 0 || v > puntolar[i - 1]);
-  check(artan, `Arma ${etiket} ekranda dört a kademeli büyüyor`, `puntolar=[${puntolar.join(', ')}]`);
+  check(dizi === 'OHAAAA.COM', `Arma ${etiket} ekranda "OHAAAA.COM" çiziyor`, `okunan="${dizi}"`);
 
-  /*
-   * `.com` GÖRÜLEBİLİR PUNTODA MI?
-   *
-   * İlk uygulamada `.com` oranı büyük format armadan (0,42em) aynen
-   * alınmıştı; başlıkta 6,7px'e düşüyor ve okunmuyordu. Marka adının
-   * `.com`'suz görünmesi kural ihlali olduğu için bu bir yazım hatası
-   * kadar ciddi. Eşik 8px: altına düşerse punto basamakları bozulmuş
-   * demektir.
-   */
-  const comPunto = await arma.evaluate((el) => {
-    const s = [...el.querySelectorAll('span > span')];
-    const com = s.find((x) => x.textContent === '.com');
-    return com ? parseFloat(getComputedStyle(com).fontSize) : 0;
+  // A sayısı ayrıca sayılıyor: dizi karşılaştırması geçse bile bu, hatanın
+  // tam olarak NEREDE olduğunu söyleyen ikinci bir okuma veriyor.
+  const aSayisi = (dizi.match(/A/g) ?? []).length;
+  check(aSayisi === 4, `Arma ${etiket} ekranda tam dört A var`, `${aSayisi} adet`);
+
+  // Erişilebilir ad tam marka adını taşımalı: harfler aria-hidden.
+  const etiketMetni = await arma.getAttribute('aria-label');
+  check(
+    (etiketMetni ?? '').includes('Ohaaaa.com'),
+    `Arma ${etiket} ekranda erişilebilir adı "Ohaaaa.com" içeriyor`,
+    `aria-label="${etiketMetni}"`,
+  );
+
+  const olcu = await arma.evaluate((el) => {
+    const s = getComputedStyle(el);
+    const svg = el.querySelector('svg');
+    return {
+      zemin: s.backgroundColor,
+      yazi: s.color,
+      boy: Math.round(svg.getBoundingClientRect().height),
+      dolgu: getComputedStyle(svg).fill,
+    };
   });
-  check(comPunto >= 8, `Arma ${etiket} ekranda ".com" okunabilir puntoda`, `${comPunto.toFixed(1)}px`);
+  check(
+    olcu.zemin === 'rgb(252, 95, 0)' && olcu.dolgu === 'rgb(255, 255, 255)',
+    `Arma ${etiket} ekranda turuncu zemin + beyaz yazı`,
+    `zemin=${olcu.zemin} dolgu=${olcu.dolgu}`,
+  );
+  check(
+    olcu.boy >= ARMA_BOY[genislik],
+    `Arma ${etiket} ekranda boyunu koruyor`,
+    `${olcu.boy}px (asgari ${ARMA_BOY[genislik]}px)`,
+  );
 
-  // Arma satırı taşırmamalı: eski tasarımda mobilde kısaltmaya sebep olan kısıt.
   const tasma = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   check(tasma <= 0, `Arma ${etiket} ekranda yatay taşma yaratmıyor`, `${tasma}px taşma`);
-
-  const renkler = await arma.evaluate((el) => {
-    const s = getComputedStyle(el);
-    return { zemin: s.backgroundColor, yazi: s.color };
-  });
-  check(
-    renkler.zemin === 'rgb(184, 79, 20)' && renkler.yazi === 'rgb(255, 255, 255)',
-    `Arma ${etiket} ekranda turuncu zemin + beyaz yazı`,
-    `zemin=${renkler.zemin} yazı=${renkler.yazi}`,
-  );
 }
 
 await page.setViewportSize({ width: 390, height: 844 });
