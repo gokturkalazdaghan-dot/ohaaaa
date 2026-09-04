@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+import { isAffiliateOnly } from '@/lib/env';
+
 export function Footer() {
   return (
     <footer className="mt-16 border-t border-line bg-bg">
@@ -22,11 +24,19 @@ export function Footer() {
                 Fiyat takibi
               </Link>
             </li>
-            <li>
-              <Link href="/tasoron/basvuru" className="text-muted hover:text-fg">
-                Satıcı ol
-              </Link>
-            </li>
+            {/*
+              Pazar yeri CTA'si yalnizca hybrid kipte gorunur. Ortaklik
+              yayincisi olarak konumlanirken "Satici ol" cagrisini vitrinde
+              tutmak, ziyaretciye ve ortaklik agi denetcisine celiskili bir
+              is modeli gosterir.
+            */}
+            {isAffiliateOnly ? null : (
+              <li>
+                <Link href="/tasoron/basvuru" className="text-muted hover:text-fg">
+                  Satıcı ol
+                </Link>
+              </li>
+            )}
             <li>
               <Link href="/iletisim" className="text-muted hover:text-fg">
                 İletişim

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { requireMarketplaceMode } from '@/lib/commerceGuard';
 
 export const metadata: Metadata = {
   title: 'Satıcı olun',
@@ -60,6 +61,8 @@ const STEPS = [
 ];
 
 export default function VendorLandingPage() {
+  requireMarketplaceMode();
+
   return (
     <div className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
       {/* --- Giris --- */}

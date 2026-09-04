@@ -8,6 +8,7 @@ import { SearchBar } from './SearchBar';
 import { HeartIcon } from './Icons';
 import { useCart, useCartSummary } from '@/store/cart';
 import { useFavorites } from '@/lib/favorites';
+import { isAffiliateOnly } from '@/lib/env';
 
 export function Header({
   userMenu,
@@ -44,7 +45,7 @@ export function Header({
         <div className="ml-auto flex items-center gap-2 text-sm sm:gap-3">
           {userMenu}
           <FavoritesButton />
-          <CartButton />
+          {isAffiliateOnly ? null : <CartButton />}
         </div>
       </div>
       <div className="border-t border-line px-4 py-2 md:hidden">

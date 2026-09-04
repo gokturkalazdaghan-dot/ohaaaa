@@ -8,6 +8,7 @@ import { getCarriers } from '@/data/carriers';
 import { getVendorOrders } from '@/data/vendorStats';
 
 import { OrderActions } from './OrderActions';
+import { requireMarketplaceMode } from '@/lib/commerceGuard';
 
 /*
  * Oturuma bağlı sayfalar ASLA önbelleğe alınmamalıdır. Next, `cookies()`
@@ -33,6 +34,8 @@ const STATUS_META = {
 } as const;
 
 export default async function VendorOrdersPage() {
+  requireMarketplaceMode();
+
   const user = await getSessionUser();
   const vendor = user ? await getOwnedVendor(user.id) : null;
 

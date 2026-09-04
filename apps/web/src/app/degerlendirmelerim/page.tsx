@@ -3,6 +3,7 @@ import Link from 'next/link';
 
 import { ReviewForm } from '@/components/ReviewForm';
 import { getReviewableItems } from '@/data/catalog';
+import { requireMarketplaceMode } from '@/lib/commerceGuard';
 
 export const metadata: Metadata = {
   title: 'Değerlendirmelerim',
@@ -15,6 +16,8 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic';
 
 export default async function ReviewsPage() {
+  requireMarketplaceMode();
+
   const items = await getReviewableItems();
 
   return (

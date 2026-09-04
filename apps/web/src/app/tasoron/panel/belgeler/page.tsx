@@ -4,6 +4,7 @@ import { getOwnedVendor, getSessionUser } from '@/lib/auth';
 import { getVendorDocuments } from '@/data/vendorStats';
 
 import { DocumentUpload } from './DocumentUpload';
+import { requireMarketplaceMode } from '@/lib/commerceGuard';
 
 export const metadata: Metadata = {
   title: 'Belgelerim',
@@ -26,6 +27,8 @@ const DURUM: Record<string, { label: string; className: string }> = {
 };
 
 export default async function VendorDocumentsPage() {
+  requireMarketplaceMode();
+
   const user = await getSessionUser();
   const vendor = user ? await getOwnedVendor(user.id) : null;
 

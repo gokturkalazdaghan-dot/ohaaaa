@@ -7,6 +7,7 @@ import { DataSourceNotice } from '@/components/DataSourceNotice';
 import { RevenueChart } from '@/components/RevenueChart';
 import { getOwnedVendor, getSessionUser } from '@/lib/auth';
 import { getVendorStats } from '@/data/vendorStats';
+import { requireMarketplaceMode } from '@/lib/commerceGuard';
 
 /*
  * Oturuma bağlı sayfalar ASLA önbelleğe alınmamalıdır. Next, `cookies()`
@@ -24,6 +25,8 @@ export const metadata: Metadata = {
 };
 
 export default async function VendorDashboardPage() {
+  requireMarketplaceMode();
+
   const user = await getSessionUser();
   const vendor = user ? await getOwnedVendor(user.id) : null;
 

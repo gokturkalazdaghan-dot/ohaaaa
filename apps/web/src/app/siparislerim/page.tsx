@@ -5,6 +5,7 @@ import { formatMoney } from '@ohaaaa/shared';
 
 import { getCustomerOrders, type CustomerVendorOrder } from '@/data/catalog';
 import { getSessionUser } from '@/lib/auth';
+import { requireMarketplaceMode } from '@/lib/commerceGuard';
 
 export const metadata: Metadata = {
   title: 'Siparişlerim',
@@ -61,6 +62,8 @@ const STATUS_META: Record<
 };
 
 export default async function CustomerOrdersPage() {
+  requireMarketplaceMode();
+
   const user = await getSessionUser();
 
   /*

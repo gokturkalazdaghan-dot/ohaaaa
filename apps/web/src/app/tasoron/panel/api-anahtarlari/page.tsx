@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { ApiKeyManager, type ApiKeyRow } from '@/components/ApiKeyManager';
 import { getOwnedVendor, getSessionUser } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { requireMarketplaceMode } from '@/lib/commerceGuard';
 
 /*
  * Oturuma bağlı sayfalar ASLA önbelleğe alınmamalıdır. Next, `cookies()`
@@ -76,6 +77,8 @@ async function anahtarlariOku(): Promise<ApiKeyRow[]> {
 }
 
 export default async function ApiKeysPage() {
+  requireMarketplaceMode();
+
   const anahtarlar = await anahtarlariOku();
 
   return (

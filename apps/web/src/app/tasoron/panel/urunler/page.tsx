@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { discountPercent, formatMoney } from '@ohaaaa/shared';
 
 import { demoProductGroups } from '@/data/demo';
+import { requireMarketplaceMode } from '@/lib/commerceGuard';
 
 /*
  * Oturuma bağlı sayfalar ASLA önbelleğe alınmamalıdır. Next, `cookies()`
@@ -22,6 +23,8 @@ export const metadata: Metadata = {
 const VENDOR_ID = 'vendor-teknomarkt';
 
 export default function VendorProductsPage() {
+  requireMarketplaceMode();
+
   // Canlı kurulumda: GET /api/v1/products (x-api-key ile) veya
   // supabase.from('products').eq('vendor_id', …)
   const products = demoProductGroups
