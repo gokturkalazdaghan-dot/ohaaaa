@@ -20,6 +20,8 @@
 
 import { NextResponse } from 'next/server';
 
+import { safeCompareHash } from '@ohaaaa/shared/api-key';
+
 export const dynamic = 'force-dynamic';
 // Zamanlanmış iş, bir sayfa isteğinden uzun sürebilir.
 export const maxDuration = 60;
@@ -42,7 +44,24 @@ export async function GET(request: Request): Promise<Response> {
     );
   }
 
-  if (request.headers.get('authorization') !== `Bearer ${secret}`) {
+  /*
+   * SIR KARSILASTIRMASI SABIT ZAMANDA.
+   *
+   * Onceki hal duz `!==` idi. Duz karsilastirma ilk farkli baytta doner;
+   * saldirgan yanit suresini olcerek dogru degeri bayt bayt turetebilir.
+   * Bu uc nokta E-POSTA GONDERTTIGI icin sirrin ele gecirilmesi, siteyi
+   * kendi kullanicilarina spam gonderten bir araca cevirir.
+   *
+   * `safeCompareHash` projede zaten var (packages/shared/src/apiKey.ts) ve
+   * tasoron API anahtarlarinda kullaniliyor. Ayni isi ikinci kez yazmak
+   * yerine onu cagiriyoruz: iki farkli sabit zaman uygulamasi, birinin
+   * sessizce yanlis olmasi demektir.
+   *
+   * Uzunluk farkinda erken donuyor; uzunluk gizli bir bilgi degil.
+   */
+  const provided = request.headers.get('authorization') ?? '';
+
+  if (!safeCompareHash(provided, `Bearer ${secret}`)) {
     return NextResponse.json(
       { error: { code: 'unauthorized', message: 'Yetkisiz.' } },
       { status: 401 },
