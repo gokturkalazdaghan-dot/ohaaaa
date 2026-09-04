@@ -42,16 +42,29 @@ GitHub: **Settings -> Branches -> Add branch ruleset** (ya da klasik
 - **Dependabot alerts** acik olmali; `.github/dependabot.yml` guncelleme
   PR'larini zaten aciyor.
 
-## Eylem SHA sabitleme
+## Eylem SHA sabitleme — TAMAMLANDI
 
-Is akislari `actions/checkout@v4` gibi DEGISEBILIR etiketler kullaniyor:
-`v4` bir surum degil, bakimcinin her yayinda tasidigi bir takma ad.
-Guvenli hal commit SHA'sina sabitlemektir.
+Is akislari `actions/checkout@v4` gibi DEGISEBILIR etiketler kullaniyordu:
+`v4` bir surum degil, bakimcinin her yayinda tasidigi bir takma ad. Yani
+dun denetlenen kod, bugun haber vermeden baska bir kod olabilirdi.
 
-Bu calisma sirasinda sabitlenemedi: resmi eylem depolarina bu ortamdan
-erisim yok (GitHub API 403, depo kapsami yalnizca bu depoyu iceriyor) ve
-dogrulanmamis bir SHA yazmak CI'yi kirardi. SHA uydurulmadi.
+Su an sabitlenmis SHA'lar (`git ls-remote` ile dogrulandi; her ikisi de
+sabitleme anindaki `v4` takma adiyla birebir ayni commit):
 
-Sabitleme yapildiginda `.github/dependabot.yml` guncellemeleri PR olarak
-getirmeye devam eder; yani sabitlemenin bilinen bedeli (guncellemelerin
-donmasi) zaten karsilanmis durumda.
+| Eylem | SHA | Surum |
+|---|---|---|
+| `actions/checkout` | `11d5960a326750d5838078e36cf38b85af677262` | v4.4.0 |
+| `actions/setup-node` | `49933ea5288caeca8642d1e84afbd3f7d6820020` | v4.4.0 |
+
+Davranis degismedi: sabitleme, o an zaten calisan commit'i sabitledi.
+
+Sabitlemenin bilinen bedeli guncellemelerin donmasidir; onu
+`.github/dependabot.yml` odiyor: yeni surum ciktiginda SHA'yi guncelleyen
+bir PR acilir ve degisiklik insan incelemesinden gecer.
+
+### Dependabot ve "Actions PR olusturma" ayari
+
+Depo ayarlarinda *Allow GitHub Actions to create and approve pull requests*
+KAPALI. Bu Dependabot'u ETKILEMEZ: Dependabot PR'lari `GITHUB_TOKEN` ile
+degil Dependabot'un kendi kimligiyle acilir. Ayarin kapali olmasi dogru ve
+daha guvenli.

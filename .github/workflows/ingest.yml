@@ -35,6 +35,26 @@ on:
 # varsayilan yazma yetkisi tasiyabilir. Bu is yalnizca kodu okur; issue
 # acmaz, paket yayinlamaz, commit atmaz. Yetkiyi burada sabitlemek, depo
 # ayari ileride gevsetilse bile bu is akisini etkilemez.
+# ----------------------------------------------------------------------------
+# EYLEMLER COMMIT SHA'SINA SABITLENDI
+# ----------------------------------------------------------------------------
+# `actions/checkout@v4` bir SURUM degil TAKMA ADDIR: bakimci her yeni yayinda
+# `v4` etiketini tasir. Yani dun denetledigimiz kod, bugun haber vermeden
+# baska bir kod olabilir. Eylem deposu ele gecirilirse -- ya da bir bakimci
+# hesabi -- degisiklik bize hicbir sinyal vermeden calistiriciya iner.
+#
+# Sabitlenen SHA'lar `git ls-remote` ile DOGRULANDI ve her ikisi de o an
+# `v4` takma adinin gosterdigi commit ile birebir ayni:
+#   actions/checkout   11d5960... = v4.4.0
+#   actions/setup-node 49933ea... = v4.4.0
+# Yani sabitleme davranisi degistirmiyor; yalnizca degisebilir olani
+# sabitliyor.
+#
+# Sabitlemenin bilinen bedeli guncellemelerin donmasidir; onu
+# `.github/dependabot.yml` odiyor: yeni surum ciktiginda SHA'yi guncelleyen
+# bir PR acilir ve degisiklik insan incelemesinden gecer.
+# ----------------------------------------------------------------------------
+
 permissions:
   contents: read
 
@@ -50,7 +70,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # VARSAYILAN DAVRANIS: checkout, GITHUB_TOKEN'i `.git/config`
           # icine yazar ve sonraki HER adim onu okuyabilir -- `npm ci`
@@ -59,7 +79,7 @@ jobs:
           # yalnizca gereksiz bir maruziyet.
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
           cache: npm
