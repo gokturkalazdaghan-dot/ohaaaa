@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useSyncExternalStore } from 'react';
 
 import { CameraIcon } from './Icons';
 
@@ -41,17 +41,38 @@ import { CameraIcon } from './Icons';
 export function VisualSearchButton({
   onQuery,
   onBarcode,
+  aiEnabled,
   compact = false,
 }: {
   /** Model bir arama terimi ürettiğinde çağrılır. */
   onQuery: (query: string) => void;
   /** Fotoğrafta barkod okunduğunda çağrılır. */
   onBarcode: (gtin: string) => void;
+  /**
+   * Görme modeli SUNUCUDA yapılandırılmış mı (`ANTHROPIC_API_KEY`).
+   *
+   * Sunucudan geçirilir çünkü istemci bunu bilemez ve bilmemeli: anahtarın
+   * KENDİSİ asla istemciye inmez, yalnızca "açık mı" bilgisi iner.
+   */
+  aiEnabled: boolean;
   compact?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /*
+   * Barkod okuyucu tarayıcıda var mı?
+   *
+   * Sunucuda ve hidrasyon sırasında `false`, sonra gerçek değer -- sesli
+   * aramadaki `supported` ile aynı desen, aynı gerekçe (fazladan render
+   * turu üretmemek ve sunucu/istemci uyuşmazlığı yaratmamak).
+   */
+  const barkodDestegi = useSyncExternalStore(
+    subscribeNothing,
+    () => typeof window !== 'undefined' && 'BarcodeDetector' in window,
+    () => false,
+  );
 
   async function handleFile(file: File) {
     setError(null);
@@ -87,6 +108,22 @@ export function VisualSearchButton({
       if (inputRef.current) inputRef.current.value = '';
     }
   }
+
+  /*
+   * ÇALIŞMAYAN DÜĞME ÇİZİLMEZ.
+   *
+   * Fotoğrafla aramanın İKİ yolu var ve ikisi bağımsız:
+   *   barkod  -> tarayıcıda çözülür, sunucuya gitmez, ücretsiz
+   *   model   -> sunucuda çözülür, `ANTHROPIC_API_KEY` ister
+   *
+   * Bu yüzden kapı "AI açık mı" değil, "HERHANGİ bir yol çalışıyor mu".
+   * Yalnızca AI'ya bakan bir kapı, anahtar yokken barkod okuyabilen bir
+   * telefonda çalışan bir özelliği gereksiz yere kapatırdı.
+   *
+   * İkisi de yoksa düğme yok: kullanıcı basıp hiçbir yere varmayan bir
+   * akışa girmez.
+   */
+  if (!aiEnabled && !barkodDestegi) return null;
 
   return (
     <>
@@ -222,4 +259,12 @@ async function shrink(file: File): Promise<File> {
   } catch {
     return file;
   }
+}
+
+/**
+ * `useSyncExternalStore` bir abone fonksiyonu ister. Tarayıcı yeteneği
+ * oturum boyunca değişmez, dolayısıyla dinlenecek bir kaynak yok.
+ */
+function subscribeNothing(): () => void {
+  return () => {};
 }

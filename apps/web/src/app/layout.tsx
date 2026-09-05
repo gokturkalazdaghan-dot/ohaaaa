@@ -4,6 +4,7 @@ import { Outfit, Plus_Jakarta_Sans } from 'next/font/google';
 import { Analytics } from '@/components/Analytics';
 import { VercelAnalytics } from '@/components/VercelAnalytics';
 import { ConsentBanner } from '@/components/ConsentBanner';
+import { isVisualSearchConfigured } from '@/lib/visualSearch';
 import { Footer } from '@/components/Footer';
 import { Header } from '@/components/Header';
 import { CategoryNav } from '@/components/CategoryNav';
@@ -177,7 +178,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           listesini gösterirdi.
         */}
         <FavoritesProvider>
-          <Header userMenu={<UserMenu />} categoryNav={<CategoryNav />} />
+          <Header
+            userMenu={<UserMenu />}
+            categoryNav={<CategoryNav />}
+            visualSearchEnabled={isVisualSearchConfigured()}
+          />
           <main id="icerik">{children}</main>
           <Footer />
           {isAffiliateOnly ? null : <CartDrawer />}

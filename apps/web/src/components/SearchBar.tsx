@@ -25,9 +25,15 @@ export function SearchBar({
   size = 'compact',
   autoFocus = false,
   label,
+  visualSearchEnabled = false,
 }: {
   size?: 'hero' | 'compact';
   autoFocus?: boolean;
+  /**
+   * Görme modeli sunucuda yapılandırılmış mı. Sunucudan gelir; fotoğrafla
+   * arama düğmesi bunu ve tarayıcının barkod desteğini birlikte değerlendirir.
+   */
+  visualSearchEnabled?: boolean;
   /**
    * Bu arama alanının adı.
    *
@@ -232,6 +238,7 @@ export function SearchBar({
             <VisualSearchButton
               onQuery={runSearch}
               onBarcode={runBarcodeSearch}
+              aiEnabled={visualSearchEnabled}
               compact={!isHero}
             />
 

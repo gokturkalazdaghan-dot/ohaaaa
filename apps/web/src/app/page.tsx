@@ -6,6 +6,7 @@ import { DataUnavailable } from '@/components/DataUnavailable';
 import { FlashDeals } from '@/components/FlashDeals';
 import { categoryIcon } from '@/components/Icons';
 import { SearchBar } from '@/components/SearchBar';
+import { isVisualSearchConfigured } from '@/lib/visualSearch';
 import { ProductCard } from '@/components/ProductCard';
 import { RecentlyViewed } from '@/components/RecentlyViewed';
 import { TrustSignals } from '@/components/TrustSignals';
@@ -135,7 +136,11 @@ export default async function HomePage() {
         */}
         <div className="mt-8 max-w-2xl">
           <Suspense fallback={<div className="h-[68px] w-full rounded-2xl bg-surface-2" />}>
-            <SearchBar size="hero" label="Ürün, marka veya model ara" />
+            <SearchBar
+              size="hero"
+              label="Ürün, marka veya model ara"
+              visualSearchEnabled={isVisualSearchConfigured()}
+            />
           </Suspense>
         </div>
 

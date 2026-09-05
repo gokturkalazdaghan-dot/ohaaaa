@@ -32,6 +32,34 @@ function check(ok, label, detail = '') {
 const browser = await launchBrowser();
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 
+/*
+ * BARKOD OKUYUCU TAKLİDİ.
+ *
+ * Fotoğrafla arama düğmesi artık bir YETENEK KAPISININ arkasında: barkod
+ * okuyucu da görme modeli de yoksa düğme hiç çizilmiyor. Headless
+ * Chromium'da `BarcodeDetector` YOK (ölçüldü) ve doğrulama sunucusunda
+ * `ANTHROPIC_API_KEY` de yok -- yani kapı, hiçbir şey bozuk olmasa bile
+ * düğmeyi gizlerdi ve aşağıdaki kamera kontrolleri anlamsızlaşırdı.
+ *
+ * Gerçek bir Android telefonda bu API VAR. Bu yüzden ana sayfada onu taklit
+ * ediyoruz: ölçtüğümüz şey "gerçek bir telefonda ne görünür" olsun.
+ * Kapının KENDİSİ ayrıca ve iki yönde sınanıyor (aşağıdaki "Yetenek kapısı").
+ */
+const BARKOD_TAKLIDI = () => {
+  Object.defineProperty(window, 'BarcodeDetector', {
+    configurable: true,
+    value: class {
+      static getSupportedFormats() {
+        return Promise.resolve(['ean_13']);
+      }
+      detect() {
+        return Promise.resolve([]);
+      }
+    },
+  });
+};
+await page.addInitScript(BARKOD_TAKLIDI);
+
 const consoleErrors = [];
 page.on('console', (msg) => {
   if (msg.type() === 'error') consoleErrors.push(msg.text());
@@ -188,6 +216,65 @@ check(
   'Mobilde mikrofon butonu dokunulabilir boyutta',
   micBox ? `${Math.round(micBox.width)}x${Math.round(micBox.height)}` : 'buton yok',
 );
+
+// --- Yetenek kapısı: çalışmayan giriş noktası çizilmez ------------------
+/*
+ * KURAL: bir keşif girişi (kamera / ses) yalnızca GERÇEKTEN çalışabiliyorsa
+ * çizilir. Çalışmayan bir düğme kullanıcıyı hiçbir yere varmayan bir akışa
+ * sokar; bu, keşif hunisinin en tepesinde sessiz bir kayıptır.
+ *
+ * Kapı İKİ YÖNDE de sınanıyor -- yalnızca "görünüyor" demek, kapının hiç
+ * çalışmadığı bir uygulamada da geçerdi.
+ */
+{
+  // (a) Hiçbir yol yokken: barkod okuyucu yok + sunucuda model yok -> düğme YOK.
+  const kapali = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  await kapali.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  const kapaliSayi = await kapali.locator('button[aria-label="Fotoğrafla ara"]').count();
+  check(
+    kapaliSayi === 0,
+    'Kamera düğmesi: hiçbir yol yokken çizilmiyor',
+    `${kapaliSayi} düğme (barkod desteği yok, model yapılandırılmamış)`,
+  );
+  await kapali.close();
+
+  // (b) Barkod okuyucu varken -> düğme VAR (model olmasa bile; barkod ücretsiz yol).
+  const acik = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  await acik.addInitScript(BARKOD_TAKLIDI);
+  await acik.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  const acikSayi = await acik.locator('button[aria-label="Fotoğrafla ara"]').count();
+  check(
+    acikSayi > 0,
+    'Kamera düğmesi: barkod okuyucu varken çiziliyor (model gerekmeden)',
+    `${acikSayi} düğme`,
+  );
+  await acik.close();
+
+  /*
+   * Ses düğmesinin kapısı bileşenin kendisinde: SpeechRecognition yoksa
+   * `return null`. Headless Chromium'da API var, yani düğme görünmeli.
+   * Yokluğunda gizlendiğini ayrıca sınıyoruz.
+   */
+  const sesDestegi = await page.evaluate(
+    () => 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window,
+  );
+  const sesSayi = await page.locator('button[aria-label="Sesle ara"]').count();
+  check(
+    sesDestegi ? sesSayi > 0 : sesSayi === 0,
+    'Ses düğmesi tarayıcı desteğiyle tutarlı',
+    `destek=${sesDestegi} düğme=${sesSayi}`,
+  );
+
+  const sessiz = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  await sessiz.addInitScript(() => {
+    delete window.SpeechRecognition;
+    delete window.webkitSpeechRecognition;
+  });
+  await sessiz.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  const sessizSayi = await sessiz.locator('button[aria-label="Sesle ara"]').count();
+  check(sessizSayi === 0, 'Ses düğmesi: destek yokken çizilmiyor', `${sessizSayi} düğme`);
+  await sessiz.close();
+}
 
 // --- Marka kilidi: Ohaaaa.com ---------------------------------------------
 /*
