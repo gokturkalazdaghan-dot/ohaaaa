@@ -95,6 +95,16 @@ jobs:
       - name: Marka yazimi
         run: npm run verify:brand
 
+      # Permissions-Policy'de bos liste (`camera=()`) ozelligi ucuncu
+      # taraflara degil KENDI kaynagimiza da kapatir. Bu tek satir
+      # production'da fotografla aramayi ve sesle aramayi sessizce oldurdu:
+      # hata dusmez, konsol temizdir, yalnizca calismayan bir dugme kalir.
+      # vercel.json basliklari Vercel platformunda uygulandigi icin yerel
+      # `next start` bunlari hic gondermez -- tarayici denetimi de goremez.
+      # Yakalanabilecek tek yer yapilandirmanin kendisi.
+      - name: Guvenlik basliklari
+        run: npm run verify:headers
+
       # Sir sizintisinin en pahali hali fark edilmeden commit edilenidir:
       # dosya sonradan silinse bile deger git gecmisinde kalir ve anahtarin
       # dondurulmesi gerekir. Kontrol bu yuzden commit'ten SONRA degil,

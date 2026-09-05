@@ -19,8 +19,24 @@ import { CameraIcon } from './Icons';
  *      TERİMİne çevrilir, doğrudan bir ürün sayfasına değil: yanlış tahmin
  *      alakasız bir sonuç listesi verir, yanlış bir satın alma değil.
  *
- * `capture="environment"` telefonda arka kamerayı açar; masaüstünde tarayıcı
- * bunu yok sayar ve normal dosya seçici çıkar. Tek giriş, iki davranış.
+ * NEDEN `capture` ÖZNİTELİĞİ YOK
+ *
+ * Daha önce girdi `capture="environment"` taşıyordu. Bu öznitelik telefonda
+ * seçiciyi ATLAYIP doğrudan arka kamerayı açar. İki somut zararı vardı:
+ *
+ *   1. KAÇIŞ YOLU KALMIYORDU. Kamera herhangi bir sebeple görüntü
+ *      veremediğinde (izin reddi, kamerayı tutan başka bir uygulama,
+ *      uygulama içi tarayıcı) kullanıcı siyah bir kameraya çakılıyor ve
+ *      geri dönmekten başka bir şey yapamıyordu. Galeriden fotoğraf
+ *      seçmek mümkün değildi.
+ *   2. GALERİ ZATEN ASIL KULLANIM. Fiyat karşılaştırmada insanlar çoğu
+ *      zaman ellerindeki ürünü değil, kaydettikleri bir ekran görüntüsünü
+ *      ya da fotoğrafı aratır. `capture` bunu imkânsız kılıyordu.
+ *
+ * Öznitelik kaldırılınca işletim sisteminin kendi seçicisi çıkar:
+ * "Kamera / Galeri / Dosyalar". Kamera bir dokunuş uzakta kalır ama
+ * artık tek yol değildir. Düğmenin kendi ipucu da zaten bunu vaat
+ * ediyordu: "Fotoğraf çek veya yükle".
  */
 export function VisualSearchButton({
   onQuery,
@@ -78,7 +94,6 @@ export function VisualSearchButton({
         ref={inputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         className="sr-only"
         /*
          * Görünmez ama ERİŞİLEBİLİR AD taşır. `aria-hidden` yapmak yanlış

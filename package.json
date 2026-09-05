@@ -24,6 +24,7 @@
     "verify:a11y": "node scripts/verify-a11y.mjs",
     "verify:routes": "node scripts/verify-routes.mjs",
     "verify:brand": "node scripts/verify-brand.mjs",
+    "verify:headers": "node scripts/verify-headers.mjs",
     "verify:secrets": "node scripts/verify-secrets.mjs"
   },
   "devDependencies": {
