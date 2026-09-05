@@ -44,6 +44,7 @@ export class AffiliateLinkError extends Error {
       | 'invalid_template'
       | 'invalid_product_url'
       | 'missing_tracking_id'
+      | 'unresolved_placeholder'
       | 'unsafe_redirect',
   ) {
     super(message);
@@ -102,6 +103,47 @@ export function buildAffiliateUrl(input: DeeplinkInput): string {
     throw new AffiliateLinkError(
       `Geçersiz ürün adresi: ${productUrl}`,
       'invalid_product_url',
+    );
+  }
+
+  /*
+   * ÇÖZÜLMEMİŞ YER TUTUCU = SESSİZ GELİR KAYBI.
+   *
+   * `DEEPLINK_PLACEHOLDERS` dört yer tutucu tanımlar ve `buildAffiliateUrl`
+   * yalnızca onları doldurur. Şablonda BAŞKA bir yer tutucu kalırsa —
+   * Awin şablonundaki `{awinmid}` en olası örnek — düz metin olarak adrese
+   * girer. Sonuç sessizdir ve tam da bu yüzden pahalıdır:
+   *
+   *   • `parseHttpUrl` geçerli bir adres görür (süslü parantez adres
+   *     dilbilgisini bozmaz),
+   *   • `assertSafeRedirect` host'u onaylar (`awin1.com` şablonun kendi
+   *     alan adı olduğu için zaten izinli),
+   *   • kullanıcı yönlendirilir, tıklama `clicks` tablosuna yazılır,
+   *   • ama ağ bozuk bir `awinmid` alır: tıklama atfedilmez, komisyon
+   *     oluşmaz ve HİÇBİR YERDE hata görünmez.
+   *
+   * Yani sistem "çalışıyor" gibi görünürken para kaybeder. Bu yüzden burada
+   * kapalı başarısız oluyoruz: bozuk bir adres üretmektense yönlendirmeyi
+   * hiç yapmamak yeğdir — kayıp o zaman en azından GÖRÜNÜR olur.
+   *
+   * DENETİM ŞABLON ÜZERİNDE YAPILIR, ÜRETİLEN ADRES ÜZERİNDE DEĞİL.
+   * Ölçüldü: `new URL('https://m.example/p?q={x}').toString()` süslü
+   * parantezi sorgu dizesinde KORUR. Üretilen adrese bakan bir denetim,
+   * sorgusunda süslü parantez taşıyan meşru bir mağaza adresini reddeder
+   * ve ters yönde gelir kaybettirir. Şablon operatörün yazdığı veridir;
+   * denetlenmesi gereken de odur.
+   */
+  const cozulmemis = DEEPLINK_PLACEHOLDERS.reduce(
+    (iskelet, yerTutucu) => iskelet.replaceAll(yerTutucu, ''),
+    template,
+  ).match(/\{[^{}]*\}/);
+
+  if (cozulmemis) {
+    throw new AffiliateLinkError(
+      `Şablonda çözülmemiş yer tutucu var: ${cozulmemis[0]}. ` +
+        `Desteklenenler: ${DEEPLINK_PLACEHOLDERS.join(', ')}. ` +
+        'Ağa özel değerler (ör. awinmid) şablona gerçek değeriyle yazılmalıdır.',
+      'unresolved_placeholder',
     );
   }
 

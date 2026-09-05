@@ -13,8 +13,11 @@ import { isAffiliateOnly } from '@/lib/env';
 export function Header({
   userMenu,
   categoryNav,
+  visualSearchEnabled = false,
 }: {
   userMenu?: React.ReactNode;
+  /** Görme modeli sunucuda açık mı; arama çubuğuna aktarılır. */
+  visualSearchEnabled?: boolean;
   /** Kategori şeridi. Sunucuda çizilir; veri için istemciye tur atılmaz. */
   categoryNav?: React.ReactNode;
 }) {
@@ -39,7 +42,7 @@ export function Header({
         <Logo />
         <div className="hidden flex-1 md:block">
           <Suspense fallback={<div className="h-10 w-full max-w-xl bg-surface-2" />}>
-            <SearchBar label="Üst çubukta ürün ara" />
+            <SearchBar label="Üst çubukta ürün ara" visualSearchEnabled={visualSearchEnabled} />
           </Suspense>
         </div>
         <div className="ml-auto flex items-center gap-2 text-sm sm:gap-3">
@@ -50,7 +53,7 @@ export function Header({
       </div>
       <div className="border-t border-line px-4 py-2 md:hidden">
         <Suspense fallback={<div className="h-10 w-full bg-surface-2" />}>
-          <SearchBar label="Üst çubukta ürün ara" />
+          <SearchBar label="Üst çubukta ürün ara" visualSearchEnabled={visualSearchEnabled} />
         </Suspense>
       </div>
 

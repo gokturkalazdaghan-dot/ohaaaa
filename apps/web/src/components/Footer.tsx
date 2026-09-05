@@ -7,7 +7,7 @@ export function Footer() {
     <footer className="mt-16 border-t border-line bg-bg">
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-10 text-left sm:grid-cols-2 sm:px-6">
         <div>
-          <p className="font-semibold text-fg">Ohaaaa</p>
+          <p className="font-semibold text-fg">Ohaaaa.com</p>
           <ul className="mt-3 space-y-2 text-sm">
             <li>
               <Link href="/hakkimizda" className="text-muted hover:text-fg">
@@ -84,7 +84,7 @@ export function Footer() {
         </div>
       </div>
       <p className="mx-auto max-w-6xl px-4 pb-8 text-xs text-subtle sm:px-6">
-        © {new Date().getFullYear()} Armanalabs. Ohaaaa, Armanalabs tarafından işletilir.
+        © {new Date().getFullYear()} Armanalabs. Ohaaaa.com, Armanalabs tarafından işletilir.
         Fiyatları satıcı belirler.
       </p>
     </footer>

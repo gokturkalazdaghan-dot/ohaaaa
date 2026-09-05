@@ -32,6 +32,34 @@ function check(ok, label, detail = '') {
 const browser = await launchBrowser();
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 
+/*
+ * BARKOD OKUYUCU TAKLİDİ.
+ *
+ * Fotoğrafla arama düğmesi artık bir YETENEK KAPISININ arkasında: barkod
+ * okuyucu da görme modeli de yoksa düğme hiç çizilmiyor. Headless
+ * Chromium'da `BarcodeDetector` YOK (ölçüldü) ve doğrulama sunucusunda
+ * `ANTHROPIC_API_KEY` de yok -- yani kapı, hiçbir şey bozuk olmasa bile
+ * düğmeyi gizlerdi ve aşağıdaki kamera kontrolleri anlamsızlaşırdı.
+ *
+ * Gerçek bir Android telefonda bu API VAR. Bu yüzden ana sayfada onu taklit
+ * ediyoruz: ölçtüğümüz şey "gerçek bir telefonda ne görünür" olsun.
+ * Kapının KENDİSİ ayrıca ve iki yönde sınanıyor (aşağıdaki "Yetenek kapısı").
+ */
+const BARKOD_TAKLIDI = () => {
+  Object.defineProperty(window, 'BarcodeDetector', {
+    configurable: true,
+    value: class {
+      static getSupportedFormats() {
+        return Promise.resolve(['ean_13']);
+      }
+      detect() {
+        return Promise.resolve([]);
+      }
+    },
+  });
+};
+await page.addInitScript(BARKOD_TAKLIDI);
+
 const consoleErrors = [];
 page.on('console', (msg) => {
   if (msg.type() === 'error') consoleErrors.push(msg.text());
@@ -188,6 +216,136 @@ check(
   'Mobilde mikrofon butonu dokunulabilir boyutta',
   micBox ? `${Math.round(micBox.width)}x${Math.round(micBox.height)}` : 'buton yok',
 );
+
+// --- Yetenek kapısı: çalışmayan giriş noktası çizilmez ------------------
+/*
+ * KURAL: bir keşif girişi (kamera / ses) yalnızca GERÇEKTEN çalışabiliyorsa
+ * çizilir. Çalışmayan bir düğme kullanıcıyı hiçbir yere varmayan bir akışa
+ * sokar; bu, keşif hunisinin en tepesinde sessiz bir kayıptır.
+ *
+ * Kapı İKİ YÖNDE de sınanıyor -- yalnızca "görünüyor" demek, kapının hiç
+ * çalışmadığı bir uygulamada da geçerdi.
+ */
+{
+  // (a) Hiçbir yol yokken: barkod okuyucu yok + sunucuda model yok -> düğme YOK.
+  const kapali = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  await kapali.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  const kapaliSayi = await kapali.locator('button[aria-label="Fotoğrafla ara"]').count();
+  check(
+    kapaliSayi === 0,
+    'Kamera düğmesi: hiçbir yol yokken çizilmiyor',
+    `${kapaliSayi} düğme (barkod desteği yok, model yapılandırılmamış)`,
+  );
+  await kapali.close();
+
+  // (b) Barkod okuyucu varken -> düğme VAR (model olmasa bile; barkod ücretsiz yol).
+  const acik = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  await acik.addInitScript(BARKOD_TAKLIDI);
+  await acik.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  const acikSayi = await acik.locator('button[aria-label="Fotoğrafla ara"]').count();
+  check(
+    acikSayi > 0,
+    'Kamera düğmesi: barkod okuyucu varken çiziliyor (model gerekmeden)',
+    `${acikSayi} düğme`,
+  );
+  await acik.close();
+
+  /*
+   * Ses düğmesinin kapısı bileşenin kendisinde: SpeechRecognition yoksa
+   * `return null`. Headless Chromium'da API var, yani düğme görünmeli.
+   * Yokluğunda gizlendiğini ayrıca sınıyoruz.
+   */
+  const sesDestegi = await page.evaluate(
+    () => 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window,
+  );
+  const sesSayi = await page.locator('button[aria-label="Sesle ara"]').count();
+  check(
+    sesDestegi ? sesSayi > 0 : sesSayi === 0,
+    'Ses düğmesi tarayıcı desteğiyle tutarlı',
+    `destek=${sesDestegi} düğme=${sesSayi}`,
+  );
+
+  const sessiz = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  await sessiz.addInitScript(() => {
+    delete window.SpeechRecognition;
+    delete window.webkitSpeechRecognition;
+  });
+  await sessiz.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  const sessizSayi = await sessiz.locator('button[aria-label="Sesle ara"]').count();
+  check(sessizSayi === 0, 'Ses düğmesi: destek yokken çizilmiyor', `${sessizSayi} düğme`);
+  await sessiz.close();
+}
+
+// --- Marka kilidi: Ohaaaa.com ---------------------------------------------
+/*
+ * NEDEN BU KONTROL BURADA
+ *
+ * `verify-brand.mjs` kaynak dosyalarda "Ohaaaa" dizgisini sayar. Arma ise
+ * kontura çevrilmiş SVG yollarından oluşuyor: DOM'da metin yok, kaynakta
+ * dizgi yok. Yani ne yazım denetçisi ne de `textContent` A sayısını
+ * görebilir. Rampadan/diziden bir harf düşse hiçbir kontrol uyarmaz ve
+ * site sessizce eksik ya da fazla A'lı bir marka adı yayınlar.
+ *
+ * Bu yüzden her yol bir `data-harf` özniteliği taşıyor; burada diziyi
+ * geri kurup doğruluyoruz. Ayrıca:
+ *  - Eski `OHA` mobil kısaltması geri gelirse yakalanır (dizi tam eşleşmeli).
+ *  - "Turuncu zemin, beyaz yazı" kuralı hesaplanmış stilden doğrulanır.
+ *  - Armanın taşma yaratmadığı ve boyunun küçülmediği ölçülür.
+ */
+const ARMA_BOY = { 320: 14, 390: 20, 1280: 30 };
+
+for (const [genislik, etiket] of [[320, 'en dar'], [390, 'mobil'], [1280, 'masaüstü']]) {
+  await page.setViewportSize({ width: genislik, height: 900 });
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+
+  const arma = page.locator('header a[aria-label*="Ohaaaa"]').first();
+
+  const dizi = await arma.evaluate((el) =>
+    [...el.querySelectorAll('svg [data-harf]')].map((p) => p.getAttribute('data-harf')).join(''),
+  );
+  check(dizi === 'OHAAAA.COM', `Arma ${etiket} ekranda "OHAAAA.COM" çiziyor`, `okunan="${dizi}"`);
+
+  // A sayısı ayrıca sayılıyor: dizi karşılaştırması geçse bile bu, hatanın
+  // tam olarak NEREDE olduğunu söyleyen ikinci bir okuma veriyor.
+  const aSayisi = (dizi.match(/A/g) ?? []).length;
+  check(aSayisi === 4, `Arma ${etiket} ekranda tam dört A var`, `${aSayisi} adet`);
+
+  // Erişilebilir ad tam marka adını taşımalı: harfler aria-hidden.
+  const etiketMetni = await arma.getAttribute('aria-label');
+  check(
+    (etiketMetni ?? '').includes('Ohaaaa.com'),
+    `Arma ${etiket} ekranda erişilebilir adı "Ohaaaa.com" içeriyor`,
+    `aria-label="${etiketMetni}"`,
+  );
+
+  const olcu = await arma.evaluate((el) => {
+    const s = getComputedStyle(el);
+    const svg = el.querySelector('svg');
+    return {
+      zemin: s.backgroundColor,
+      yazi: s.color,
+      boy: Math.round(svg.getBoundingClientRect().height),
+      dolgu: getComputedStyle(svg).fill,
+    };
+  });
+  check(
+    olcu.zemin === 'rgb(252, 95, 0)' && olcu.dolgu === 'rgb(255, 255, 255)',
+    `Arma ${etiket} ekranda turuncu zemin + beyaz yazı`,
+    `zemin=${olcu.zemin} dolgu=${olcu.dolgu}`,
+  );
+  check(
+    olcu.boy >= ARMA_BOY[genislik],
+    `Arma ${etiket} ekranda boyunu koruyor`,
+    `${olcu.boy}px (asgari ${ARMA_BOY[genislik]}px)`,
+  );
+
+  const tasma = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  check(tasma <= 0, `Arma ${etiket} ekranda yatay taşma yaratmıyor`, `${tasma}px taşma`);
+}
+
+await page.setViewportSize({ width: 390, height: 844 });
 
 // --- Mobilde filtreler kapalı başlamalı ------------------------------------
 /*
