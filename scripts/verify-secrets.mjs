@@ -138,6 +138,13 @@ const YASAK_ADLAR = [
    */
   'OHAAAA_FEED_TOKEN',
   'OHAAAA_PIPELINE_TEST_TOKEN',
+  /*
+   * Sağlayıcıdan bağımsız AI katmanının anahtarı. `ANTHROPIC_API_KEY` bu
+   * listede zaten vardı; sağlayıcı değiştirilebilir hâle gelince aynı sır
+   * BAŞKA BİR ADLA taşınabilir oldu ve koruma o adı tanımıyordu. Aynı
+   * hatanın ikinci adı için tekrarlanmaması bu satırla sağlanıyor.
+   */
+  'AI_API_KEY',
 ];
 
 let bundleTarandi = 0;
