@@ -4,12 +4,12 @@ select plan(9);
 
 -- --- Zemin ----------------------------------------------------------------
 insert into public.merchants
-  (slug, display_name, homepage_url, network, status, deeplink_template, country_code)
+  (slug, display_name, homepage_url, network, status, deeplink_template, country_code, terms_verified_at)
 values
   ('tr-magaza', 'TR Magaza', 'https://tr.gecersiz', 'direct', 'active',
-   'https://tr.gecersiz/g?u={url}', 'TR'),
+   'https://tr.gecersiz/g?u={url}', 'TR', now()),
   ('de-magaza', 'DE Magaza', 'https://de.gecersiz', 'direct', 'active',
-   'https://de.gecersiz/g?u={url}', 'DE');
+   'https://de.gecersiz/g?u={url}', 'DE', now());
 
 -- --- 1) Pazar → para birimi eşlemesi --------------------------------------
 select is(public.market_currency('TR'), 'TRY'::char(3), 'TR pazari TRY kullanir');

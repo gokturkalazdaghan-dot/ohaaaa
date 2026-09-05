@@ -24,10 +24,10 @@ select plan(12);
 -- --- 1) KAYNAK + SATICI ----------------------------------------------------
 insert into public.merchants
   (slug, display_name, homepage_url, network, status, deeplink_template,
-   country_code)
+   country_code, terms_verified_at)
 values
   ('zincir-magaza', 'Zincir Magaza', 'https://zincir.gecersiz', 'direct', 'active',
-   'https://zincir.gecersiz/git?u={url}', 'TR');
+   'https://zincir.gecersiz/git?u={url}', 'TR', now());
 
 insert into public.sources
   (merchant_id, slug, name, kind, endpoint_url, market, currency)
@@ -192,10 +192,10 @@ select ok(
 -- Alman pazarına aynı kanonik ürün için EUR bir teklif eklenirse, Türk
 -- pazarının fırsat listesi bundan etkilenmemeli.
 insert into public.merchants
-  (slug, display_name, homepage_url, network, status, deeplink_template, country_code)
+  (slug, display_name, homepage_url, network, status, deeplink_template, country_code, terms_verified_at)
 values
   ('zincir-de', 'Zincir DE', 'https://zincir.de.gecersiz', 'direct', 'active',
-   'https://zincir.de.gecersiz/g?u={url}', 'DE');
+   'https://zincir.de.gecersiz/g?u={url}', 'DE', now());
 
 insert into public.products
   (merchant_id, group_id, external_id, title,

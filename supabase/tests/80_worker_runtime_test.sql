@@ -3,9 +3,9 @@ begin;
 select plan(17);
 
 insert into public.merchants
-  (slug, display_name, homepage_url, network, status, deeplink_template, country_code)
+  (slug, display_name, homepage_url, network, status, deeplink_template, country_code, terms_verified_at)
 values ('wr-m', 'WR Magaza', 'https://wr.gecersiz', 'direct', 'active',
-        'https://wr.gecersiz/g?u={url}', 'TR');
+        'https://wr.gecersiz/g?u={url}', 'TR', now());
 
 insert into public.sources (merchant_id, slug, name, kind, endpoint_url, market, currency)
 select id, 'wr-feed', 'WR Feed', 'feed_csv', 'https://wr.gecersiz/f.csv', 'TR', 'TRY'

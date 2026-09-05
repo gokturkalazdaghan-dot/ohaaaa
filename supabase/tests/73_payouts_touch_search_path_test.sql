@@ -32,10 +32,11 @@ select ok(
 -- Aktif magaza sema geregi bir yonlendirme sablonu ister
 -- (merchants_active_needs_template).
 insert into public.merchants
-  (slug, display_name, homepage_url, network, status, deeplink_template)
+  (slug, display_name, homepage_url, network, status, deeplink_template,
+   terms_verified_at, country_code)
 values
   ('kanit-magaza', 'Kanit Magaza', 'https://ornek.gecersiz', 'direct', 'active',
-   'https://ornek.gecersiz/git?u={url}');
+   'https://ornek.gecersiz/git?u={url}', now(), 'TR');
 
 insert into public.payouts (merchant_id, period_start, period_end, currency, expected_cents)
 select id, date '2026-01-01', date '2026-01-31', 'TRY', 1000

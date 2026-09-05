@@ -219,19 +219,24 @@ on conflict (id) do nothing;
 -- Aynı kanonik ürüne hem taşeron hem ortak mağaza teklif verebilir; fiyat
 -- karşılaştırma motoru ikisini yan yana gösterir. Kullanıcı için fark yoktur,
 -- bizim için fark "sipariş mi, yönlendirme mi" sorusudur.
+-- `terms_verified_at`: bir mağaza, komisyon oranı ve çerez penceresi
+-- programın gerçek şartlarıyla doğrulanmadan `active` olamaz
+-- (merchants_active_needs_verified_terms). Demo mağazaların şartları
+-- burada tanımlandığı için doğrulanmış sayılırlar.
 insert into public.merchants
   (id, slug, display_name, homepage_url, network, status, tracking_id,
-   deeplink_template, default_commission_rate, cookie_window_days, postback_secret)
+   deeplink_template, default_commission_rate, cookie_window_days, postback_secret,
+   terms_verified_at, country_code)
 values
   ('b1000000-0000-4000-8000-000000000001', 'ornek-magaza-a', 'Örnek Mağaza A',
    'https://magaza-a.example', 'direct', 'active', 'ohaaaa-21',
    'https://ag.example/c?pub={tracking_id}&sub={subid}&url={url_encoded}',
-   0.0450, 30, 'seed-postback-secret-a'),
+   0.0450, 30, 'seed-postback-secret-a', now(), 'TR'),
 
   ('b1000000-0000-4000-8000-000000000002', 'ornek-magaza-b', 'Örnek Mağaza B',
    'https://magaza-b.example', 'direct', 'active', 'ohaaaa',
    '{url}?ref={tracking_id}&subid={subid}',
-   0.0300, 7, 'seed-postback-secret-b')
+   0.0300, 7, 'seed-postback-secret-b', now(), 'TR')
 on conflict (id) do nothing;
 
 insert into public.sources

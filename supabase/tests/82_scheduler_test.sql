@@ -3,12 +3,12 @@ begin;
 select plan(14);
 
 insert into public.merchants
-  (slug, display_name, homepage_url, network, status, deeplink_template, country_code)
+  (slug, display_name, homepage_url, network, status, deeplink_template, country_code, terms_verified_at)
 values
   ('sch-tr', 'SCH TR', 'https://schtr.gecersiz', 'direct', 'active',
-   'https://schtr.gecersiz/g?u={url}', 'TR'),
+   'https://schtr.gecersiz/g?u={url}', 'TR', now()),
   ('sch-de', 'SCH DE', 'https://schde.gecersiz', 'direct', 'active',
-   'https://schde.gecersiz/g?u={url}', 'DE');
+   'https://schde.gecersiz/g?u={url}', 'DE', now());
 
 -- Seed kaynakları karışmasın: bu test yalnızca kendi kaynaklarına bakar.
 update public.sources set is_enabled = false;

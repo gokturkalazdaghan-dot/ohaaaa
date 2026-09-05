@@ -24,9 +24,10 @@ begin
   perform set_config('request.jwt.claims',
     '{"sub":"ffffffff-ffff-4fff-8fff-ffffffffffff","role":"authenticated"}', true);
 
-  insert into public.merchants (slug, display_name, homepage_url, status, deeplink_template)
+  insert into public.merchants (slug, display_name, homepage_url, status, deeplink_template,
+                                terms_verified_at, country_code)
   values ('kasa-test-magaza', 'Kasa Test', 'https://kasa.example', 'active',
-          '{url}?tag={tracking_id}&sub={subid}')
+          '{url}?tag={tracking_id}&sub={subid}', now(), 'TR')
   returning id into v_magaza;
 
   ---------------------------------------------------------------------------
