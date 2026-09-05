@@ -42,7 +42,7 @@
     "test": "npm run build && node --test \"dist/**/*.test.js\""
   },
   "dependencies": {
-    "zod": "^3.23.8"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
