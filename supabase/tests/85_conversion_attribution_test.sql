@@ -9,14 +9,14 @@ select plan(20);
 -- --- Zemin ----------------------------------------------------------------
 insert into public.merchants
   (slug, display_name, homepage_url, network, status, deeplink_template,
-   country_code, cookie_window_days)
+   country_code, cookie_window_days, terms_verified_at)
 values
   ('atif-a', 'Atif A', 'https://a.gecersiz', 'direct', 'active',
-   'https://a.gecersiz/g?u={url}', 'TR', 30),
+   'https://a.gecersiz/g?u={url}', 'TR', 30, now()),
   ('atif-b', 'Atif B', 'https://b.gecersiz', 'direct', 'active',
-   'https://b.gecersiz/g?u={url}', 'TR', 30),
+   'https://b.gecersiz/g?u={url}', 'TR', 30, now()),
   ('atif-dar', 'Atif Dar Pencere', 'https://d.gecersiz', 'direct', 'active',
-   'https://d.gecersiz/g?u={url}', 'TR', 1);
+   'https://d.gecersiz/g?u={url}', 'TR', 1, now());
 
 -- Tiklamalar dogrudan ekleniyor: record_click'in kendi testi ayri dosyada.
 insert into public.clicks (subid, merchant_id, created_at)
@@ -160,9 +160,9 @@ select is(
 select throws_matching(
   $$insert into public.merchants
       (slug, display_name, homepage_url, network, status, country_code,
-       deeplink_template)
+       deeplink_template, terms_verified_at)
     values ('ag-bilinmeyen', 'Bilinmeyen Ag', 'https://x.gecersiz',
-            'uydurma-ag', 'active', 'TR', 'https://x.gecersiz/g?u={url}')$$,
+            'uydurma-ag', 'active', 'TR', 'https://x.gecersiz/g?u={url}', now())$$,
   'merchants_network_known',
   '19) taninmayan network degeri veritabanina YAZILAMAZ (dogru kisit adiyla)'
 );
@@ -170,9 +170,9 @@ select throws_matching(
 select lives_ok(
   $$insert into public.merchants
       (slug, display_name, homepage_url, network, status, country_code,
-       deeplink_template)
+       deeplink_template, terms_verified_at, network_advertiser_id)
     values ('ag-awin', 'Awin Magaza', 'https://w.gecersiz',
-            'awin', 'active', 'TR', 'https://w.gecersiz/g?u={url}')$$,
+            'awin', 'active', 'TR', 'https://w.gecersiz/g?u={url}', now(), '12345')$$,
   '20) kayitli ag (awin) kabul edilir'
 );
 

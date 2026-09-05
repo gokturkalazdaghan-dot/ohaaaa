@@ -120,6 +120,13 @@ export const StoreIcon = (p: IconProps) => (
   </Icon>
 );
 
+export const ChainIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M10 13.5a4 4 0 0 0 5.7 0l2.8-2.8a4 4 0 0 0-5.7-5.7l-1.4 1.4" />
+    <path d="M14 10.5a4 4 0 0 0-5.7 0l-2.8 2.8a4 4 0 0 0 5.7 5.7l1.4-1.4" />
+  </Icon>
+);
+
 export const ChartIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M3.5 20.5h17" />

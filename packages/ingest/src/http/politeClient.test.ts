@@ -70,6 +70,17 @@ function fakeFetch(routes: Record<string, RouteResponse | RouteResponse[]>) {
 
 const UA = 'OhaaaaBot/1.0 (+https://ohaaaa.com/bot)';
 
+/**
+ * Sahte ad çözücü.
+ *
+ * Adres kapısı (`guard.ts`) her istekte adı çözüp çıkan IP'leri denetliyor.
+ * Testlerdeki `*.example` adları KASITLI olarak çözülmez (ayrılmış TLD), yani
+ * gerçek DNS kullanılsaydı bu testler ağa çıkar ve "çözülemedi" gerekçesiyle
+ * düşerdi. Sahte çözücü herkese genel bir adres verir; kapının kendisi
+ * `guard.test.ts` içinde ayrıca sınanıyor.
+ */
+const fakeResolve = async () => ['93.184.216.34'];
+
 test('robots.txt yasakladığı adresi çekmez', async () => {
   const { impl, calls } = fakeFetch({
     'https://site.example/robots.txt': {
@@ -79,6 +90,7 @@ test('robots.txt yasakladığı adresi çekmez', async () => {
 
   const clock = fakeClock();
   const client = createPoliteClient({
+    resolveHost: fakeResolve,
     userAgent: UA,
     ...{ minDelayMs: 1000, timeoutMs: 5000, maxRetries: 1, circuitBreakerThreshold: 5 },
     fetchImpl: impl,
@@ -102,6 +114,7 @@ test('robots.txt alınamazsa güvenli varsayım yasaktır', async () => {
 
   const clock = fakeClock();
   const client = createPoliteClient({
+    resolveHost: fakeResolve,
     userAgent: UA,
     minDelayMs: 1000,
     timeoutMs: 5000,
@@ -125,6 +138,7 @@ test('robots.txt yoksa (404) erişim serbesttir', async () => {
 
   const clock = fakeClock();
   const client = createPoliteClient({
+    resolveHost: fakeResolve,
     userAgent: UA,
     minDelayMs: 1000,
     timeoutMs: 5000,
@@ -149,6 +163,7 @@ test('alan adı başına en az bekleme uygulanır', async () => {
 
   const clock = fakeClock();
   const client = createPoliteClient({
+    resolveHost: fakeResolve,
     userAgent: UA,
     minDelayMs: 2000,
     timeoutMs: 5000,
@@ -178,6 +193,7 @@ test('robots crawl-delay bizim ayarımızdan büyükse o kazanır', async () => 
 
   const clock = fakeClock();
   const client = createPoliteClient({
+    resolveHost: fakeResolve,
     userAgent: UA,
     minDelayMs: 1000, // bizim ayarımız daha hızlı
     timeoutMs: 5000,
@@ -209,6 +225,7 @@ test('429 yanıtında Retry-After değerine uyulur', async () => {
 
   const clock = fakeClock();
   const client = createPoliteClient({
+    resolveHost: fakeResolve,
     userAgent: UA,
     minDelayMs: 1000,
     timeoutMs: 5000,
@@ -237,6 +254,7 @@ test('kalıcı 4xx yeniden denenmez', async () => {
 
   const clock = fakeClock();
   const client = createPoliteClient({
+    resolveHost: fakeResolve,
     userAgent: UA,
     minDelayMs: 1000,
     timeoutMs: 5000,
@@ -261,6 +279,7 @@ test('ardışık hatalarda devre kesici açılır', async () => {
 
   const clock = fakeClock();
   const client = createPoliteClient({
+    resolveHost: fakeResolve,
     userAgent: UA,
     minDelayMs: 100,
     timeoutMs: 5000,
@@ -294,6 +313,7 @@ test('User-Agent her istekte gönderilir ve iletişim adresi içerir', async () 
 
   const clock = fakeClock();
   const client = createPoliteClient({
+    resolveHost: fakeResolve,
     userAgent: UA,
     minDelayMs: 0,
     timeoutMs: 5000,
@@ -329,6 +349,7 @@ function jetonluIstemci(routes: Record<string, RouteResponse | RouteResponse[]>)
   const { impl } = fakeFetch(routes);
   const clock = fakeClock();
   return createPoliteClient({
+    resolveHost: fakeResolve,
     userAgent: UA,
     minDelayMs: 0,
     timeoutMs: 5000,
@@ -409,6 +430,7 @@ test('ağ hatası tükendiğinde jeton son hata metnine girmez', async () => {
   }) as unknown as typeof fetch;
 
   const client = createPoliteClient({
+    resolveHost: fakeResolve,
     userAgent: UA,
     minDelayMs: 0,
     timeoutMs: 50,
@@ -444,6 +466,7 @@ test('çağıranın başlıkları isteğe eklenir', async () => {
 
   const clock = fakeClock();
   const client = createPoliteClient({
+    resolveHost: fakeResolve,
     userAgent: UA,
     minDelayMs: 0,
     timeoutMs: 5000,
@@ -483,6 +506,7 @@ test('çağıran user-agent başlığını EZEMEZ', async () => {
 
   const clock = fakeClock();
   const client = createPoliteClient({
+    resolveHost: fakeResolve,
     userAgent: UA,
     minDelayMs: 0,
     timeoutMs: 5000,
@@ -525,6 +549,7 @@ test('yanıt vermeyen sunucuda istek zaman aşımına uğrar', async () => {
   };
 
   const client = createPoliteClient({
+    resolveHost: fakeResolve,
     userAgent: UA,
     minDelayMs: 0,
     timeoutMs: 25,
@@ -541,4 +566,291 @@ test('yanıt vermeyen sunucuda istek zaman aşımına uğrar', async () => {
       error instanceof Error && /[Zz]aman aşımı/.test(error.message),
     'zaman aşımı hatası fırlatılmalı, istek süresiz beklememeli',
   );
+});
+
+/* ===========================================================================
+ * YÖNLENDİRME DENETİMİ
+ * ---------------------------------------------------------------------------
+ * Önceki hâl `redirect: 'follow'` kullanıyordu: adres kapısı yalnızca İLK
+ * adrese uygulanırdı ve güvenli görünen bir alan adı 302 ile iç ağa
+ * yollayabilirdi. Aşağıdaki testler zincirin TAMAMININ denetlendiğini
+ * kanıtlıyor.
+ * ======================================================================== */
+
+/** İstenen adrese göre yanıt üreten, yönlendirme kurabilen sahte fetch. */
+function yonlendirenFetch(harita: Record<string, Response | (() => Response)>) {
+  const cagrilar: string[] = [];
+  const impl = (async (input: string | URL) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    cagrilar.push(url);
+    const kayit = harita[url];
+    if (!kayit) return new Response('bulunamadı', { status: 404 });
+    return typeof kayit === 'function' ? kayit() : kayit.clone();
+  }) as unknown as typeof fetch;
+  return { impl, cagrilar };
+}
+
+test('yönlendirme İÇ AĞA giderse reddedilir', async () => {
+  const clock = fakeClock();
+  const { impl, cagrilar } = yonlendirenFetch({
+    'https://feed.example/robots.txt': new Response('', { status: 404 }),
+    'https://feed.example/urunler.csv': new Response('', {
+      status: 302,
+      headers: { location: 'http://169.254.169.254/latest/meta-data/' },
+    }),
+  });
+
+  const client = createPoliteClient({
+    // Yalnızca feed.example çözülür; metadata adresi zaten IP olarak yazılı.
+    resolveHost: async () => ['93.184.216.34'],
+    userAgent: UA,
+    minDelayMs: 0,
+    timeoutMs: 1000,
+    maxRetries: 0,
+    circuitBreakerThreshold: 5,
+    fetchImpl: impl,
+    now: clock.now,
+    sleep: clock.sleep,
+  });
+
+  await assert.rejects(
+    () => client.get('https://feed.example/urunler.csv'),
+    (error: unknown) => (error as Error).name === 'UnsafeUrlError',
+  );
+
+  // EN ÖNEMLİ İDDİA: metadata adresine İSTEK HİÇ GİTMEDİ.
+  assert.ok(
+    !cagrilar.some((u) => u.includes('169.254.169.254')),
+    'yasak hedefe istek gönderilmemeliydi',
+  );
+});
+
+test('yönlendirme zinciri sınırı aşarsa reddedilir', async () => {
+  const clock = fakeClock();
+
+  const harita: Record<string, Response | (() => Response)> = {
+    'https://feed.example/robots.txt': new Response('', { status: 404 }),
+  };
+  // 0 → 1 → 2 → ... sonsuza kadar yönlendiren bir zincir.
+  for (let i = 0; i < 20; i += 1) {
+    harita[`https://feed.example/${i}`] = () =>
+      new Response('', { status: 302, headers: { location: `https://feed.example/${i + 1}` } });
+  }
+
+  const { impl, cagrilar } = yonlendirenFetch(harita);
+
+  const client = createPoliteClient({
+    resolveHost: fakeResolve,
+    userAgent: UA,
+    minDelayMs: 0,
+    timeoutMs: 1000,
+    maxRetries: 0,
+    circuitBreakerThreshold: 5,
+    maxRedirects: 3,
+    fetchImpl: impl,
+    now: clock.now,
+    sleep: clock.sleep,
+  });
+
+  await assert.rejects(
+    () => client.get('https://feed.example/0'),
+    (error: unknown) => (error as Error).name === 'TooManyRedirectsError',
+  );
+
+  // Sınır gerçekten uygulandı: 4 adım (0..3) + robots.txt.
+  const feedIstekleri = cagrilar.filter((u) => !u.endsWith('/robots.txt'));
+  assert.equal(feedIstekleri.length, 4, 'maxRedirects=3 → en fazla 4 istek');
+});
+
+test('GENEL bir adrese yönlendirme İZLENİR — kapı meşru akışı kesmiyor', async () => {
+  const clock = fakeClock();
+  const { impl } = yonlendirenFetch({
+    'https://feed.example/robots.txt': new Response('', { status: 404 }),
+    'https://feed.example/urunler.csv': new Response('', {
+      status: 301,
+      headers: { location: 'https://feed.example/v2/urunler.csv' },
+    }),
+    'https://feed.example/v2/urunler.csv': new Response('id,title\n1,Ürün', { status: 200 }),
+  });
+
+  const client = createPoliteClient({
+    resolveHost: fakeResolve,
+    userAgent: UA,
+    minDelayMs: 0,
+    timeoutMs: 1000,
+    maxRetries: 0,
+    circuitBreakerThreshold: 5,
+    fetchImpl: impl,
+    now: clock.now,
+    sleep: clock.sleep,
+  });
+
+  const sonuc = await client.get('https://feed.example/urunler.csv');
+
+  assert.equal(sonuc.body, 'id,title\n1,Ürün');
+  // Dönen adres SON adres olmalı; çağıran göreli bağlantıları buna göre çözer.
+  assert.equal(sonuc.url, 'https://feed.example/v2/urunler.csv');
+});
+
+/* ===========================================================================
+ * GÖVDE BOYUTU
+ * ======================================================================== */
+
+test('beyan edilen content-length sınırı aşarsa gövde HİÇ okunmaz', async () => {
+  const clock = fakeClock();
+  let cekilenParca = 0;
+
+  const impl = (async (input: string | URL) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    if (url.endsWith('/robots.txt')) return new Response('', { status: 404 });
+
+    /*
+     * SAYAÇ, BAYRAK DEĞİL. İlk yazılışta "akış hiç okundu mu" diye bir
+     * bayrak vardı ve test düştü -- ama koddan değil, ölçüm hatasından:
+     * `ReadableStream` kendi tamponunu doldurmak için `pull`'u kurulum
+     * anında BİR KEZ kendiliğinden çağırır. Yani bayrak bizim okumamızı
+     * değil, akışın kendi davranışını ölçüyordu.
+     *
+     * Sayaç bu ikisini ayırır: erken çıkışta yalnızca o kendiliğinden
+     * gelen tek çağrı olur; erken çıkış olmasaydı 10 MiB için binlerce.
+     */
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        cekilenParca += 1;
+        controller.enqueue(new Uint8Array(1024));
+      },
+    });
+
+    return new Response(stream, {
+      status: 200,
+      headers: { 'content-length': String(10 * 1024 * 1024) },
+    });
+  }) as unknown as typeof fetch;
+
+  const client = createPoliteClient({
+    resolveHost: fakeResolve,
+    userAgent: UA,
+    minDelayMs: 0,
+    timeoutMs: 1000,
+    maxRetries: 0,
+    circuitBreakerThreshold: 5,
+    maxBodyBytes: 1024,
+    fetchImpl: impl,
+    now: clock.now,
+    sleep: clock.sleep,
+  });
+
+  await assert.rejects(
+    () => client.get('https://feed.example/dev.csv'),
+    (error: unknown) => (error as Error).name === 'ResponseTooLargeError',
+  );
+
+  assert.ok(
+    cekilenParca <= 1,
+    `content-length yeterliyken gövde indirilmemeli (${cekilenParca} parça çekildi)`,
+  );
+});
+
+test('content-length YOKKEN (chunked) gerçek bayt sayısı sınırlanır', async () => {
+  const clock = fakeClock();
+  let uretilenParca = 0;
+
+  const impl = (async (input: string | URL) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    if (url.endsWith('/robots.txt')) return new Response('', { status: 404 });
+
+    /*
+     * content-length YOK. Yalnızca başlığa bakan bir denetim burada
+     * hiçbir şey yapmaz; sınır gerçek baytlar üzerinden uygulanmalı.
+     * Akış sonsuz: koruma çalışmazsa test asılır.
+     */
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        uretilenParca += 1;
+        controller.enqueue(new Uint8Array(256));
+      },
+    });
+
+    return new Response(stream, { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const client = createPoliteClient({
+    resolveHost: fakeResolve,
+    userAgent: UA,
+    minDelayMs: 0,
+    timeoutMs: 2000,
+    maxRetries: 0,
+    circuitBreakerThreshold: 5,
+    maxBodyBytes: 1024,
+    fetchImpl: impl,
+    now: clock.now,
+    sleep: clock.sleep,
+  });
+
+  await assert.rejects(
+    () => client.get('https://feed.example/sonsuz.csv'),
+    (error: unknown) => (error as Error).name === 'ResponseTooLargeError',
+  );
+
+  // Sınırın hemen ötesinde durdu; sonsuza kadar indirmedi.
+  assert.ok(uretilenParca <= 8, `akış erken kesilmeliydi (${uretilenParca} parça)`);
+});
+
+test('sınırın altındaki normal feed AYNEN döner — davranış korunuyor', async () => {
+  const clock = fakeClock();
+  const govde = 'id,title,price\n1,Ürün,100\n2,Başka,200';
+
+  const { impl } = yonlendirenFetch({
+    'https://feed.example/robots.txt': new Response('', { status: 404 }),
+    'https://feed.example/urunler.csv': new Response(govde, {
+      status: 200,
+      headers: { 'content-type': 'text/csv; charset=utf-8' },
+    }),
+  });
+
+  const client = createPoliteClient({
+    resolveHost: fakeResolve,
+    userAgent: UA,
+    minDelayMs: 0,
+    timeoutMs: 1000,
+    maxRetries: 0,
+    circuitBreakerThreshold: 5,
+    fetchImpl: impl,
+    now: clock.now,
+    sleep: clock.sleep,
+  });
+
+  const sonuc = await client.get('https://feed.example/urunler.csv');
+
+  assert.equal(sonuc.body, govde, 'gövde bozulmadan dönmeli (UTF-8 dahil)');
+  assert.equal(sonuc.status, 200);
+  assert.equal(sonuc.contentType, 'text/csv; charset=utf-8');
+});
+
+test('özel adrese ÇÖZÜLEN feed adresi istemci seviyesinde de reddedilir', async () => {
+  const clock = fakeClock();
+  const { impl, cagrilar } = yonlendirenFetch({});
+
+  const client = createPoliteClient({
+    resolveHost: async () => ['10.0.0.7'],
+    userAgent: UA,
+    minDelayMs: 0,
+    timeoutMs: 1000,
+    maxRetries: 3,
+    circuitBreakerThreshold: 5,
+    fetchImpl: impl,
+    now: clock.now,
+    sleep: clock.sleep,
+  });
+
+  await assert.rejects(
+    () => client.get('https://ic-ag.example/feed.csv'),
+    (error: unknown) => (error as Error).name === 'UnsafeUrlError',
+  );
+
+  /*
+   * Güvenlik hatası KALICI: robots.txt dahil hiçbir istek gitmemeli ve
+   * `maxRetries: 3` olmasına rağmen yeniden denenmemeli.
+   */
+  assert.equal(cagrilar.length, 0, 'yasak hedefe hiç istek gitmemeli');
 });

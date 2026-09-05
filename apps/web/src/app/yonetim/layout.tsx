@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import { ChartIcon, StoreIcon } from '@/components/Icons';
+import { ChainIcon, ChartIcon, StoreIcon } from '@/components/Icons';
 import { NavLink } from '@/components/NavLink';
 
 /**
@@ -40,6 +40,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <NavLink href="/yonetim/basvurular">
                 <StoreIcon className="h-4 w-4" />
                 Başvurular
+              </NavLink>
+            </li>
+            <li className="shrink-0">
+              <NavLink href="/yonetim/ortaklar">
+                <ChainIcon className="h-4 w-4" />
+                Ortaklar
               </NavLink>
             </li>
           </ul>

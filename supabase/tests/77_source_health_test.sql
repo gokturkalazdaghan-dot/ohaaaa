@@ -27,10 +27,10 @@ select is(
 
 -- --- Zemin: bir satıcı ve bir kaynak --------------------------------------
 insert into public.merchants
-  (slug, display_name, homepage_url, network, status, deeplink_template, country_code)
+  (slug, display_name, homepage_url, network, status, deeplink_template, country_code, terms_verified_at)
 values
   ('saglik-m', 'Saglik Magaza', 'https://sag.gecersiz', 'direct', 'active',
-   'https://sag.gecersiz/g?u={url}', 'TR');
+   'https://sag.gecersiz/g?u={url}', 'TR', now());
 
 insert into public.sources
   (merchant_id, slug, name, kind, endpoint_url, market, currency)

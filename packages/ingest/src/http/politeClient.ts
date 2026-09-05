@@ -18,6 +18,13 @@
 
 import { crawlDelayFor, isAllowed, parseRobotsTxt, type RobotsTxt } from './robots.js';
 import { maskUrl } from './redact.js';
+import { IngestError } from '../errors.js';
+import {
+  ResponseTooLargeError,
+  TooManyRedirectsError,
+  assertFetchable,
+  type HostResolver,
+} from './guard.js';
 
 export interface PoliteClientOptions {
   /**
@@ -34,17 +41,39 @@ export interface PoliteClientOptions {
   maxRetries: number;
   /** Bu kadar ardışık hatadan sonra alan adı bu çalışma için bırakılır. */
   circuitBreakerThreshold: number;
+  /**
+   * Bir istekte izlenecek en fazla yönlendirme.
+   *
+   * Sonsuz döngü ya da yüzlerce adımlık bir zincir, her adımda DNS + kapı
+   * denetimi çalıştırdığı için ucuz bir kaynak tüketim saldırısıdır.
+   */
+  maxRedirects?: number;
+  /**
+   * Gövde için en fazla bayt.
+   *
+   * Gövde belleğe alınıyor (`string`); sınırsız bırakmak, tek bir dev
+   * feed'in işçiyi düşürmesi demektir. Sınır, gövdenin TAMAMI indirilmeden
+   * uygulanır -- aşıldığı anda akış iptal edilir.
+   */
+  maxBodyBytes?: number;
   fetchImpl?: typeof fetch;
+  /** Ad çözücü. Testler gerçek DNS'e çıkmasın diye dışarıdan verilir. */
+  resolveHost?: HostResolver;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
 
-export const DEFAULT_OPTIONS: Omit<PoliteClientOptions, 'userAgent'> = {
+export const DEFAULT_OPTIONS = {
   minDelayMs: 2000,
   timeoutMs: 20_000,
   maxRetries: 3,
   circuitBreakerThreshold: 5,
-};
+  maxRedirects: 5,
+  // 64 MiB. Ürün feed'leri büyüktür ama bu sınırı aşan bir feed'in
+  // belleğe alınması zaten güvenli değil; kaynak başına ayarlanabilir
+  // hale getirmek ilk gerçek feed bağlandığında değerlendirilir.
+  maxBodyBytes: 64 * 1024 * 1024,
+} as const satisfies Omit<PoliteClientOptions, 'userAgent'>;
 
 export class RobotsDisallowedError extends Error {
   /*
@@ -101,7 +130,18 @@ export interface FetchResult {
 }
 
 export function createPoliteClient(options: PoliteClientOptions) {
-  const config = { ...DEFAULT_OPTIONS, ...options };
+  /*
+   * Yeni sınırlar isteğe bağlı: mevcut çağıranlar (cli.ts, testler) hiçbir
+   * değişiklik yapmadan çalışmaya devam eder ve varsayılanı alır. `??` ile
+   * ayrıca çözülüyor çünkü yayılım (spread), açıkça `undefined` verilmiş
+   * bir alanı varsayılanın ÜZERİNE yazardı.
+   */
+  const config = {
+    ...DEFAULT_OPTIONS,
+    ...options,
+    maxRedirects: options.maxRedirects ?? DEFAULT_OPTIONS.maxRedirects,
+    maxBodyBytes: options.maxBodyBytes ?? DEFAULT_OPTIONS.maxBodyBytes,
+  };
   const doFetch = config.fetchImpl ?? fetch;
   const now = config.now ?? Date.now;
   const sleep =
@@ -124,6 +164,55 @@ export function createPoliteClient(options: PoliteClientOptions) {
   }
 
   /**
+   * KAPILI GETİRME — her istek ve HER YÖNLENDİRME ADIMI için adres denetimi.
+   *
+   * Önceki hâl `redirect: 'follow'` kullanıyordu. Bu, denetimi yalnızca İLK
+   * adrese uygulamak demekti: güvenli görünen bir alan adı 302 ile
+   * `http://169.254.169.254/...` adresine yollayabilir ve `fetch` oraya
+   * sessizce giderdi. Yani kapı olsa bile atlanabilirdi.
+   *
+   * Artık yönlendirmeler ELLE izleniyor ve her adımda `assertFetchable`
+   * yeniden çalışıyor. Zincirin uzunluğu sınırlı: sonsuz döngü, her adımda
+   * DNS çözümü yaptıran ucuz bir tüketim saldırısıdır.
+   *
+   * Zaman aşımı TEK BİR BÜTÇE olarak taşınıyor. Önceden `withTimeout`
+   * yalnızca `fetch` sözünü sarıyordu; `fetch` başlıklar gelir gelmez
+   * çözülür, yani GÖVDE OKUMASI süresizdi. Yavaş damlatan bir sunucu
+   * işçiyi süresiz tutabilirdi. Bütçe artık başlıkları da gövdeyi de kapsar
+   * ve `AbortController` ile soket gerçekten kapanır.
+   */
+  async function guardedFetch(
+    startUrl: string,
+    init: RequestInit,
+    kalanMs: () => number,
+    signal: AbortSignal,
+  ): Promise<{ response: Response; finalUrl: string }> {
+    let current = startUrl;
+
+    for (let hop = 0; hop <= config.maxRedirects; hop += 1) {
+      await assertFetchable(current, { resolveHost: config.resolveHost });
+
+      const response = await withTimeout(
+        doFetch(current, { ...init, redirect: 'manual', signal }),
+        kalanMs(),
+      );
+
+      if (!YONLENDIRME_KODLARI.has(response.status)) {
+        return { response, finalUrl: current };
+      }
+
+      const konum = response.headers.get('location');
+      // Yönlendirme kodu ama adres yok: izlenecek bir hedef yok, yanıt
+      // olduğu gibi döner. Uydurma bir hedef üretmek yanlış olurdu.
+      if (!konum) return { response, finalUrl: current };
+
+      current = new URL(konum, current).toString();
+    }
+
+    throw new TooManyRedirectsError(startUrl, config.maxRedirects);
+  }
+
+  /**
    * robots.txt'yi alır ve önbelleğe koyar (alan adı başına bir kez).
    * Sonucu DÖNDÜRÜR: çağıran taraf mutasyona güvenip daraltma (narrowing)
    * yapamaz, çünkü ara `await`'ler durumu değiştirmiş olabilir.
@@ -132,13 +221,22 @@ export function createPoliteClient(options: PoliteClientOptions) {
     const state = stateFor(host);
     if (state.robots !== null) return state.robots;
 
+    const bitis = now() + config.timeoutMs;
+    const kalan = () => Math.max(0, bitis - now());
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), config.timeoutMs);
+
     try {
-      const response = await withTimeout(
-        doFetch(`${origin}/robots.txt`, {
-          headers: { 'user-agent': config.userAgent, accept: 'text/plain' },
-          redirect: 'follow',
-        }),
-        config.timeoutMs,
+      /*
+       * robots.txt de kapıdan geçer. Aynı kaynağa gittiği için ilk adres
+       * zaten denetlenmiş olur; asıl kazanç YÖNLENDİRMEDE: robots.txt bir
+       * özel adrese yönlendirilerek kapı atlatılabilirdi.
+       */
+      const { response } = await guardedFetch(
+        `${origin}/robots.txt`,
+        { headers: { 'user-agent': config.userAgent, accept: 'text/plain' } },
+        kalan,
+        controller.signal,
       );
 
       if (response.status === 404 || response.status === 410) {
@@ -153,7 +251,9 @@ export function createPoliteClient(options: PoliteClientOptions) {
         return false;
       }
 
-      const parsed = parseRobotsTxt(await response.text());
+      const parsed = parseRobotsTxt(
+        await readBodyLimited(response, ROBOTS_MAX_BYTES, `${origin}/robots.txt`),
+      );
       state.robots = parsed;
 
       const delaySeconds = crawlDelayFor(parsed, config.userAgent);
@@ -165,6 +265,8 @@ export function createPoliteClient(options: PoliteClientOptions) {
     } catch {
       state.robots = false;
       return false;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -193,6 +295,20 @@ export function createPoliteClient(options: PoliteClientOptions) {
       throw new CircuitOpenError(host);
     }
 
+    /*
+     * ADRES DENETİMİ ROBOTS'TAN ÖNCE.
+     *
+     * Sıra bir ayrıntı değil, TEŞHİS meselesi. Denetim yalnızca
+     * `guardedFetch` içinde kalsaydı iç ağa bakan bir adres önce robots.txt
+     * isteğinde takılır, `loadRobots` hatayı yutar ve operatöre
+     * "robots.txt erişimi yasaklıyor" denirdi -- gerçek sebep ise adresin
+     * özel bir ağı göstermesi. Yanlış teşhis, saatlerce yanlış yerde
+     * aranan bir hata demektir.
+     *
+     * Ayrıca ucuz: yasak bir adres için robots.txt isteği hiç gitmez.
+     */
+    await assertFetchable(targetUrl, { resolveHost: config.resolveHost });
+
     const robots = await loadRobots(url.origin, host);
 
     if (robots === false) {
@@ -217,9 +333,15 @@ export function createPoliteClient(options: PoliteClientOptions) {
     for (let attempt = 0; attempt <= config.maxRetries; attempt += 1) {
       await waitForSlot(host);
 
+      const bitis = now() + config.timeoutMs;
+      const kalan = () => Math.max(0, bitis - now());
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), config.timeoutMs);
+
       try {
-        const response = await withTimeout(
-          doFetch(targetUrl, {
+        const { response, finalUrl } = await guardedFetch(
+          targetUrl,
+          {
             /*
              * Çağıranın başlıkları SONA konuyor ama user-agent'ı ezemez:
              * kimliğimizi gizlemek robots uyumunu anlamsız kılardı ve bu
@@ -231,9 +353,9 @@ export function createPoliteClient(options: PoliteClientOptions) {
               ...(options.headers ?? {}),
               'user-agent': config.userAgent,
             },
-            redirect: 'follow',
-          }),
-          config.timeoutMs,
+          },
+          kalan,
+          controller.signal,
         );
 
         // 429 / 503: sunucu açıkça "yavaşla" diyor. Retry-After'a uyulur.
@@ -258,21 +380,45 @@ export function createPoliteClient(options: PoliteClientOptions) {
           throw new PermanentHttpError(response.status, targetUrl);
         }
 
+        /*
+         * GÖVDE SINIRLI OKUNUR. Önceki `await response.text()` ne kadar
+         * geleceğine bakmadan hepsini belleğe alıyordu; 10 GB'lık bir yanıt
+         * işçiyi düşürürdü ve bunun için saldırı bile gerekmezdi -- yanlış
+         * yapılandırılmış tek bir feed yeterdi.
+         */
+        const body = await withTimeout(
+          readBodyLimited(response, config.maxBodyBytes, finalUrl),
+          kalan(),
+        );
+
         state.consecutiveFailures = 0;
 
         return {
-          url: response.url || targetUrl,
+          url: finalUrl,
           status: response.status,
-          body: await response.text(),
+          body,
           contentType: response.headers.get('content-type'),
         };
       } catch (error) {
-        // Bu iki hata döngüden ÇIKAR: tekrarlamak sonucu değiştirmez.
+        /*
+         * Bu hatalar döngüden ÇIKAR: tekrarlamak sonucu değiştirmez.
+         *
+         * Güvenlik hataları özellikle önemli: bir SSRF denemesini ya da
+         * sınırı aşan bir gövdeyi yeniden denemek yalnızca kayıtları
+         * kirletir. `IngestError` üzerinden gelen `permanent` bayrağı
+         * kuyruğa da aynı şeyi söyler.
+         */
         if (error instanceof RobotsDisallowedError) throw error;
         if (error instanceof PermanentHttpError) throw error;
+        if (error instanceof IngestError && error.permanent) {
+          state.consecutiveFailures += 1;
+          throw error;
+        }
 
         lastError = error;
         state.nextAllowedAt = now() + backoffMs(attempt, config.minDelayMs);
+      } finally {
+        clearTimeout(timer);
       }
     }
 
@@ -287,6 +433,83 @@ export function createPoliteClient(options: PoliteClientOptions) {
     /** Test ve teşhis için alan adı durumu. */
     inspect: (host: string) => hosts.get(host),
   };
+}
+
+/**
+ * Yönlendirme sayılan durum kodları.
+ *
+ * 303 için yöntem GET'e döner; bu istemci zaten yalnızca GET yaptığı için
+ * ek bir davranış gerekmiyor.
+ */
+const YONLENDIRME_KODLARI = new Set([301, 302, 303, 307, 308]);
+
+/**
+ * robots.txt için ayrı ve çok daha küçük sınır.
+ *
+ * robots.txt bir metin dosyasıdır; megabaytlarcası ancak saldırı ya da
+ * arıza olur. Feed sınırını buraya uygulamak, 64 MiB'lık bir "robots.txt"i
+ * kabul etmek anlamına gelirdi.
+ */
+const ROBOTS_MAX_BYTES = 512 * 1024;
+
+/**
+ * Gövdeyi SINIRA KADAR okur; sınır aşılırsa akışı iptal edip fırlatır.
+ *
+ * İki katmanlı: önce beyan edilen `content-length`, sonra GERÇEKTEN gelen
+ * bayt. İkincisi şart, çünkü `content-length` yalan olabilir ya da hiç
+ * gönderilmeyebilir (chunked). Yalnızca başlığa güvenen bir denetim,
+ * başlığı atlayan bir sunucu karşısında hiçbir şey yapmaz.
+ *
+ * Sınır aşıldığında geri kalan İNDİRİLMEZ: `reader.cancel()` bağlantıyı
+ * kapatır. "Hepsini al, sonra boyuna bak" yaklaşımı, korumanın kendisini
+ * saldırının aracına çevirirdi.
+ */
+async function readBodyLimited(
+  response: Response,
+  maxBytes: number,
+  url: string,
+): Promise<string> {
+  const beyan = response.headers.get('content-length');
+  if (beyan !== null) {
+    const bildirilen = Number(beyan);
+    // ERKEN ÇIKIŞ: sunucu zaten "şu kadar göndereceğim" diyorsa, tek bayt
+    // indirmeden reddedilir.
+    if (Number.isFinite(bildirilen) && bildirilen > maxBytes) {
+      throw new ResponseTooLargeError(url, maxBytes);
+    }
+  }
+
+  const stream = response.body;
+  if (!stream) return '';
+
+  const reader = stream.getReader();
+  const parcalar: Uint8Array[] = [];
+  let toplam = 0;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+
+    toplam += value.byteLength;
+
+    if (toplam > maxBytes) {
+      // Gerisini indirme; soket kapansın.
+      await reader.cancel().catch(() => {});
+      throw new ResponseTooLargeError(url, maxBytes);
+    }
+
+    parcalar.push(value);
+  }
+
+  const birlesik = new Uint8Array(toplam);
+  let ofset = 0;
+  for (const parca of parcalar) {
+    birlesik.set(parca, ofset);
+    ofset += parca.byteLength;
+  }
+
+  return new TextDecoder('utf-8').decode(birlesik);
 }
 
 /** Üstel geri çekilme + jitter. Jitter, eşzamanlı denemelerin çakışmasını önler. */

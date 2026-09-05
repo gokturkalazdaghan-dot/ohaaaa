@@ -3,9 +3,9 @@ begin;
 select plan(16);
 
 insert into public.merchants
-  (slug, display_name, homepage_url, network, status, deeplink_template, country_code)
+  (slug, display_name, homepage_url, network, status, deeplink_template, country_code, terms_verified_at)
 values ('kuyruk-m', 'Kuyruk Magaza', 'https://kuy.gecersiz', 'direct', 'active',
-        'https://kuy.gecersiz/g?u={url}', 'TR');
+        'https://kuy.gecersiz/g?u={url}', 'TR', now());
 
 insert into public.sources (merchant_id, slug, name, kind, endpoint_url, market, currency)
 select id, 'kuyruk-feed', 'Kuyruk Feed', 'feed_csv',

@@ -3,18 +3,18 @@ begin;
 select plan(17);
 
 insert into public.merchants
-  (slug, display_name, homepage_url, network, status, deeplink_template, country_code)
+  (slug, display_name, homepage_url, network, status, deeplink_template, country_code, terms_verified_at)
 values
   ('net-magaza', 'Net Magaza', 'https://net.gecersiz', 'direct', 'active',
-   'https://net.gecersiz/g?u={url}', 'DE'),
+   'https://net.gecersiz/g?u={url}', 'DE', now()),
   -- İkinci ve üçüncü satıcı GEREKLİ: payouts benzersizliği
   -- (merchant_id, period_start, period_end) -- yani bir satıcının aynı
   -- dönemde iki ödemesi olamaz. Pratikte doğru, çünkü merchants tek bir
   -- ülkeye (dolayısıyla tek para birimine) bağlı.
   ('net-beyan', 'Net Beyan Magaza', 'https://beyan.gecersiz', 'direct', 'active',
-   'https://beyan.gecersiz/g?u={url}', 'DE'),
+   'https://beyan.gecersiz/g?u={url}', 'DE', now()),
   ('net-try', 'Net TRY Magaza', 'https://nettry.gecersiz', 'direct', 'active',
-   'https://nettry.gecersiz/g?u={url}', 'TR');
+   'https://nettry.gecersiz/g?u={url}', 'TR', now());
 
 -- --- Tahsil edilmiş bir ödeme (mevcut kanıt kapısıyla) ---------------------
 insert into public.payouts

@@ -3,9 +3,9 @@ begin;
 select plan(12);
 
 insert into public.merchants
-  (slug, display_name, homepage_url, network, status, deeplink_template, country_code)
+  (slug, display_name, homepage_url, network, status, deeplink_template, country_code, terms_verified_at)
 values ('taze-m', 'Taze Magaza', 'https://taze.gecersiz', 'direct', 'active',
-        'https://taze.gecersiz/g?u={url}', 'TR');
+        'https://taze.gecersiz/g?u={url}', 'TR', now());
 
 insert into public.products
   (merchant_id, external_id, title, price_cents, currency, market, status,
