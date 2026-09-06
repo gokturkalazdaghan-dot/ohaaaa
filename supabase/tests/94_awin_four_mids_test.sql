@@ -82,19 +82,21 @@ select throws_ok(
   null,
   '11) ayni ag icinde ayni MID iki kez kaydedilemiyor');
 
--- --- 12: mevcut yirmi kayit etkilenmedi ----------------------------------
--- GENEL magaza sayimi kullanilmiyor: seed kendi `direct` magazalarini
--- ekliyor ve test o zaman gocla ilgisiz bir sebepten duserdi. Olculen sey
--- gocun gercekten iddia ettigi ikili: awin kayitlari 20'den 24'e cikti ve
--- DOGRULANMIS sart sayisi 14'te KALDI -- yani dort yeni kayit, mevcut
--- dogrulamalarin hicbirini devralmadi.
+-- --- 12: mevcut kayitlarin dogrulamasi devralinmadi ----------------------
+-- TOPLAM SAYIM KULLANILMIYOR. Ilk halinde bu iddia "24 awin kaydi" diyordu
+-- ve bir sonraki advertiser eklendiginde -- Simple Project -- gocla hicbir
+-- ilgisi olmayan bir sebepten dustu. Sayim, buyuyen bir tabloda kararsiz
+-- bir olcudur.
+--
+-- Kararli olan degismez su: `terms_verified_at` yalnizca 20260905120000'in
+-- dizin kanitiyla doldurdugu 14 firmada dolu. Yeni eklenen hicbir kayit onu
+-- DEVRALMAZ; devralsaydi merchants_active_needs_verified_terms kapisi o
+-- kayitlar icin sessizce acilirdi.
 select is(
-  (select format('%s/%s',
-            count(*),
-            count(*) filter (where terms_verified_at is not null))
-     from public.merchants where network = 'awin'),
-  '24/14',
-  '12) awin kayitlari 24, dogrulanmis sart hala 14 -- mevcutlar etkilenmedi');
+  (select count(*)::int from public.merchants
+    where network = 'awin' and terms_verified_at is not null),
+  14,
+  '12) dogrulanmis sart sayisi hala 14 -- yeni kayitlar dogrulama devralmadi');
 
 select * from finish();
 rollback;
