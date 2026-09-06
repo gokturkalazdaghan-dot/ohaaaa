@@ -19,7 +19,15 @@ export interface QueueJob {
   kind: string;
   payload: Record<string, unknown>;
   attempt: number;
-  market: string | null;
+  /**
+   * İşin kapsandığı ticari bölge (`markets.code`), yoksa null.
+   *
+   * Eskiden `market` adıyla `jobs.market` enum sütununu taşıyordu; o sütun
+   * M4'te düşüyor ve yerini `jobs.market_code` alıyor. Ad da onunla birlikte
+   * değişti: alan adının sütun adından sapması, hangi sütunun okunduğunu
+   * bir sonraki okuyanın tahmin etmesine yol açardı.
+   */
+  marketCode: string | null;
   sourceId: string | null;
 }
 

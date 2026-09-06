@@ -20,8 +20,23 @@ import type { Currency } from './money.js';
 export const LOCALES = ['tr', 'de', 'en'] as const;
 export type Locale = (typeof LOCALES)[number];
 
-/** Faaliyet gösterilen pazarlar (ISO 3166-1 alpha-2). */
-export const MARKETS = ['TR', 'DE', 'US'] as const;
+/**
+ * Faaliyet gösterilen pazarlar (ISO 3166-1 alpha-2).
+ *
+ * ⚠️ BU LİSTE ŞU AN VERİTABANINDAN İLERİDE.
+ * `public.market` enum'u bugün yalnızca TR/DE/US taşıyor; buradaki GB/ES/PT
+ * karşılığı henüz şemada YOK. Bu bilerek böyle: pazar modeli veri odaklı
+ * `markets` tablosuna taşınıyor (global market modeli, M1–M4) ve enum
+ * tamamen düşürülecek. Araya bir `ALTER TYPE` sıkıştırmak, birkaç gün sonra
+ * düşürülecek bir tipe geri alınamaz değer eklemek olurdu.
+ *
+ * BUGÜN NEDEN GÜVENLİ: bu listedeki bir değer hiçbir veritabanı sorgusuna
+ * ULAŞMIYOR. `resolveMarket()` sonucu yalnızca `localeTag()`'e gidiyor;
+ * alım hattındaki `market` ise DB satırından OKUNUYOR, buraya yazılmıyor.
+ * Ölçüldü. Bu koşul değişirse -- yani bir pazar kodu sorguya parametre
+ * olarak geçmeye başlarsa -- şema hazır olana kadar o yol açılmamalı.
+ */
+export const MARKETS = ['TR', 'DE', 'US', 'GB', 'ES', 'PT'] as const;
 export type Market = (typeof MARKETS)[number];
 
 export const DEFAULT_LOCALE: Locale = 'tr';
@@ -66,13 +81,48 @@ export const MARKET_CONFIG: Record<Market, MarketConfig> = {
     numberLocale: 'en-US',
     locales: ['en'],
   },
+  /*
+   * GB / ES / PT — Awin advertiser kısa listesinin ülkeleri.
+   *
+   * Üçünün de `defaultLocale` değeri 'en'. Bu bir tercih değil, ELDEKİNİN
+   * DÜRÜST BEYANI: `LOCALES` yalnızca tr/de/en taşıyor ve projede çeviri
+   * altyapısı yok (i18n dizini, mesaj dosyası yok — metinler bileşenlerin
+   * içinde). 'es'/'pt' eklemek, karşılığı olmayan bir dil vaadi olurdu:
+   * kullanıcı İspanyolca seçer, sayfa İngilizce gelirdi.
+   *
+   * `numberLocale` ise gerçek: sayı ve para biçimi ülkeye göre değişir ve
+   * bunun için çeviri gerekmez. İspanya'da "1.234,56 €", Portekiz'de
+   * "1 234,56 €", Britanya'da "£1,234.56" -- üçü de farklı ve üçü de
+   * Intl tarafından karşılanıyor.
+   */
+  GB: {
+    code: 'GB',
+    currency: 'GBP',
+    defaultLocale: 'en',
+    numberLocale: 'en-GB',
+    locales: ['en'],
+  },
+  ES: {
+    code: 'ES',
+    currency: 'EUR',
+    defaultLocale: 'en',
+    numberLocale: 'es-ES',
+    locales: ['en'],
+  },
+  PT: {
+    code: 'PT',
+    currency: 'EUR',
+    defaultLocale: 'en',
+    numberLocale: 'pt-PT',
+    locales: ['en'],
+  },
 };
 
 /** BCP-47 dil etiketi — `<html lang>` ve sesli arama için. */
 const LOCALE_TAGS: Record<Locale, Record<string, string>> = {
-  tr: { TR: 'tr-TR', DE: 'tr-TR', US: 'tr-TR' },
-  de: { TR: 'de-DE', DE: 'de-DE', US: 'de-DE' },
-  en: { TR: 'en-GB', DE: 'en-GB', US: 'en-US' },
+  tr: { TR: 'tr-TR', DE: 'tr-TR', US: 'tr-TR', GB: 'tr-TR', ES: 'tr-TR', PT: 'tr-TR' },
+  de: { TR: 'de-DE', DE: 'de-DE', US: 'de-DE', GB: 'de-DE', ES: 'de-DE', PT: 'de-DE' },
+  en: { TR: 'en-GB', DE: 'en-GB', US: 'en-US', GB: 'en-GB', ES: 'en-GB', PT: 'en-GB' },
 };
 
 export function isLocale(value: unknown): value is Locale {

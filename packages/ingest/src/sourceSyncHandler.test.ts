@@ -27,7 +27,8 @@ const SOURCE: SourceConfig = {
   merchantId: 'merchant-tr',
   kind: 'feed_csv',
   endpointUrl: 'https://magaza.example/feed.csv',
-  market: 'TR',
+  marketCode: 'TR',
+  countryCode: 'TR',
   currency: 'TRY',
   allowedHosts: ['magaza.example'],
   fieldMapping: {
@@ -125,7 +126,7 @@ const job = (over: Partial<QueueJob> = {}): QueueJob => ({
   kind: 'SOURCE_SYNC',
   payload: { source_id: 'src-tr' },
   attempt: 1,
-  market: 'TR',
+  marketCode: 'TR',
   sourceId: 'src-tr',
   ...over,
 });
@@ -339,7 +340,7 @@ test('E2E: TR işi yalnızca TR kaynağını çalıştırır', async () => {
   const ingest = ingestRepository();
   const yuklenenler: string[] = [];
 
-  const DE: SourceConfig = { ...SOURCE, id: 'src-de', slug: 'de-feed', market: 'DE', currency: 'EUR' };
+  const DE: SourceConfig = { ...SOURCE, id: 'src-de', slug: 'de-feed', marketCode: 'EU', countryCode: 'DE', currency: 'EUR' };
 
   await runWorkerOnce({
     repository: queue([job()]).repository,

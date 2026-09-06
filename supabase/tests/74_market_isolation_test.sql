@@ -1,4 +1,22 @@
--- Pazar izolasyonu: teklif hangi pazara ait ve para birimiyle uyumlu mu?
+-- ============================================================================
+-- Pazar izolasyonu: teklif hangi pazara ait?
+-- ----------------------------------------------------------------------------
+-- 20260907110000 (M2) ile PARA BIRIMI PAZARDAN AYRILDI. Bu dosyanin 5. ve 7.
+-- iddialari eskiden `..._market_currency_uyumlu` kisitinin uyumsuz satiri
+-- REDDETTIGINI sinardi; o kisit artik yok, dolayisiyla iddialar yeni
+-- sozlesmeyi sinayacak sekilde TERS CEVRILDI: uyumsuz kombinasyon artik
+-- KABUL EDILMELI.
+--
+-- Iddia SILINMEDI, devre disi da birakilmadi -- yon degistirdi. Silinseydi
+-- ayrismanin gerceklestigini hicbir sey kanitlamazdi.
+--
+-- Uydurma para birimi REDDI kaybolmadi, YER DEGISTIRDI: artik currencies
+-- tablosuna yabanci anahtarla saglaniyor (91_geo_foreign_keys_test, iddia 8).
+--
+-- Dosyanin ASIL konusu -- iki pazarin tekliflerinin birbirine karismamasi --
+-- 8. ve 9. iddialarda AYNEN duruyor. Ayrisma o garantiyi kaldirmadi:
+-- karsilastirilabilirlik artik semanin degil arama katmaninin isi.
+-- ============================================================================
 begin;
 select plan(9);
 
@@ -25,16 +43,20 @@ select is(
   'pazari olmayan kaynak yok'
 );
 
--- --- 3) Uyumsuz para birimi REDDEDİLİR ------------------------------------
-select throws_ok(
+-- --- 3) Uyumsuz para birimi ARTIK KABUL EDİLİR ----------------------------
+/*
+ * ESKIDEN: bu insert `sources_market_currency_uyumlu` ile reddedilirdi.
+ * ARTIK: kabul edilmeli. Almanya'daki bir satici TRY ile fiyat verebilir;
+ * "bir pazar = bir para birimi" varsayimi global olcekte yanlisti (NORDICS
+ * bes ulkede dort para birimi, GCC alti ulkede alti para birimi tasiyor).
+ */
+select lives_ok(
   $$ insert into public.sources
        (merchant_id, slug, name, kind, endpoint_url, market, currency)
-     select id, 'uyumsuz', 'Uyumsuz', 'feed_csv', 'https://x.gecersiz/f.csv',
-            'DE', 'TRY'
+     select id, 'uyumsuz', 'Pazardan Farkli Para Birimi', 'feed_csv',
+            'https://x.gecersiz/f.csv', 'DE', 'TRY'
        from public.merchants where slug = 'de-magaza' $$,
-  '23514',
-  'new row for relation "sources" violates check constraint "sources_market_currency_uyumlu"',
-  'Alman pazarinda TRY fiyatli kaynak tam da pazar/para birimi kisitiyla engelleniyor'
+  'DE pazarinda TRY fiyatli kaynak ARTIK kabul ediliyor (para birimi pazardan ayri)'
 );
 
 insert into public.sources
@@ -57,16 +79,14 @@ select ok(
  * SINAMIYORDU -- pazar/para birimi kisiti hic devreye girmemisti bile.
  * Bu yuzden hata KODU degil, kisit ADI dogrulaniyor.
  */
-select throws_ok(
+select lives_ok(
   $$ insert into public.products
        (merchant_id, external_id, title, price_cents, currency, market,
         status, fulfillment, product_url)
-     select id, 'X1', 'Uyumsuz Urun', 1000, 'TRY', 'US', 'active',
+     select id, 'X1', 'Pazardan Farkli Para Birimi', 1000, 'TRY', 'US', 'active',
             'affiliate', 'https://de.gecersiz/u/x1'
        from public.merchants where slug = 'de-magaza' $$,
-  '23514',
-  'new row for relation "products" violates check constraint "products_market_currency_uyumlu"',
-  'ABD pazarinda TRY fiyatli teklif tam da pazar/para birimi kisitiyla engelleniyor'
+  'US pazarinda TRY fiyatli teklif ARTIK kabul ediliyor (para birimi pazardan ayri)'
 );
 
 -- --- 5) İki pazarın teklifleri BİRBİRİNE KARIŞMAZ -------------------------

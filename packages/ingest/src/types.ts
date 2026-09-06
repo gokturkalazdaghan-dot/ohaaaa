@@ -67,14 +67,26 @@ export interface SourceConfig {
   slug: string;
   merchantId: string;
   /**
-   * Bu kaynağın veri getirdiği pazar.
+   * Bu kaynağın veri getirdiği TİCARİ BÖLGE (`markets.code`).
    *
-   * Para biriminden AYRI taşınır: EUR hem Almanya hem Avusturya demektir
-   * ve bir satıcı kendi ülkesi dışındaki bir para birimiyle fiyat
-   * verebilir. Pazarı para biriminden türetmek, kullanıcıya kendisine
-   * gönderilmeyecek teklifleri "en ucuz" diye göstermeye yol açar.
+   * ÜÇ AYRI KAVRAM, ÜÇ AYRI ALAN: pazar ≠ ülke ≠ para birimi.
+   *   marketCode  → hangi ticari bölge      ('EU', 'NORDICS', 'GCC'…)
+   *   countryCode → hangi ülke              ('DE', 'ES', 'SE'…)
+   *   currency    → hangi para birimi       ('EUR', 'SEK'…)
+   *
+   * Bir EU kaynağı Almanya'dan da İspanya'dan da veri getirebilir ve ikisi
+   * de EUR olmak zorunda değildir. Bunları tek alana sıkıştırmak, "bir
+   * pazar = bir ülke = bir para birimi" varsayımını kodun içine gömerdi;
+   * o varsayım NORDICS (5 ülke, 4 para birimi) ve GCC (6 ülke, 6 para
+   * birimi) için YANLIŞ.
+   *
+   * Tip `string` -- `markets` bir REFERANS TABLOSU ve yeni bir pazar
+   * eklemek kod dağıtımı gerektirmemeli. Doğrulama sınırda: veritabanında
+   * yabancı anahtar, okuma anında bu katman.
    */
-  market: 'TR' | 'DE' | 'US';
+  marketCode: string;
+  /** Kaynağın ürün verdiği ülke (`countries.code`). Bilinmiyorsa null. */
+  countryCode: string | null;
   kind: 'feed_csv' | 'feed_xml' | 'feed_json' | 'api' | 'sitemap' | 'manual';
   endpointUrl: string | null;
   fieldMapping: FieldMapping;

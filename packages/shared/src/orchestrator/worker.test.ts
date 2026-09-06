@@ -31,7 +31,7 @@ const is = (over: Partial<QueueJob> & { id: string }): QueueJob => ({
   kind: 'yenile',
   payload: {},
   attempt: 1,
-  market: 'TR',
+  marketCode: 'TR',
   sourceId: null,
   ...over,
 });

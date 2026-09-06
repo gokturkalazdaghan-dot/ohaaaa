@@ -22,25 +22,34 @@ import 'server-only';
  * bir yönlendirmedir.
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import { SEARCH_SORTS, aramaAiAcik, searchIntentSchema, type SearchIntent } from '@ohaaaa/shared';
 
-import { SEARCH_SORTS, searchIntentSchema, type SearchIntent } from '@ohaaaa/shared';
+import { aiAyari } from './ai/config';
+import { yapisalMetin } from './ai/client';
 
 /*
- * Görselle arama zaten bu anahtarı kullanıyor; ikinci bir anahtar istemek
+ * Görselle arama zaten aynı ayarı kullanıyor; ikinci bir anahtar istemek
  * kurulumu iki katına çıkarırdı.
+ *
+ * Sağlayıcı artık seçilebilir (`AI_SAGLAYICI`), ama bu işlevin SÖZLEŞMESİ
+ * değişmedi: çağıranlar hâlâ yalnızca "açık mı" diye soruyor.
  */
 export function isSearchAiConfigured(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+  return aramaAiAcik(aiAyari());
 }
 
 /*
- * Model seçilebilir. Varsayılan en yetenekli model; arama kutusunda gecikme
- * kritikse işletmeci `SEARCH_INTENT_MODEL` ile daha hızlı bir modele
- * geçebilir. Bu bir maliyet kararı ve işletmecinin kararı -- kod kendi
- * başına ucuza kaçmaz.
+ * Model seçilebilir. Arama kutusunda gecikme kritikse işletmeci daha hızlı
+ * bir modele geçebilir; bu bir maliyet kararı ve işletmecinin kararı -- kod
+ * kendi başına ucuza kaçmaz. Varsayılan çözümlemesi artık `aiProvider`
+ * katmanında.
+ *
+ * DENETİM KAYDI İÇİN OKUNUYOR (`agent_decisions.model`), o sütun NOT NULL.
+ * Buradaki geri düşüş değeri pratikte veritabanına GİRMEZ: kayıt yalnızca
+ * AI çağrısı BAŞARILI olduktan sonra yazılıyor, yani o anda model zaten
+ * yapılandırılmış. Değer yine de uydurulmuyor -- ne olduğu açıkça yazılıyor.
  */
-export const MODEL = process.env.SEARCH_INTENT_MODEL?.trim() || 'claude-opus-5';
+export const MODEL = aiAyari()?.aramaModeli ?? 'yapilandirilmamis';
 
 /*
  * Üretimi kısıtlayan JSON şeması.
@@ -114,58 +123,54 @@ export type IntentResult =
   | { ok: false; reason: 'not_configured' | 'failed' | 'refused' };
 
 export async function parseSearchIntent(raw: string): Promise<IntentResult> {
-  if (!isSearchAiConfigured()) return { ok: false, reason: 'not_configured' };
+  const ayar = aiAyari();
+  if (!aramaAiAcik(ayar)) return { ok: false, reason: 'not_configured' };
 
   const metin = raw.trim().slice(0, 300);
   if (!metin) return { ok: false, reason: 'failed' };
 
-  const client = new Anthropic();
+  /*
+   * Sağlayıcıya özgü her şey (SDK mı HTTP mi, şema nasıl gönderilir, red
+   * nasıl anlaşılır) `ai/client` içinde. Buraya YALNIZCA metin dönüyor --
+   * ve doğrulama zinciri aşağıda, olduğu gibi duruyor.
+   */
+  const cevap = await yapisalMetin({
+    ayar: ayar!,
+    sistem: SISTEM,
+    kullaniciMetni: metin,
+    jsonSemasi: JSON_SEMASI,
+    semaAdi: 'arama_niyeti',
+    maxTokens: 1024,
+  });
 
+  if (!cevap.ok) {
+    /*
+     * Arama AI olmadan da çalışıyor: başarısızlıkta kullanıcının yazdığı
+     * metin olduğu gibi aranır. Bu yüzden hata fırlatılmaz.
+     *
+     * `refused` ile `failed` ayrı tutuluyor: birincisi modelin beklenen bir
+     * cevabı, ikincisi bir arıza. Karıştırmak, arızayı normal sayardı.
+     */
+    return { ok: false, reason: cevap.reason };
+  }
+
+  let ham: unknown;
   try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 1024,
-      system: SISTEM,
-      // Kullanıcı metni kendi bloğunda ve sınırları işaretli: modelin
-      // sistem istemiyle veriyi karıştırmasını zorlaştırır.
-      messages: [{ role: 'user', content: `<kullanici_metni>\n${metin}\n</kullanici_metni>` }],
-      output_config: { format: { type: 'json_schema', schema: JSON_SEMASI } },
-    });
-
-    /*
-     * Güvenlik sınıflandırıcısı isteği reddedebilir (HTTP 200 ama
-     * stop_reason 'refusal'). İçeriği okumadan ÖNCE bakılır; aksi hâlde
-     * boş içerik "anlaşılmadı" gibi görünür ve gerçek sebep kaybolur.
-     */
-    if (response.stop_reason === 'refusal') return { ok: false, reason: 'refused' };
-
-    const metinBlogu = response.content.find((block) => block.type === 'text');
-    if (!metinBlogu || metinBlogu.type !== 'text') return { ok: false, reason: 'failed' };
-
-    let ham: unknown;
-    try {
-      ham = JSON.parse(metinBlogu.text);
-    } catch {
-      return { ok: false, reason: 'failed' };
-    }
-
-    // Son söz Zod'un: şemaya uymayan bir çıktı hiçbir yere gitmez.
-    const dogrulanmis = searchIntentSchema.safeParse(ham);
-    if (!dogrulanmis.success) return { ok: false, reason: 'failed' };
-
-    return { ok: true, intent: dogrulanmis.data };
-  } catch (error) {
-    /*
-     * Arama AI olmadan da çalışıyor: hata hâlinde kullanıcının yazdığı
-     * metin olduğu gibi aranır. Bu yüzden hata fırlatılmaz, kaydedilir.
-     */
-    console.error(
-      JSON.stringify({
-        level: 'error',
-        msg: 'Arama niyeti çözümlenemedi',
-        error: error instanceof Error ? error.message : String(error),
-      }),
-    );
+    ham = JSON.parse(cevap.metin);
+  } catch {
     return { ok: false, reason: 'failed' };
   }
+
+  /*
+   * SON SÖZ ZOD'UN VE BU DEĞİŞMEDİ.
+   *
+   * Sağlayıcı değiştirmek bu satırı etkilemiyor: hangi model ne üretirse
+   * üretsin, şemaya uymayan bir çıktı hiçbir yere gitmez. Yapısal çıktı
+   * desteği olmayan bir sağlayıcıya geçilse bile güvenlik seviyesi düşmez
+   * -- yalnızca daha çok çıktı burada elenir.
+   */
+  const dogrulanmis = searchIntentSchema.safeParse(ham);
+  if (!dogrulanmis.success) return { ok: false, reason: 'failed' };
+
+  return { ok: true, intent: dogrulanmis.data };
 }

@@ -18,6 +18,11 @@
 
 import 'server-only';
 
+import { gorselAiAcik } from '@ohaaaa/shared';
+
+import { aiAyari } from './ai/config';
+import { gorselMetin } from './ai/client';
+
 /** Desteklenen görsel türleri. Model tarafının kabul ettiği kümeyle aynı. */
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
@@ -33,9 +38,18 @@ export type VisualSearchResult =
   | { ok: true; query: string; description: string }
   | { ok: false; reason: 'not_configured' | 'unsupported_type' | 'too_large' | 'no_match' | 'failed' };
 
-/** Görme modeli yapılandırılmış mı? */
+/**
+ * Görme modeli yapılandırılmış mı?
+ *
+ * Sağlayıcı artık seçilebilir, ama bu işlevin SÖZLEŞMESİ değişmedi:
+ * `layout.tsx` ve `page.tsx` hâlâ yalnızca bir boolean alıyor ve istemciye
+ * inen tek şey o -- anahtarın kendisi değil.
+ *
+ * Metin aramasından AYRI sorulur: bir işletmeci yalnızca metin aramasını
+ * açıp görsel aramayı kapalı tutabilir (görme modeli tanımlamayarak).
+ */
 export function isVisualSearchConfigured(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+  return gorselAiAcik(aiAyari());
 }
 
 /**
@@ -48,13 +62,11 @@ export async function describeProductImage(
   bytes: ArrayBuffer,
   mediaType: string,
 ): Promise<VisualSearchResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
-  if (!apiKey) return { ok: false, reason: 'not_configured' };
+  const ayar = aiAyari();
+  if (!gorselAiAcik(ayar)) return { ok: false, reason: 'not_configured' };
 
   if (!ALLOWED_TYPES.has(mediaType)) return { ok: false, reason: 'unsupported_type' };
   if (bytes.byteLength > MAX_IMAGE_BYTES) return { ok: false, reason: 'too_large' };
-
-  const model = process.env.VISUAL_SEARCH_MODEL?.trim() || 'claude-haiku-4-5-20251001';
 
   /*
    * İstem bilinçli olarak dar: modelden ürünü SATIN ALINABİLİR biçimde
@@ -63,7 +75,7 @@ export async function describeProductImage(
    * WH-1000XM5" iyi bir arama terimi.
    *
    * Emin olamadığında marka/model uydurması engelleniyor: uydurulmuş bir
-   * model adı, hiç sonuç vermeyen bir aramadan daha kötüdür — kullanıcı
+   * model adı, hiç sonuç vermeyen bir aramadan daha kötüdür -- kullanıcı
    * ürünün katalogda olmadığını değil, aramanın bozuk olduğunu düşünür.
    */
   const prompt = [
@@ -77,76 +89,29 @@ export async function describeProductImage(
     '- Fotoğrafta satın alınabilir bir ürün yoksa yalnızca YOK yaz.',
   ].join('\n');
 
-  try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 64,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: mediaType,
-                  data: Buffer.from(bytes).toString('base64'),
-                },
-              },
-              { type: 'text', text: prompt },
-            ],
-          },
-        ],
-      }),
-      // Kullanıcı bir arama kutusunun önünde bekliyor: yanıt gelmiyorsa
-      // süresiz beklemek yerine hızlıca "olmadı" demek daha iyi.
-      signal: AbortSignal.timeout(20_000),
-    });
+  // Sağlayıcıya özgü her şey `ai/client` içinde; buraya yalnızca metin döner.
+  const cevap = await gorselMetin({
+    ayar: ayar!,
+    prompt,
+    bytes,
+    mediaType,
+    maxTokens: 64,
+  });
 
-    if (!response.ok) {
-      console.error(
-        JSON.stringify({
-          level: 'error',
-          msg: 'Görsel arama modeli hata döndü',
-          status: response.status,
-        }),
-      );
-      return { ok: false, reason: 'failed' };
-    }
+  /*
+   * Modelin reddi de eşleşmeme sayılıyor: kullanıcı açısından ikisi de
+   * "bu fotoğraftan ürün çıkmadı" demek ve arayüzün ayrı bir davranışı yok.
+   * Arıza (`failed`) ayrı kalıyor -- o bir sistem sorunu.
+   */
+  if (!cevap.ok) return { ok: false, reason: cevap.reason === 'refused' ? 'no_match' : 'failed' };
 
-    const payload = (await response.json()) as {
-      content?: Array<{ type: string; text?: string }>;
-    };
+  const text = cevap.metin.trim();
+  if (!text || /^yok\b/i.test(text)) return { ok: false, reason: 'no_match' };
 
-    const text = (payload.content ?? [])
-      .filter((block) => block.type === 'text')
-      .map((block) => block.text ?? '')
-      .join(' ')
-      .trim();
+  // Model kuralı çiğneyip tırnak ya da fazladan satır eklerse temizle.
+  const query = text.split('\n')[0]!.replace(/^["'“”]+|["'“”]+$/g, '').trim().slice(0, 120);
 
-    if (!text || /^yok\b/i.test(text)) return { ok: false, reason: 'no_match' };
+  if (!query) return { ok: false, reason: 'no_match' };
 
-    // Model kuralı çiğneyip tırnak ya da fazladan satır eklerse temizle.
-    const query = text.split('\n')[0]!.replace(/^["'“”]+|["'“”]+$/g, '').trim().slice(0, 120);
-
-    if (!query) return { ok: false, reason: 'no_match' };
-
-    return { ok: true, query, description: text };
-  } catch (error) {
-    console.error(
-      JSON.stringify({
-        level: 'error',
-        msg: 'Görsel arama isteği başarısız',
-        error: error instanceof Error ? error.message : String(error),
-      }),
-    );
-    return { ok: false, reason: 'failed' };
-  }
+  return { ok: true, query, description: text };
 }
