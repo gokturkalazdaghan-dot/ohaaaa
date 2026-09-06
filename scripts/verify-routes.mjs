@@ -30,6 +30,35 @@ const APP = new URL('../apps/web/src/app', import.meta.url).pathname;
 /** Oturum gerektiren yollar: giriş sayfasına yönlenmeleri BEKLENEN davranış. */
 const KORUMALI = ['/tasoron/panel', '/yonetim', '/siparislerim', '/degerlendirmelerim', '/adreslerim'];
 
+/*
+ * PAZAR YERI YUZEYI — ORTAKLIK KIPINDE 404 DONMESI BEKLENIR.
+ *
+ * Bu betik once yalnizca "HTTP >= 400 kotudur" diyordu ve ortaklik kipinde
+ * bu 13 rotayi HATA sayiyordu. Dogru cevabi hata sayan bir denetim, bir
+ * sure sonra gormezden gelinir; gormezden gelinen denetim de gercek bir
+ * gerilemeyi kacirir.
+ *
+ * Simdi kip biliniyor ve beklenti TERSINE cevriliyor: ortaklik kipinde bu
+ * yollarda 404 GECER, baska her sey DUSER. Boylece asagidaki gerileme
+ * yakalanir -- ki uretimde bir kez GERCEKTEN yasandi:
+ *
+ *   middleware'in oturum yonlendirmesi, sayfadaki commerceGuard'dan ONCE
+ *   calisiyordu; /siparislerim 404 yerine /giris'e 307 veriyor ve boylece
+ *   pazar yeri yuzeyinin VAR OLDUGUNU dogruluyordu.
+ *
+ * Kip kurali `apps/web/src/lib/env.ts` ile ayni: 'hybrid' disindaki her sey
+ * ortaklik kipidir.
+ */
+const ORTAKLIK_KIPI = process.env.NEXT_PUBLIC_COMMERCE_MODE !== 'hybrid';
+
+const PAZAR_YERI = [
+  '/odeme',
+  '/siparislerim',
+  '/degerlendirmelerim',
+  '/adreslerim',
+  '/tasoron',
+];
+
 function rotalariTopla(dizin, onek = '') {
   const cikti = [];
   for (const ad of readdirSync(dizin)) {
@@ -117,9 +146,22 @@ for (const rota of rotalar) {
   sayfa.off('pageerror', cokmeDinleyici);
 
   const korumali = KORUMALI.some((p) => hedef.startsWith(p));
+  const pazarYeri = PAZAR_YERI.some((p) => hedef === p || hedef.startsWith(`${p}/`));
   const varilanYol = new URL(sayfa.url()).pathname;
 
-  if (durum >= 400) {
+  if (ORTAKLIK_KIPI && pazarYeri) {
+    // Beklenti tersine: burada DOGRU cevap 404'tur. Gerekcesi PAZAR_YERI
+    // tanimindaki notta.
+    if (durum === 404) {
+      gecti += 1;
+    } else {
+      hatalar.push(
+        `${hedef}: ortaklik kipinde 404 beklenirdi, HTTP ${durum} dondu` +
+          (varilanYol === hedef ? '' : ` (${varilanYol} adresine gidildi)`) +
+          ' -- pazar yeri yuzeyinin VARLIGI dogrulaniyor',
+      );
+    }
+  } else if (durum >= 400) {
     hatalar.push(`${hedef}: HTTP ${durum}`);
   } else if (korumali && varilanYol === hedef) {
     // Korumalı sayfa oturumsuz açıldıysa ya koruma çalışmıyordur ya da
