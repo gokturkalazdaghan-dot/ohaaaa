@@ -17,11 +17,8 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-import { runWorkerOnce } from '@ohaaaa/shared';
-
 import { runSource } from './pipeline.js';
-import { createQueueRepository, scheduleDueSources } from './queueRepository.js';
-import { createSourceSyncHandler } from './sourceSyncHandler.js';
+import { runScheduledIngest } from './runner.js';
 import { createSupabaseRepository, loadSources } from './supabaseRepository.js';
 import { createPoliteClient } from './http/politeClient.js';
 import { redact, redactError } from './http/redact.js';
@@ -101,10 +98,11 @@ async function main(): Promise<void> {
   });
 
   /*
-   * ZAMANLAYICI KİPİ — zincirin gerçek giriş noktası.
+   * ZAMANLAYICI KİPİ — zincirin giriş noktası.
    *
-   *   schedule_due_sources()  → SOURCE_SYNC işleri
-   *   runWorkerOnce()         → claim_jobs → işleyici → runSource
+   * Zincirin KENDİSİ `runner.ts` içindedir (`runScheduledIngest`) çünkü
+   * aynı tur HTTP tetikleyiciden de çalıştırılıyor. Burada yalnızca
+   * çağrılır ve sonucu insana okunur biçimde yazılır.
    *
    * Kuru çalışmada zamanlayıcı ÇALIŞTIRILMAZ: kuyruğa iş yazmak da bir
    * yazma işlemidir ve `--dry-run` sözünü bozardı.
@@ -115,55 +113,48 @@ async function main(): Promise<void> {
       process.exit(2);
     }
 
-    const planlanan = await scheduleDueSources(supabase);
-    console.log(`▸ Zamanlayıcı: ${planlanan.length} kaynak kuyruğa alındı`);
-    for (const p of planlanan) console.log(`  · ${p.sourceId} (${p.reason})`);
-
     /*
-     * Yetim işler önce kurtarılır: bir önceki çalışmada worker ölmüşse
-     * o işler `calisiyor` durumunda asılı kalmıştır ve kirası dolmuştur.
+     * ZİNCİRİN KENDİSİ ARTIK BURADA DEĞİL: `runScheduledIngest`.
+     *
+     * Aynı tur HTTP tetikleyiciden de (Vercel Cron) çalıştırılıyor. Adımları
+     * burada TEKRAR yazmak iki alım yolu demekti ve iki yol zamanla AYRIŞIR:
+     * biri yetim işleri kurtarır, diğeri unutur; biri nezaket gecikmesini
+     * uygular, diğeri uygulamaz. Ayrışma sessizdir -- ikisi de "çalışıyor"
+     * görünür ve fark yalnızca veri bozulduğunda ortaya çıkar.
+     *
+     * Bu dal artık yalnızca SUNUM yapıyor: turu çalıştırır, sonucu insana
+     * okunur biçimde yazar ve çıkış kodunu belirler.
      */
-    const { error: kurtarmaHatasi } = await supabase.rpc('recover_orphaned_jobs');
-    if (kurtarmaHatasi) {
-      console.error(`  ! yetim kurtarma başarısız: ${kurtarmaHatasi.message}`);
-    }
-
-    const queueRepo = createQueueRepository(supabase);
-    const ingestRepo = createSupabaseRepository(supabase);
-
-    const sonuc = await runWorkerOnce({
-      repository: queueRepo,
-      batchSize: 5,
-      // Aynı kaynağa eşzamanlı istek göndermemek için tek tek işlenir.
-      concurrency: 1,
-      leaseRenewMs: 60_000,
-      handlers: {
-        SOURCE_SYNC: createSourceSyncHandler({
-          loadSource: async (id) => {
-            const bulunan = await loadSources(supabase, { id });
-            return bulunan[0] ?? null;
-          },
-          repository: ingestRepo,
-          fetcher: fetcherForAll,
-          onComplete: (summary) => {
-            console.log(
-              `  ${statusIcon(summary.status)} ${summary.status} · ` +
-                `${summary.itemsSeen} görüldü, ${summary.itemsNew} yeni, ` +
-                `${summary.itemsChanged} değişti, ${summary.itemsUnchanged} aynı, ` +
-                `${summary.itemsDeleted} eksildi`,
-            );
-          },
-        }),
-      },
+    const sonuc = await runScheduledIngest({
+      supabase,
+      fetcher: fetcherForAll,
       log: (event, data) => console.log(JSON.stringify({ event, ...data })),
     });
 
+    console.log(`▸ Zamanlayıcı: ${sonuc.scheduled.length} kaynak kuyruğa alındı`);
+    for (const p of sonuc.scheduled) console.log(`  · ${p.sourceId} (${p.reason})`);
+
+    if (sonuc.orphansRecovered === null) {
+      console.error('  ! yetim kurtarma başarısız (tur yine de sürdü)');
+    } else if (sonuc.orphansRecovered > 0) {
+      console.log(`  · ${sonuc.orphansRecovered} yetim iş kurtarıldı`);
+    }
+
+    for (const summary of sonuc.summaries) {
+      console.log(
+        `  ${statusIcon(summary.status)} ${summary.status} · ` +
+          `${summary.itemsSeen} görüldü, ${summary.itemsNew} yeni, ` +
+          `${summary.itemsChanged} değişti, ${summary.itemsUnchanged} aynı, ` +
+          `${summary.itemsDeleted} eksildi`,
+      );
+    }
+
     console.log(
-      `▸ Worker: ${sonuc.claimed} alındı, ${sonuc.completed} tamamlandı, ` +
-        `${sonuc.failed} başarısız`,
+      `▸ Worker: ${sonuc.worker.claimed} alındı, ${sonuc.worker.completed} tamamlandı, ` +
+        `${sonuc.worker.failed} başarısız`,
     );
 
-    process.exit(sonuc.failed > 0 ? 1 : 0);
+    process.exit(sonuc.worker.failed > 0 ? 1 : 0);
   }
 
   const sources = await loadSources(supabase, { slug: options.sourceSlug });

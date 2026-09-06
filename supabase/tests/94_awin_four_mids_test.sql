@@ -6,7 +6,7 @@
 -- her alani uydurma degerle dolduran bir goc de gecerdi -- ve bu gocun tum
 -- meselesi tam olarak o alanlari DOLDURMAMAKTI.
 begin;
-select plan(12);
+select plan(13);
 
 -- --- 1-4: dordu de dogru MID ile var ------------------------------------
 select is(
@@ -49,17 +49,46 @@ select is(
   0, '7) hicbirinde onay tarihi yok');
 
 -- --- 8-9: BILINMEYEN UYDURULMADI -----------------------------------------
+/*
+ * 8-9) BU IKI IDDIA DARALDI, SILINMEDI.
+ *
+ * Ilk hallerinde DORDU icin de "ana sayfa/ulke/sablon BOS" diyorlardi ve
+ * 20260907140000'in kaniti olmayani doldurmadigini kanitliyorlardi.
+ * Sonradan Ravin Crossbows icin hesap sahibi gercek bilgi dogruladi
+ * (ulke US, MID'e dayali sablon) ve 20260907170000 onlari yazdi.
+ *
+ * Iddialar kalan UCE daraltildi: kaniti gelmeyen advertiser'da hala hicbir
+ * alan uydurulmadigini olcuyorlar. Silinselerdi "kanit yoksa yazma" kurali
+ * bu dosyada izsiz kalirdi; Ravin'i disari almasaydik test gercek bir
+ * ilerlemeyi hata sayardi.
+ *
+ * KANITI GELMEYEN UC: 25962, 61655, 17453.
+ */
 select is(
   (select count(*)::int from public.merchants
-    where network_advertiser_id in ('25962','61655','17453','115809')
+    where network_advertiser_id in ('25962','61655','17453')
       and (homepage_url is not null or country_code is not null)),
-  0, '8) ana sayfa ve ulke bos -- ad icindeki alan adi kanit degildir');
+  0, '8) kaniti gelmeyen ucte ana sayfa ve ulke hala bos');
 
 select is(
   (select count(*)::int from public.merchants
+    where network_advertiser_id in ('25962','61655','17453')
+      and deeplink_template is not null),
+  0, '9a) kaniti gelmeyen ucte yonlendirme sablonu hala bos');
+
+/*
+ * 9b) SART DOGRULAMASI ISE DORDU ICIN DE BOS OLMAK ZORUNDA.
+ *
+ * Ravin'in cerez penceresi dogrulandi (68 gun) ama KOMISYONU bildirilmedi.
+ * terms_verified_at yarim kanitla doldurulamaz: o sutun
+ * merchants_active_needs_verified_terms'in dayanagi ve doldurmak, yayina
+ * alma kapisini kaldirmak demek. Bu yuzden Ravin bu iddianin ICINDE kaliyor.
+ */
+select is(
+  (select count(*)::int from public.merchants
     where network_advertiser_id in ('25962','61655','17453','115809')
-      and (terms_verified_at is not null or deeplink_template is not null)),
-  0, '9) sart dogrulamasi ve yonlendirme sablonu bos');
+      and terms_verified_at is not null),
+  0, '9b) dordunde de sart dogrulamasi bos -- cerez bilmek komisyon bilmek degildir');
 
 -- --- 10: KAPI GERCEKTEN CALISIYOR ----------------------------------------
 -- 8 ve 9 yalnizca alanlarin bos oldugunu soyler. Asil soru: bu eksiklik
