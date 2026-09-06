@@ -1,4 +1,8 @@
 export type {
+  ApplicationResult,
+  ApplicationState,
+  DiscoveredFeed,
+  NormalizedProgram,
   AffiliateProvider,
   ConversionStatus,
   DeeplinkContext,
@@ -15,4 +19,21 @@ export {
   AWIN_PUBLISHER_ID,
   AWIN_DEEPLINK_TEMPLATE_SHAPE,
 } from './awin.js';
-export { getProvider, isKnownNetwork, knownNetworks } from './registry.js';
+export {
+  getProvider,
+  isKnownNetwork,
+  knownNetworks,
+  supportsCapability,
+  networksWithCapability,
+  callCapability,
+} from './registry.js';
+export type {
+  CapabilityMatrix,
+  CapabilitySupport,
+  ProviderCapability,
+} from './capabilities.js';
+export {
+  PROVIDER_CAPABILITIES,
+  allCapabilities,
+  requireCapability,
+} from './capabilities.js';

@@ -22,6 +22,8 @@
  * doğrular, sonra normalize eder.
  */
 
+import type { CapabilityMatrix } from './capabilities.js';
+
 /** Dönüşüm durumları — `public.conversion_status` enum'uyla birebir. */
 export type ConversionStatus = 'pending' | 'approved' | 'rejected' | 'paid';
 
@@ -75,7 +77,13 @@ export type ProviderErrorCode =
   | 'unknown_network'
   | 'verification_unavailable'
   | 'invalid_payload'
-  | 'unsupported_status';
+  | 'unsupported_status'
+  /** Ag bu isi API ile yapmiyor ya da sartlari otomatiklestirmeyi yasakliyor. */
+  | 'manual_required'
+  /** Yetenegin sozlesmesi henuz dogrulanmadi -- "bilmiyoruz". */
+  | 'capability_unavailable'
+  /** Beyan `supported` ama kod yok -- BIZIM hatamiz. */
+  | 'capability_not_implemented';
 
 export class ProviderError extends Error {
   constructor(
@@ -85,6 +93,78 @@ export class ProviderError extends Error {
     super(message);
     this.name = 'ProviderError';
   }
+}
+
+/**
+ * Ağdan keşfedilen bir programın AĞ BAĞIMSIZ modeli.
+ *
+ * TASARIM KURALI: bilinmeyen alan `null`. Boş string, 0 ya da "UNKNOWN"
+ * metni KULLANILMAZ -- üçü de bir DEĞER gibi davranır ve puanlamaya,
+ * filtreye, rapora sızar. `null` sızmaz; her okuyan onu ele almak zorunda
+ * kalır.
+ *
+ * Bu yüzden `commissionRate` de `number | null`: 0 geçerli bir oran
+ * (komisyonsuz program) ve "bilmiyoruz" ile aynı hücreye yazılamaz.
+ */
+export interface NormalizedProgram {
+  /** `merchants.network` ile aynı değer. */
+  network: string;
+  /** Ağın kendi program/advertiser kimliği (Awin'de MID). */
+  networkProgramId: string;
+  merchantName: string;
+  homepageUrl: string | null;
+  /** ISO-3166 alfa-2, büyük harf. */
+  countryCode: string | null;
+  /** `markets.code`. Ağ pazar kavramı taşımıyorsa null. */
+  marketCode: string | null;
+  /** ISO-4217. */
+  currency: string | null;
+  /** Oran (0.10 = %10), yüzde DEĞİL. Bilinmiyorsa null. */
+  commissionRate: number | null;
+  cookieWindowDays: number | null;
+  feedAvailable: boolean | null;
+  productCount: number | null;
+  applicationSupported: boolean | null;
+  deeplinkSupported: boolean | null;
+  /** Serbest metin program şartları. */
+  terms: string | null;
+  /** Ağdaki ham durum metni (ör. "joined", "notjoined"). */
+  networkStatus: string | null;
+  /** Bu kaydın ağdan en son ne zaman doğrulandığı (ISO-8601). */
+  lastVerifiedAt: string;
+}
+
+/** Başvuru durum makinesi — `AŞAMA 4` ile birebir. */
+export type ApplicationState =
+  | 'DISCOVERED'
+  | 'ELIGIBLE'
+  | 'APPLICATION_READY'
+  | 'APPLIED'
+  | 'PENDING'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'MANUAL_REQUIRED';
+
+export interface ApplicationResult {
+  state: ApplicationState;
+  /** Ağın başvuruya verdiği kimlik; yoksa null. */
+  networkApplicationId: string | null;
+  /** Ağdan gelen ham gerekçe/mesaj. */
+  message: string | null;
+  checkedAt: string;
+}
+
+/** Ağdan keşfedilen feed — adres doğrulanmadan source açılmaz. */
+export interface DiscoveredFeed {
+  url: string;
+  /** `sources.kind` ile uyumlu: feed_csv | feed_xml | feed_json. */
+  kind: string;
+  /**
+   * Kimlik doğrulama gerekiyorsa yalnızca ORTAM DEĞİŞKENİ ADI taşınır,
+   * değeri asla. Depodaki `sources.auth_secret_ref` kalıbının aynısı.
+   */
+  authSecretRef: string | null;
+  lastUpdatedAt: string | null;
 }
 
 export interface AffiliateProvider {
@@ -109,4 +189,27 @@ export interface AffiliateProvider {
    * `buildAffiliateUrl` akışını kullanır — mevcut davranış korunur.
    */
   buildDeeplink?(context: DeeplinkContext): string;
+
+  /**
+   * Her yeteneğin durumu. ZORUNLU ve varsayılansız: yeni bir yetenek
+   * eklendiğinde derleyici her sağlayıcıyı tek tek uyarır. Varsayılan
+   * olsaydı yeni yetenek sessizce o değeri alırdı.
+   */
+  readonly capabilities: CapabilityMatrix;
+
+  /*
+   * Aşağıdakiler İSTEĞE BAĞLI. Bir sağlayıcı yalnızca `supported` beyan
+   * ettiği yeteneğin metodunu yazar; çağrı `requireCapability` üzerinden
+   * geçtiği için beyan ile kod ayrışamaz.
+   *
+   * Hiçbiri burada varsayılan bir uygulama taşımıyor: ağdan veri çekmenin
+   * "makul varsayılanı" yoktur; olsaydı doğrulanmamış bir sözleşme
+   * çalışıyormuş gibi görünürdü.
+   */
+  discoverPrograms?(): Promise<NormalizedProgram[]>;
+  lookupProgram?(networkProgramId: string): Promise<NormalizedProgram | null>;
+  submitApplication?(networkProgramId: string): Promise<ApplicationResult>;
+  applicationStatus?(networkProgramId: string): Promise<ApplicationResult>;
+  programMetadata?(networkProgramId: string): Promise<NormalizedProgram | null>;
+  discoverFeeds?(networkProgramId: string): Promise<DiscoveredFeed[]>;
 }

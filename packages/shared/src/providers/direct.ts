@@ -7,6 +7,7 @@
  * yapıyorsak tam olarak onu yapsın.
  */
 
+import type { CapabilityMatrix } from './capabilities.js';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 
@@ -58,7 +59,39 @@ export function verifyHmacSha256(
   return timingSafeEqual(providedBuffer, expectedBuffer);
 }
 
+/**
+ * DOĞRUDAN ANLAŞMA YETENEK BEYANI.
+ *
+ * `direct` bir AĞ DEĞİL: mağazayla birebir anlaşma. Keşif, başvuru ve
+ * program metadata'sı kavramsal olarak YOKTUR -- ortada sorgulanacak bir
+ * ağ kataloğu yok, iki taraf anlaşır ve operatör kaydı elle girer. Bu
+ * yüzden `manual_required`, `unavailable` değil: bu bir BOŞLUK değil KARAR.
+ *
+ * Postback ve komisyon normalizasyonu `supported`: HMAC-SHA256 şeması
+ * bizim belirlediğimiz şemadır (karşı taraf ona uyar), dolayısıyla
+ * doğrulanmış sayılır ve kodu yazılmıştır.
+ *
+ * `deeplink` = supported: ortak `buildAffiliateUrl` akışı yeterli;
+ * mağazanın kendi şablonu `merchants.deeplink_template`'te durur.
+ *
+ * `feed_discovery` = manual_required: feed adresini operatör anlaşmadan
+ * öğrenir; keşfedilecek bir uç nokta yok.
+ */
+const DIRECT_CAPABILITIES: CapabilityMatrix = {
+  program_discovery: 'manual_required',
+  program_lookup: 'manual_required',
+  application_submit: 'manual_required',
+  application_status: 'manual_required',
+  program_metadata: 'manual_required',
+  feed_discovery: 'manual_required',
+  deeplink: 'supported',
+  transaction_postback: 'supported',
+  commission_normalization: 'supported',
+};
+
 export const directProvider: AffiliateProvider = {
+  capabilities: DIRECT_CAPABILITIES,
+
   network: 'direct',
   displayName: 'Doğrudan anlaşma',
 

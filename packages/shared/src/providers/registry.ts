@@ -10,6 +10,7 @@
  * İkisi de sessizce olur. Bu yüzden bilinmeyen ağ HATA fırlatır.
  */
 
+import { requireCapability, type ProviderCapability } from './capabilities.js';
 import { awinProvider } from './awin.js';
 import { directProvider } from './direct.js';
 import { ProviderError, type AffiliateProvider } from './types.js';
@@ -60,4 +61,44 @@ export function getProvider(network: string | null | undefined): AffiliateProvid
   }
 
   return provider;
+}
+
+/**
+ * Bir ağın belirli bir yeteneği otomatik yapıp yapamadığı.
+ *
+ * Çağıranın (keşif turu, başvuru motoru, feed onboarding) bu soruyu
+ * SORMADAN metodu çağırması gerekmiyor: `callCapability` zaten kapalı
+ * başarısız oluyor. Bu fonksiyon planlama içindir -- "hangi ağlarda keşif
+ * turu koşabilirim" gibi.
+ */
+export function supportsCapability(
+  network: string,
+  capability: ProviderCapability,
+): boolean {
+  return getProvider(network).capabilities[capability] === 'supported';
+}
+
+/** Yeteneği `supported` olan kayıtlı ağlar. */
+export function networksWithCapability(capability: ProviderCapability): string[] {
+  return PROVIDERS.filter((p) => p.capabilities[capability] === 'supported')
+    .map((p) => p.network)
+    .sort();
+}
+
+/**
+ * Yetenek metodunu BEYANLA BİRLİKTE çözer.
+ *
+ * Doğrudan `provider.discoverPrograms?.()` çağırmak yerine bunun
+ * kullanılması şart: optional chaining, beyanı `unavailable` olan bir
+ * yeteneği sessizce `undefined` döndürerek atlar ve çağıran bunu "sonuç
+ * yok" sanar. Burada ise hata fırlar ve sebebi (manual_required /
+ * capability_unavailable / capability_not_implemented) ayrı ayrı görünür.
+ */
+export function callCapability<K extends ProviderCapability>(
+  network: string,
+  capability: K,
+  pick: (provider: AffiliateProvider) => unknown,
+): ReturnType<typeof requireCapability> {
+  const provider = getProvider(network);
+  return requireCapability(provider, capability, pick(provider) as never);
 }

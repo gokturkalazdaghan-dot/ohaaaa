@@ -32,6 +32,7 @@
  * Sözleşmenin geri kalanı, registry ve route değişmeden kalır.
  */
 
+import type { CapabilityMatrix } from './capabilities.js';
 import {
   ProviderError,
   type AffiliateProvider,
@@ -98,7 +99,42 @@ const EKSIK_BILGILER = [
   'durum degerlerinin karsiliklari',
 ].join(', ');
 
+/**
+ * AWIN YETENEK BEYANI — HEPSİ ÖLÇÜLMÜŞ DURUMU YANSITIR, UMUDU DEĞİL.
+ *
+ * `deeplink` = supported: şablonun biçimi operatörden geldi, iki gerçek MID
+ * (158122, 115809) ile üretilen adres ölçüldü ve `buildAffiliateUrl` zaten
+ * bu şablonu çözüyor. Sağlayıcı kendi `buildDeeplink`'ini TANIMLAMAZ --
+ * çalışan bir mekanizmayı ikizlemek, iki kopyanın zamanla ayrışması demek.
+ *
+ * `transaction_postback` ve `commission_normalization` = unavailable:
+ * Awin'in imza şeması ve alan adları bu ortamdan doğrulanamadı
+ * (wiki.awin.com / developer.awin.com ağ politikasıyla engelli). Tahmin
+ * ederek yazmak ilk gerçek dönüşümde ya sessizce yanlış tutar kaydetmek ya
+ * da doğrulamayı anlamsız kılmak olurdu. `verifyPostback` bu yüzden kapalı
+ * başarısız oluyor ve route 503 dönüyor.
+ *
+ * Kalan altısı = unavailable: Awin'in Publisher API'si var olabilir ama
+ * ENDPOINT, KİMLİK DOĞRULAMA ve ALAN EŞLEMESİ doğrulanmadı. `supported`
+ * yazmak, olmayan bir yeteneği beyan etmek olurdu; `manual_required`
+ * yazmak da yanlış olurdu -- o, "API bunu yapmıyor" KARARIDIR ve biz
+ * bakamadık. Aradaki fark, birinin geri dönüp bakıp bakmayacağını belirler.
+ */
+const AWIN_CAPABILITIES: CapabilityMatrix = {
+  program_discovery: 'unavailable',
+  program_lookup: 'unavailable',
+  application_submit: 'unavailable',
+  application_status: 'unavailable',
+  program_metadata: 'unavailable',
+  feed_discovery: 'unavailable',
+  deeplink: 'supported',
+  transaction_postback: 'unavailable',
+  commission_normalization: 'unavailable',
+};
+
 export const awinProvider: AffiliateProvider = {
+  capabilities: AWIN_CAPABILITIES,
+
   network: 'awin',
   displayName: 'Awin',
 
