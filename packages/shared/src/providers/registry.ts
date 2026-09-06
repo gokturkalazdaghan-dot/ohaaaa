@@ -94,11 +94,11 @@ export function networksWithCapability(capability: ProviderCapability): string[]
  * yok" sanar. Burada ise hata fırlar ve sebebi (manual_required /
  * capability_unavailable / capability_not_implemented) ayrı ayrı görünür.
  */
-export function callCapability<K extends ProviderCapability>(
+export function callCapability<T>(
   network: string,
-  capability: K,
-  pick: (provider: AffiliateProvider) => unknown,
-): ReturnType<typeof requireCapability> {
+  capability: ProviderCapability,
+  pick: (provider: AffiliateProvider) => T | undefined,
+): T {
   const provider = getProvider(network);
-  return requireCapability(provider, capability, pick(provider) as never);
+  return requireCapability<T>(provider, capability, pick(provider));
 }

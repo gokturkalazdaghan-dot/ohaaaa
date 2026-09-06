@@ -3,6 +3,8 @@ export type {
   ApplicationState,
   DiscoveredFeed,
   NormalizedProgram,
+  ProviderContext,
+  ProviderFetcher,
   AffiliateProvider,
   ConversionStatus,
   DeeplinkContext,

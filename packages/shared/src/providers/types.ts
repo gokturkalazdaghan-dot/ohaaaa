@@ -96,6 +96,46 @@ export class ProviderError extends Error {
 }
 
 /**
+ * Sağlayıcının ağa erişmek için kullanabileceği TEK yol.
+ *
+ * ======================================================================
+ * NEDEN GETİRİCİ DIŞARIDAN VERİLİYOR
+ * ======================================================================
+ * Sağlayıcı dosyaları `fetch`'i kendileri İÇE AKTARMAZ. Aktarsalardı her
+ * biri SSRF kapısını, gövde boyutu sınırını, zaman aşımını, yeniden
+ * denemeyi ve nezaket gecikmesini ATLARDI -- ve bunu fark etmek için her
+ * yeni sağlayıcı dosyasını tek tek okumak gerekirdi.
+ *
+ * Bu bağımlılık tersine çevrildiğinde kural TEK YERDE zorlanıyor: çağıran
+ * `createPoliteClient`'ı verir, sağlayıcı başka bir ağ yolu bulamaz.
+ * Yeni bir ağ eklendiğinde güvenlik gözden geçirmesi "bu dosya fetch
+ * çağırıyor mu" sorusuna iner.
+ *
+ * `shared` paketi `ingest`'e bağımlı olamaz (ters yönde bağımlılık var),
+ * bu yüzden burada YAPISAL olarak uyumlu asgari bir sözleşme duruyor:
+ * `createPoliteClient`'ın döndürdüğü nesne bunu zaten karşılıyor.
+ */
+export interface ProviderFetcher {
+  get(
+    url: string,
+    options?: { headers?: Record<string, string> },
+  ): Promise<{ body: string; contentType: string | null }>;
+}
+
+export interface ProviderContext {
+  /** Ağa erişimin tek yolu. */
+  fetch: ProviderFetcher;
+  /**
+   * Kimlik bilgisi ORTAM DEĞİŞKENİ ADIYLA çözülür, değeriyle değil:
+   * sağlayıcı koduna sır girmez ve `programs.raw`'a sızma yolu kapanır.
+   * Ad tanımlı değilse çözücü null döner ve sağlayıcı kapalı başarısız olur.
+   */
+  secret(envVarName: string): string | null;
+  /** Enjekte edilebilir saat — testlerde belirlenimci. */
+  now(): string;
+}
+
+/**
  * Ağdan keşfedilen bir programın AĞ BAĞIMSIZ modeli.
  *
  * TASARIM KURALI: bilinmeyen alan `null`. Boş string, 0 ya da "UNKNOWN"
@@ -206,10 +246,10 @@ export interface AffiliateProvider {
    * "makul varsayılanı" yoktur; olsaydı doğrulanmamış bir sözleşme
    * çalışıyormuş gibi görünürdü.
    */
-  discoverPrograms?(): Promise<NormalizedProgram[]>;
-  lookupProgram?(networkProgramId: string): Promise<NormalizedProgram | null>;
-  submitApplication?(networkProgramId: string): Promise<ApplicationResult>;
-  applicationStatus?(networkProgramId: string): Promise<ApplicationResult>;
-  programMetadata?(networkProgramId: string): Promise<NormalizedProgram | null>;
-  discoverFeeds?(networkProgramId: string): Promise<DiscoveredFeed[]>;
+  discoverPrograms?(ctx: ProviderContext): Promise<NormalizedProgram[]>;
+  lookupProgram?(ctx: ProviderContext, networkProgramId: string): Promise<NormalizedProgram | null>;
+  submitApplication?(ctx: ProviderContext, networkProgramId: string): Promise<ApplicationResult>;
+  applicationStatus?(ctx: ProviderContext, networkProgramId: string): Promise<ApplicationResult>;
+  programMetadata?(ctx: ProviderContext, networkProgramId: string): Promise<NormalizedProgram | null>;
+  discoverFeeds?(ctx: ProviderContext, networkProgramId: string): Promise<DiscoveredFeed[]>;
 }
