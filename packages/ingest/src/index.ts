@@ -15,6 +15,7 @@ export * from './programApplication.js';
 export * from './approvalTracking.js';
 export * from './incrementalSync.js';
 export * from './discoveryRepository.js';
+export * from './onboarding.js';
 export { parseCsv } from './adapters/csv.js';
 export { parseXml } from './adapters/xml.js';
 export { parseJson } from './adapters/json.js';
