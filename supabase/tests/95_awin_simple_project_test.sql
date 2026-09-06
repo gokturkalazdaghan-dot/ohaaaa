@@ -49,11 +49,27 @@ select is(
       and deeplink_template is not null),
   1, '5) MID ve sablon 20260907160000 ile dolduruldu (onaydan AYRI bir adim)');
 
+/*
+ * 6) BU IDDIA DA DARALDI.
+ *
+ * Ilk halinde "ana sayfa VE ulke bos" diyordu: bu dosya yazildiginda ikisi
+ * de bildirilmemisti ve sirketin Shenzhen merkezli olmasindan ulke
+ * turetilmedigini kanitliyordu. Ulkeyi sonradan hesap sahibi dogruladi
+ * (US -- sirket Cin merkezli ama PROGRAM ABD pazarina calisiyor; tam da bu
+ * yuzden sirket adresinden turetmek yanlis olurdu) ve 20260907170000 yazdi.
+ *
+ * Iddia artik iki olguyu birden kilitliyor: dogrulanan deger YAZILDI,
+ * dogrulanmayan deger HALA BOS. Ikincisi onemli cunku ana sayfa ALIM ICIN
+ * ZORUNLU: normalize.ts validateUrl, allowedHosts BOSSA her urun adresini
+ * reddeder -- ana sayfa gelmeden feed'den tek satir bile gecmez.
+ */
 select is(
-  (select count(*)::int from public.merchants
-    where slug = 'simple-project'
-      and (homepage_url is not null or country_code is not null)),
-  0, '6) ana sayfa ve ulke bos -- sirketin Shenzhen merkezli olmasi programin hedef ulkesi degildir');
+  (select format('%s/%s',
+            coalesce(country_code, '(bos)'),
+            coalesce(homepage_url, '(bos)'))
+     from public.merchants where slug = 'simple-project'),
+  'US/(bos)',
+  '6) ulke dogrulandi (US) ama ana sayfa hala bos -- alim bu haliyle sifir urun yazar');
 
 -- --- 7: KOMISYON DOGRULANMIS SAYILMADI ------------------------------------
 -- Davet mesajindaki "%10+" bir TABAN, bir oran degil. terms_verified_at'i
