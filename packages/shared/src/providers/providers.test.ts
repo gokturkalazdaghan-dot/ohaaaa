@@ -50,11 +50,17 @@ test('bos network degeri de reddedilir', () => {
   }
 });
 
-test('kayitli aglar direct ve awin', () => {
-  assert.deepEqual(knownNetworks(), ['awin', 'direct']);
+test('kayitli aglar: calisan ikisi + sozlesmesi dogrulanmamislar', () => {
+  // Doğrulanmamış ağlar da kayıtta: "tanımıyoruz" ile "sözleşmesini
+  // doğrulamadık" farklı şeylerdir ve ikincisi bir iş kalemidir.
+  // Ayrıntılı sınama `multiNetwork.test.ts` içinde.
+  const aglar = knownNetworks();
+  assert.ok(aglar.includes('direct'));
+  assert.ok(aglar.includes('awin'));
+  assert.ok(aglar.includes('cj'));
   assert.equal(isKnownNetwork('direct'), true);
   assert.equal(isKnownNetwork('awin'), true);
-  assert.equal(isKnownNetwork('amazon'), false);
+  assert.equal(isKnownNetwork('amazon'), false, 'kayitta olmayan ag taninmaz');
 });
 
 test('getProvider dogru saglayiciyi dondurur', () => {

@@ -153,17 +153,21 @@ select is(
 -- merchants.network -- DB kisiti kod tarafindaki kayitla ayni olmali
 -- ===========================================================================
 
--- DIKKAT: iki kisit da 23514 dondurur (merchants_active_needs_template ve
--- merchants_network_known). Yalnizca SQLSTATE'e bakan bir iddia YANLIS SEBEPLE
--- gecebilir. Bu yuzden satir her acidan gecerli tutuluyor ve kisit ADI da
--- dogrulaniyor.
+-- DIKKAT: birden cok kisit ayni satiri reddedebilir (ornegin
+-- merchants_active_needs_template). Yalnizca SQLSTATE'e bakan bir iddia
+-- YANLIS SEBEPLE gecebilir. Bu yuzden satir her acidan gecerli tutuluyor ve
+-- kisit ADI da dogrulaniyor.
+--
+-- Kisit CHECK'ten YABANCI ANAHTARA donustu (20260907270000_network_registry):
+-- ag listesi artik dort ayri CHECK'te sabit degil, tek bir referans
+-- tablosunda. Reddin kendisi degismedi; reddi YAPAN degisti.
 select throws_matching(
   $$insert into public.merchants
       (slug, display_name, homepage_url, network, status, country_code,
        deeplink_template, terms_verified_at)
     values ('ag-bilinmeyen', 'Bilinmeyen Ag', 'https://x.gecersiz',
             'uydurma-ag', 'active', 'TR', 'https://x.gecersiz/g?u={url}', now())$$,
-  'merchants_network_known',
+  'merchants_network_fk',
   '19) taninmayan network degeri veritabanina YAZILAMAZ (dogru kisit adiyla)'
 );
 

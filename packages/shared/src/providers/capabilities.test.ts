@@ -144,7 +144,7 @@ test('supportsCapability awin postback icin false', () => {
 // --- 7) Bilinmeyen ag hala fail-closed ----------------------------------
 test('bilinmeyen ag yetenek sorgusunda da varsayilana DUSMUYOR', () => {
   assert.throws(
-    () => supportsCapability('cj', 'deeplink'),
+    () => supportsCapability('kayitsiz-ag', 'deeplink'),
     (e: ProviderError) => e.code === 'unknown_network',
   );
 });

@@ -177,7 +177,7 @@ test('3) bilinmeyen ag varsayilana DUSMUYOR ve durum ALMIYOR', async () => {
   const depo = sahteDepo();
 
   const r = await runProgramApplications({
-    candidates: [aday({ network: 'cj' })],
+    candidates: [aday({ network: 'kayitsiz-ag' })],
     fetcher: cagrilmamaliFetcher,
     repository: depo.repository,
     ...HIZLI,

@@ -84,6 +84,16 @@ if command -v node >/dev/null 2>&1; then
   DATABASE_URL="$DB_URL" node "$ROOT/scripts/verify-canonical-parity.mjs"
 fi
 
+# Ag listesi iki yerde: kodda registry, veritabaninda affiliate_networks ve
+# ona bakan dort yabanci anahtar. Ayrisirlarsa ya kesif turu her seferinde
+# ayni yerde duser (kod fazla taniyor) ya da veri girer ama hicbir kod yolu
+# onu cozemez (DB fazla taniyor). Ikisi de kendi icinde tutarli oldugu icin
+# birim testleri ve pgTAP bunu goremez.
+if command -v node >/dev/null 2>&1; then
+  echo "▸ Ağ listesi eşitliği (kod = veritabanı)"
+  DATABASE_URL="$DB_URL" node "$ROOT/scripts/verify-network-parity.mjs"
+fi
+
 # Şema hazırken, uygulamanın attığı sorguların ona uyduğunu da doğrula.
 # Supabase kod yolu demo modunda hiç çalışmaz; bir tablo/sütun/fonksiyon adı
 # tutmuyorsa bu ancak canlıda, ilk ziyaretçide ortaya çıkardı.

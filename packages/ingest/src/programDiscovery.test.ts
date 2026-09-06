@@ -108,7 +108,7 @@ test('bilinmeyen ag varsayilana DUSMUYOR', async () => {
   const sonuc = await runProgramDiscovery({
     supabase: client,
     fetcher: cagrilmamaliFetcher,
-    networks: ['cj'],
+    networks: ['kayitsiz-ag'],
   });
 
   assert.equal(sonuc.outcomes[0]?.status, 'failed');
@@ -124,7 +124,7 @@ test('bir ag duserse tur devam ediyor', async () => {
   const sonuc = await runProgramDiscovery({
     supabase: client,
     fetcher: cagrilmamaliFetcher,
-    networks: ['cj', 'direct', 'awin'],
+    networks: ['kayitsiz-ag', 'direct', 'awin'],
   });
 
   assert.equal(sonuc.outcomes.length, 3, 'uc agin da sonucu olmali');

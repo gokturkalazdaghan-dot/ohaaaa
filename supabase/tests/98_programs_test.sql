@@ -89,11 +89,14 @@ select throws_ok(
 -- --- 11: bilinmeyen ağ reddediliyor --------------------------------------
 -- Kod tarafindaki registry ile DB kisiti ayni kumeyi tanimali; ayrisirsa
 -- kesfedilen program hicbir saglayiciyla eslesmez.
+-- 'cj' ARTIK KAYITLI (20260907270000_network_registry): sozlesmesi
+-- dogrulanmamis ama tanınan bir ag. Kayitli olmayan bir ad kullaniliyor.
+-- Kisit CHECK ten yabanci anahtara dondu; red 23514 yerine 23503.
 select throws_ok(
   $$ insert into public.programs
        (network, network_program_id, merchant_name, last_verified_at)
-     values ('cj', 'X', 'Bilinmeyen Ag', now()) $$,
-  '23514', null,
+     values ('kayitsiz-ag', 'X', 'Bilinmeyen Ag', now()) $$,
+  '23503', null,
   '11) kayitli olmayan ag reddediliyor');
 
 -- --- 12: boş program kimliği reddediliyor --------------------------------

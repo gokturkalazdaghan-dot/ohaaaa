@@ -40,6 +40,19 @@ export {
   requireCapability,
 } from './capabilities.js';
 export {
+  UNVERIFIED_NETWORKS,
+  UNVERIFIED_EVIDENCE,
+  createUnverifiedProvider,
+  unverifiedProviders,
+} from './unverifiedNetworks.js';
+export type { UnverifiedNetworkSpec } from './unverifiedNetworks.js';
+export {
+  CapabilityEvidenceError,
+  matrixFromEvidence,
+  unverifiedEvidence,
+} from './capabilityEvidence.js';
+export type { CapabilityEvidence, CapabilityEvidenceMap } from './capabilityEvidence.js';
+export {
   APPLICATION_STATES,
   APPLICATION_TRANSITIONS,
   canTransition,
