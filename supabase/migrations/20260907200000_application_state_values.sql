@@ -1,0 +1,34 @@
+-- ===========================================================================
+-- program_application_state: UNAVAILABLE ve NOT_IMPLEMENTED
+-- ===========================================================================
+--
+-- NEDEN BU DOSYADA BAŞKA HİÇBİR ŞEY YOK
+--
+-- `alter type ... add value` bir işlem bloğunda ÇALIŞIR ama eklenen değer
+-- AYNI işlemde KULLANILAMAZ. `apply-migrations.sh` her dosyayı
+-- `--single-transaction` ile uyguluyor; yani değeri ekleyip aynı dosyada
+-- bir kısıtta, trigger'da ya da doğrulama bloğunda kullanmak production'da
+-- düşerdi -- üstelik `verify-sql.sh` otomatik commit ile çalıştığı için
+-- YERELDE GEÇEREK. Bu ayrım daha önce bir kez pahalıya mal oldu.
+--
+-- Bu yüzden dosya tek bir iş yapıyor: değerleri ekliyor. Kullanan her şey
+-- bir sonraki göçte.
+--
+-- ---------------------------------------------------------------------------
+-- NEDEN İKİ YENİ DURUM
+-- ---------------------------------------------------------------------------
+-- Üçü de "başvuramadık" der ama üçünün AKSİYONU farklıdır ve tek değere
+-- indirmek, kimsenin geri dönüp bakmaması demektir:
+--
+--   MANUAL_REQUIRED  Ağın API'si bunu yapmıyor ya da şartları otomasyonu
+--                    yasaklıyor. Bir KARAR: operatöre iş düşer.
+--   UNAVAILABLE      Ağın sözleşmesi henüz DOĞRULANMADI. Bir BOŞLUK:
+--                    bakılması gereken bir şey var.
+--   NOT_IMPLEMENTED  Beyan `supported` ama kod yok. BİZİM hatamız.
+--
+-- İkincisini birincisiyle karıştırmak, "henüz bakmadık"ı "elle yapılır"
+-- kararı gibi göstermek olurdu ve o program bir daha hiç incelenmezdi.
+-- ===========================================================================
+
+alter type public.program_application_state add value if not exists 'UNAVAILABLE';
+alter type public.program_application_state add value if not exists 'NOT_IMPLEMENTED';

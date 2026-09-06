@@ -174,7 +174,21 @@ export interface NormalizedProgram {
   lastVerifiedAt: string;
 }
 
-/** Başvuru durum makinesi — `AŞAMA 4` ile birebir. */
+/**
+ * Başvuru durum makinesi — `public.program_application_state` ile BİREBİR.
+ *
+ * İkisi ayrışırsa kod, veritabanının reddedeceği bir durum yazmaya çalışır
+ * ve hata çalışma anında, yanlış yerde çıkar. `applications.test.ts` bu
+ * listeyi geçiş tablosuyla birlikte kilitliyor.
+ *
+ * SON ÜÇÜ AYRI DURUMDUR VE BİRLEŞTİRİLEMEZ:
+ *   MANUAL_REQUIRED  ağ otomasyona izin vermiyor -> operatöre iş düşer
+ *   UNAVAILABLE      ağın sözleşmesi doğrulanmadı -> bakılacak bir şey var
+ *   NOT_IMPLEMENTED  beyan `supported` ama kod yok -> bizim hatamız
+ *
+ * Tek bir "desteklenmiyor" değerine indirmek, bir BOŞLUĞU bir KARAR gibi
+ * gösterir ve o programa bir daha kimse bakmaz.
+ */
 export type ApplicationState =
   | 'DISCOVERED'
   | 'ELIGIBLE'
@@ -183,7 +197,9 @@ export type ApplicationState =
   | 'PENDING'
   | 'APPROVED'
   | 'REJECTED'
-  | 'MANUAL_REQUIRED';
+  | 'MANUAL_REQUIRED'
+  | 'UNAVAILABLE'
+  | 'NOT_IMPLEMENTED';
 
 export interface ApplicationResult {
   state: ApplicationState;

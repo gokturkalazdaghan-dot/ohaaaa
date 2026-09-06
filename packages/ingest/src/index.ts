@@ -10,6 +10,8 @@ export * from './queueRepository.js';
 export * from './sourceSyncHandler.js';
 export * from './runner.js';
 export * from './refreshSignals.js';
+export * from './applicationRepository.js';
+export * from './programApplication.js';
 export { parseCsv } from './adapters/csv.js';
 export { parseXml } from './adapters/xml.js';
 export { parseJson } from './adapters/json.js';
