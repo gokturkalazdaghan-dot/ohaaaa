@@ -213,7 +213,7 @@ begin
 
   -- 5) FARKLI urunler ayri kaliyor: kapatma fazla kapatmamis.
   insert into public.product_groups (slug, title, brand, gtin)
-       values ('goc-kanonik-c', 'Test Telefon 256GB', 'TestMarka', '0987654321098')
+       values ('goc-kanonik-c', 'Test Telefon 256GB', 'TestMarka', '0777000333000')
     returning id into v_b;
 
   if (select canonical_key from public.product_groups where id = v_a)

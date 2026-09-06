@@ -56,7 +56,7 @@ select throws_ok(
 
 select lives_ok(
   $$ insert into public.product_groups (slug, title, brand, gtin)
-     values ('olcek-c', 'Test Telefon 256GB', 'TestMarka', '0987654321098') $$,
+     values ('olcek-c', 'Test Telefon 256GB', 'TestMarka', '0777000333000') $$,
   '8) FARKLI urun ayri kaliyor -- kapatma fazla kapatmamis');
 
 -- --- 9: AYNI ÜRÜN FARKLI MERCHANT — teklifler ayrı, kanonik bir ------------
@@ -155,13 +155,13 @@ select has_column('public', 'products', 'canonical_key',
 
 -- 22-23: aynı ürün iki gösterimden TEK gruba
 select is(
-  public.resolve_canonical_group('0555000111002', 'OlcekMarka', null, 'Olcek Telefon'),
-  public.resolve_canonical_group('00555000111002', 'OlcekMarka', null, 'Olcek Telefon'),
+  public.resolve_canonical_group('0555000111008', 'OlcekMarka', null, 'Olcek Telefon'),
+  public.resolve_canonical_group('00555000111008', 'OlcekMarka', null, 'Olcek Telefon'),
   '22) ayni urun iki gosterimden TEK kanonik gruba dusuyor');
 
 select isnt(
-  public.resolve_canonical_group('0555000111002', 'OlcekMarka', null, 'Olcek Telefon'),
-  public.resolve_canonical_group('0987654321098', 'OlcekMarka', null, 'Baska Telefon'),
+  public.resolve_canonical_group('0555000111008', 'OlcekMarka', null, 'Olcek Telefon'),
+  public.resolve_canonical_group('0777000333000', 'OlcekMarka', null, 'Baska Telefon'),
   '23) FARKLI urun ayri grup -- kapatma fazla kapatmamis');
 
 -- 24: başlıksız teklif bağlanmıyor
@@ -173,15 +173,15 @@ select is(
 -- 25: mevcut veri ezilmiyor
 select is(
   (select brand from public.product_groups
-    where id = public.resolve_canonical_group('0555000111002', null, null, 'Olcek Telefon')),
+    where id = public.resolve_canonical_group('0555000111008', null, null, 'Olcek Telefon')),
   'OlcekMarka',
   '25) ikinci feed ilk feed in verisini EZMIYOR');
 
 -- 26: teklif ve grup ayni anahtari uretiyor
 select is(
   (select canonical_key from public.product_groups
-    where id = public.resolve_canonical_group('0555000111002', 'OlcekMarka', null, 'Olcek Telefon')),
-  public.canonical_product_key('0555000111002', 'OlcekMarka', null, 'Olcek Telefon'),
+    where id = public.resolve_canonical_group('0555000111008', 'OlcekMarka', null, 'Olcek Telefon')),
+  public.canonical_product_key('0555000111008', 'OlcekMarka', null, 'Olcek Telefon'),
   '26) teklif ve grup anahtarlari AYRISMIYOR');
 
 select * from finish();

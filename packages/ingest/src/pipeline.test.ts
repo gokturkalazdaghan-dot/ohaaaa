@@ -222,8 +222,10 @@ test('GTIN eşleşmesi imzaya tercih edilir', async () => {
   const { repository, calls } = fakeRepository({
     async findGroupsByGtin(gtins) {
       // İlk ürünün barkodu zaten katalogda.
+      // Alım hattı GTIN'i GTIN-14'e doldurulmuş hâlde arar; katalog da
+      // `gtin_normalized` üzerinden aynı hesabı kullanır.
       return new Map(
-        gtins.includes('4548736134546') ? [['4548736134546', 'mevcut-grup']] : [],
+        gtins.includes('04548736134546') ? [['04548736134546', 'mevcut-grup']] : [],
       );
     },
   });

@@ -43,10 +43,26 @@ test('2) geçersiz GTIN bir DEĞER dönmüyor', () => {
 });
 
 test('3) geçerli uzunluklar: GTIN-8, UPC-12, EAN-13, GTIN-14', () => {
-  assert.equal(normalizeGtin('12345678'), '00000012345678');
-  assert.equal(normalizeGtin('123456789012'), '00123456789012');
-  assert.equal(normalizeGtin('1234567890123'), '01234567890123');
-  assert.equal(normalizeGtin('12345678901234'), '12345678901234');
+  // Hepsinin kontrol basamağı DOĞRU; yanlış olanı test 3b kovalıyor.
+  assert.equal(normalizeGtin('12345670'), '00000012345670');
+  assert.equal(normalizeGtin('555000111008'), '00555000111008');
+  assert.equal(normalizeGtin('0555000111008'), '00555000111008');
+  assert.equal(normalizeGtin('12345678901231'), '12345678901231');
+});
+
+test('3b) KONTROL BASAMAĞI yanlışsa GTIN kimlik sayılmıyor', () => {
+  // Bir feed'de yanlış yazılmış TEK BİR RAKAM, tamamen başka bir ürünün
+  // geçerli görünen GTIN'ini üretir. Doğrulanmazsa iki ürün birleşir ve
+  // kullanıcı karşılaştırma tablosunda başka bir ürünün fiyatlarını görür.
+  assert.equal(normalizeGtin('012345678905'), '00012345678905', 'doğru hane geçmeli');
+  assert.equal(normalizeGtin('012345678906'), null, 'son rakam yanlış: reddedilmeli');
+  assert.equal(normalizeGtin('1234567890123'), null);
+
+  // Geçersiz GTIN kanonik anahtarı bir alt basamağa düşürür; kimlik olmaz.
+  assert.match(
+    canonicalProductKey({ gtin: '012345678906', brand: 'Marka', mpn: 'MPN', title: 'T' }),
+    /^mpn:/,
+  );
 });
 
 test('4) GÜVENİLİRLİK SIRASI: gtin > marka+mpn > marka+başlık', () => {
@@ -118,7 +134,7 @@ test('11) parti içi tekilleştirme: aynı ürün üç kez geçse tek gruba dü�
     { id: 1, gtin: '012345678905', brand: null, mpn: null, title: 'Telefon' },
     { id: 2, gtin: '0012345678905', brand: null, mpn: null, title: 'Telefon' },
     { id: 3, gtin: '0-12345-67890-5', brand: null, mpn: null, title: 'Telefon' },
-    { id: 4, gtin: '0987654321098', brand: null, mpn: null, title: 'Baska' },
+    { id: 4, gtin: '0987000222000', brand: null, mpn: null, title: 'Baska' },
   ];
 
   const gruplar = groupByCanonicalKey(satirlar, (r) => r);

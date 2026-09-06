@@ -40,21 +40,46 @@ export function collapseSpace(value: string): string {
 export const GTIN_LENGTHS: readonly number[] = [8, 12, 13, 14];
 
 /**
+ * GS1 kontrol basamağı — sağdan sola 3-1-3-1 ağırlıklı toplam.
+ *
+ * BİÇİM KONTROLÜ YETMEZ. Bir feed'de yanlış yazılmış tek bir rakam,
+ * TAMAMEN BAŞKA bir ürünün geçerli görünen GTIN'ini üretir. Kontrol
+ * basamağı olmadan o iki ürün birleşir ve kullanıcı karşılaştırma
+ * tablosunda başka bir ürünün fiyatlarını görür -- yani yanlış ürünü
+ * satın alır. Tekilleştirmenin en pahalı hatası budur.
+ */
+function kontrolBasamagi(body: string): number {
+  let toplam = 0;
+  for (let i = body.length - 1, agirlik = 3; i >= 0; i -= 1, agirlik = agirlik === 3 ? 1 : 3) {
+    toplam += Number(body[i]) * agirlik;
+  }
+  return (10 - (toplam % 10)) % 10;
+}
+
+/**
  * GTIN'i tek gösterime indirir: yalnız rakamlar, GTIN-14'e sola dolgulu.
  *
  * Aynı ürün bir feed'de UPC-12, diğerinde EAN-13, üçüncüsünde tireli gelir.
  * Üçü de AYNI üründür; ham metin karşılaştırması üç ayrı ürün sayardı ve
  * bu, tekilleştirmenin en sık sessizce kaçırdığı durumdur.
  *
- * Geçersiz uzunluk `null` döner — '0' ya da boş metin DEĞİL. İkisi de bir
- * DEĞER gibi davranır ve iki geçersiz GTIN'i eşitleyerek alakasız ürünleri
- * birleştirirdi.
+ * KONTROL BASAMAĞI DOĞRULANIR: geçersizse `null`. Geçersiz bir GTIN'i
+ * kabul etmek, bir yazım hatasını kimlik saymaktır.
+ *
+ * Geçersiz uzunluk da `null` döner — '0' ya da boş metin DEĞİL. İkisi de
+ * bir DEĞER gibi davranır ve iki geçersiz GTIN'i eşitleyerek alakasız
+ * ürünleri birleştirirdi.
+ *
+ * TEK UYGULAMA: `public.normalize_gtin()` (SQL) ve alım hattı aynı
+ * hesabı kullanır; `verify-canonical-parity.mjs` eşitliği kilitler.
  */
 export function normalizeGtin(gtin: string | null | undefined): string | null {
   if (gtin === null || gtin === undefined) return null;
 
   const rakamlar = String(gtin).replace(/[^0-9]/g, '');
   if (!GTIN_LENGTHS.includes(rakamlar.length)) return null;
+
+  if (kontrolBasamagi(rakamlar.slice(0, -1)) !== Number(rakamlar.at(-1))) return null;
 
   return rakamlar.padStart(14, '0');
 }

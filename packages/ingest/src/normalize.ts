@@ -10,6 +10,7 @@
 import { parseMoneyToCents } from '@ohaaaa/shared';
 
 import type { FieldMapping, NormalizedOffer, RawRecord } from './types.js';
+import { normalizeGtin } from '@ohaaaa/shared';
 
 export interface NormalizeResult {
   offers: NormalizedOffer[];
@@ -182,31 +183,16 @@ export function parseStock(value: string | null | undefined): number {
   return 0;
 }
 
-/**
- * GTIN doğrulaması — kontrol basamağı dahil.
+/*
+ * GTIN normalizasyonu TEK UYGULAMADA: `@ohaaaa/shared`.
  *
- * Bu, kanonik ürün eşleştirmesinin en güvenilir sinyalidir; hatalı bir GTIN
- * iki FARKLI ürünü birleştirir ve kullanıcı yanlış ürünü satın alır.
- * Bu yüzden biçim kontrolü yeterli değildir, kontrol basamağı da doğrulanır.
+ * Burada ikinci bir uygulama vardı ve iki hesap AYRIŞMIŞTI: bu dosyadaki
+ * sürüm kontrol basamağını doğruluyor ama GTIN-14'e doldurmuyordu; kanonik
+ * anahtarı üreten sürüm dolduruyor ama kontrol basamağına bakmıyordu. İkisi
+ * birleştirildi -- doğrulama VE doldurma artık aynı yerde ve `products.gtin`
+ * ile `product_groups.canonical_key` aynı hesaptan geçiyor.
  */
-export function normalizeGtin(value: string | null | undefined): string | null {
-  if (!value) return null;
-
-  const digits = value.replace(/\D/g, '');
-  if (![8, 12, 13, 14].includes(digits.length)) return null;
-
-  // GS1 kontrol basamağı: sağdan sola 3-1-3-1… ağırlıklı toplam.
-  const body = digits.slice(0, -1);
-  const checkDigit = Number(digits.at(-1));
-
-  let sum = 0;
-  for (let i = body.length - 1, weight = 3; i >= 0; i -= 1, weight = weight === 3 ? 1 : 3) {
-    sum += Number(body[i]) * weight;
-  }
-
-  const expected = (10 - (sum % 10)) % 10;
-  return expected === checkDigit ? digits : null;
-}
+export { normalizeGtin } from '@ohaaaa/shared';
 
 /** Adres geçerli, https/http ve mağazanın alan adına ait olmalı. */
 function validateUrl(value: string, allowedHosts: string[]): string | null {

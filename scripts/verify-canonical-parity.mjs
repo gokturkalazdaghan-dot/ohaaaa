@@ -54,9 +54,14 @@ const CASES = [
   [null, 'Sony', 'WH-1000XM5', 'Sony WH-1000XM5 Kulaklık'],
   [null, null, null, 'Ürün   çok    boşluklu'],
   [null, 'Apple', null, 'iPhone 15 Pro Max 256GB'],
-  ['00000000', null, null, 'Sifir GTIN'],            // geçerli uzunluk, tüm sıfır
-  ['12345678', null, null, 'GTIN-8'],
-  ['12345678901234', null, null, 'GTIN-14'],
+  ['00000000', null, null, 'Sifir GTIN'],            // geçerli uzunluk + geçerli hane
+  ['12345670', null, null, 'GTIN-8'],                // kontrol basamağı doğru
+  ['12345678901231', null, null, 'GTIN-14'],         // kontrol basamağı doğru
+  // KONTROL BASAMAĞI YANLIŞ: yalnız son rakam farklı. Bir feed'deki yazım
+  // hatası tam olarak böyle görünür ve iki farklı ürünü birleştirirdi.
+  ['012345678906', null, null, 'Yazim hatasi'],
+  ['012345678906', 'Marka', 'MPN-1', 'Yazim hatasi'], // mpn dalına düşmeli
+  ['1234567890123', null, null, 'EAN-13 hatali hane'],
   [null, null, null, ''],                            // boş başlık
 ];
 

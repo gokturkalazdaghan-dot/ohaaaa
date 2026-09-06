@@ -97,10 +97,20 @@ for (const file of files) {
   const src = readFileSync(file, 'utf8');
   const rel = path.relative(ROOT, file);
 
-  for (const m of src.matchAll(/\.from\('([a-z_]+)'\)/g)) {
+  /*
+   * `Buffer.from('...')`, `Array.from('...')` gibi çağrılar da `.from('x')`
+   * kalıbına uyar ama Supabase sorgusu DEĞİLDİR. Önlerindeki tanımlayıcıya
+   * bakılmazsa bunlar "şemada olmayan tablo" diye raporlanır -- ve o yanlış
+   * alarm, gerçek bir uyuşmazlığın arasında kaybolur ya da daha kötüsü,
+   * kontrolün susturulmasına yol açar.
+   */
+  const YERLESIK = new Set(['Buffer', 'Array', 'Object', 'Uint8Array', 'String', 'Number']);
+
+  for (const m of src.matchAll(/(?:([A-Za-z_$][\w$]*)\s*\.)?from\('([a-z_]+)'\)/g)) {
+    if (m[1] && YERLESIK.has(m[1])) continue;
     checkedTables += 1;
-    if (!relations.has(m[1])) {
-      problems.push(`${rel}: .from('${m[1]}') — şemada böyle bir tablo/görünüm yok`);
+    if (!relations.has(m[2])) {
+      problems.push(`${rel}: .from('${m[2]}') — şemada böyle bir tablo/görünüm yok`);
     }
   }
 

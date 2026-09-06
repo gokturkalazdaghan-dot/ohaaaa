@@ -18,6 +18,7 @@
 
 import { crawlDelayFor, isAllowed, parseRobotsTxt, type RobotsTxt } from './robots.js';
 import { maskUrl } from './redact.js';
+import { decodeFeedPayload } from './payload.js';
 import { IngestError } from '../errors.js';
 import {
   ResponseTooLargeError,
@@ -509,7 +510,13 @@ async function readBodyLimited(
     ofset += parca.byteLength;
   }
 
-  return new TextDecoder('utf-8').decode(birlesik);
+  /*
+   * Metne çevirme `decodeFeedPayload`a devrediliyor: `urunler.csv.gz` gibi
+   * bir DOSYA gzip'i `fetch` tarafından açılmaz ve doğrudan
+   * `TextDecoder`dan geçirilirse CSV ayrıştırıcısı ikili veriyi metin
+   * sanar -- hata düşmez, "başarılı, 0 ürün" denir.
+   */
+  return decodeFeedPayload(birlesik, { url: maskUrl(url) });
 }
 
 /** Üstel geri çekilme + jitter. Jitter, eşzamanlı denemelerin çakışmasını önler. */

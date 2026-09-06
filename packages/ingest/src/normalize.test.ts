@@ -176,14 +176,23 @@ test('stok: alan yoksa stokta varsayılır, anlaşılmıyorsa stoksuz', () => {
 
 // --- GTIN -------------------------------------------------------------------
 
-test('GTIN kontrol basamağı doğrulanır', () => {
-  // Gerçek, geçerli barkodlar
-  assert.equal(normalizeGtin('0195949038204'), '0195949038204'); // iPhone 15
-  assert.equal(normalizeGtin('4548736134546'), '4548736134546'); // Sony XM5
+test('GTIN kontrol basamağı doğrulanır ve GTIN-14 e doldurulur', () => {
+  /*
+   * DOLDURMA, doğrulamanın yanına EKLENDİ (tek uygulamada birleştirme).
+   * Doldurma olmadan UPC-12 ile EAN-13 iki AYRI değerdir ve aynı ürün her
+   * feed'de yeni bir kanonik satır açar -- Aşama 6'nın çözdüğü sorun.
+   * Doğrulama olmadan da yazım hatası kimlik sayılır. İkisi birlikte.
+   */
+  assert.equal(normalizeGtin('0195949038204'), '00195949038204'); // iPhone 15
+  assert.equal(normalizeGtin('4548736134546'), '04548736134546'); // Sony XM5
 
   // Ayırıcılar temizlenir
-  assert.equal(normalizeGtin(' 4548736134546 '), '4548736134546');
-  assert.equal(normalizeGtin('4-548736-134546'), '4548736134546');
+  assert.equal(normalizeGtin(' 4548736134546 '), '04548736134546');
+  assert.equal(normalizeGtin('4-548736-134546'), '04548736134546');
+
+  // İDEMPOTENT: doldurulmuş değer yeniden normalize edilince değişmiyor.
+  // (Baştaki sıfırlar ağırlıklı toplama katkı vermez.)
+  assert.equal(normalizeGtin('04548736134546'), '04548736134546');
 });
 
 test('kontrol basamağı hatalı GTIN reddedilir', () => {

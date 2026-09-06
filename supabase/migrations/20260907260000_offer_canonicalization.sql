@@ -142,7 +142,7 @@ begin
   end if;
 
   -- 2) FARKLI urun ayri grup: kapatma fazla kapatmamis.
-  v_c := public.resolve_canonical_group('0987654321098', 'TestMarka', null, 'Baska Telefon');
+  v_c := public.resolve_canonical_group('0777000333000', 'TestMarka', null, 'Baska Telefon');
   if v_c = v_a then
     raise exception 'DOGRULAMA 2: farkli urunler ayni gruba dustu.';
   end if;

@@ -57,17 +57,28 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
       const result = new Map<string, string>();
       if (gtins.length === 0) return result;
 
-      // GTIN listesi büyük olabilir; parçalayarak sorgula.
+      /*
+       * `gtin_normalized` ÜZERİNDEN aranıyor, ham `gtin` üzerinden DEĞİL.
+       *
+       * Alım hattı GTIN'i GTIN-14'e doldurulmuş hâlde taşıyor (UPC-12 ve
+       * EAN-13'ün aynı ürüne düşmesini sağlayan şey bu). Katalogdaki satır
+       * ise ham hâliyle yazılmış olabilir. Ham sütunda aramak, doldurulmuş
+       * anahtarın hiçbir satırla eşleşmemesi demekti: her teklif kendi
+       * kanonik ürününü açar ve karşılaştırma sessizce çalışmaz olurdu.
+       *
+       * `gtin_normalized` üretilmiş sütundur ve `normalize_gtin()`ten
+       * geçer -- yani iki taraf da AYNI hesabı kullanıyor.
+       */
       for (const batch of chunk(gtins, 500)) {
         const { data, error } = await supabase
           .from('product_groups')
-          .select('id, gtin')
-          .in('gtin', batch);
+          .select('id, gtin_normalized')
+          .in('gtin_normalized', batch);
 
         if (error) throw new Error(`Kanonik ürün sorgusu başarısız: ${error.message}`);
 
         for (const row of data ?? []) {
-          if (row.gtin) result.set(String(row.gtin), String(row.id));
+          if (row.gtin_normalized) result.set(String(row.gtin_normalized), String(row.id));
         }
       }
 
