@@ -8,7 +8,7 @@
  */
 
 /** Desteklenen para birimleri. */
-export const SUPPORTED_CURRENCIES = ['TRY', 'USD', 'EUR'] as const;
+export const SUPPORTED_CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP'] as const;
 export type Currency = (typeof SUPPORTED_CURRENCIES)[number];
 
 /**
@@ -25,6 +25,7 @@ const CURRENCY_LOCALES: Record<Currency, string> = {
   TRY: 'tr-TR',
   USD: 'en-US',
   EUR: 'de-DE',
+  GBP: 'en-GB',
 };
 
 /**

@@ -183,9 +183,10 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
         price_cents: row.priceCents,
         compare_at_price_cents: row.compareAtPriceCents,
         currency: row.currency,
-        // Pazar KAYNAKTAN gelir, fiyattan tahmin edilmez. Şema ayrıca
+        // Pazar KAYNAKTAN gelir, fiyattan tahmin edilmez. Şema bugün ayrıca
         // pazar ile para biriminin uyumunu zorunlu kılıyor
-        // (products_market_currency_uyumlu).
+        // (products_market_currency_uyumlu) -- global market modelinde bu
+        // kısıt kalkacak ve para birimi kendi referans tablosuna bağlanacak.
         market,
         // Bir sonraki turda "değişti mi" sorusunu yanıtlayacak olan özet.
         fingerprint: row.fingerprint,

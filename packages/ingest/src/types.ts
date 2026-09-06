@@ -1,3 +1,5 @@
+import type { Market } from '@ohaaaa/shared';
+
 import type { AuthType } from './auth.js';
 import type { IngestErrorClass } from './errors.js';
 
@@ -69,12 +71,17 @@ export interface SourceConfig {
   /**
    * Bu kaynağın veri getirdiği pazar.
    *
+   * Tip `@ohaaaa/shared`'ın `Market`'ından gelir, burada ELLE YAZILMAZ.
+   * Önceden `'TR' | 'DE' | 'US'` diye kopyalanmıştı; o kopya ikinci bir
+   * doğruluk kaynağıydı ve merkezî listeye eklenen bir pazar burada
+   * sessizce reddediliyordu.
+   *
    * Para biriminden AYRI taşınır: EUR hem Almanya hem Avusturya demektir
    * ve bir satıcı kendi ülkesi dışındaki bir para birimiyle fiyat
    * verebilir. Pazarı para biriminden türetmek, kullanıcıya kendisine
    * gönderilmeyecek teklifleri "en ucuz" diye göstermeye yol açar.
    */
-  market: 'TR' | 'DE' | 'US';
+  market: Market;
   kind: 'feed_csv' | 'feed_xml' | 'feed_json' | 'api' | 'sitemap' | 'manual';
   endpointUrl: string | null;
   fieldMapping: FieldMapping;
