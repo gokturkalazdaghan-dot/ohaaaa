@@ -33,7 +33,8 @@ const SOURCE: SourceConfig = {
   merchantId: 'merchant-1',
   kind: 'feed_csv',
   endpointUrl: 'https://magaza.example/feed.csv',
-  market: 'TR',
+  marketCode: 'TR',
+  countryCode: 'TR',
   currency: 'TRY',
   allowedHosts: ['magaza.example'],
   fieldMapping: {

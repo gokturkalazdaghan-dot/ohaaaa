@@ -7,9 +7,37 @@
  * sayı ile tutar taşınmaz — yalnızca gösterim anında biçimlendirilir.
  */
 
-/** Desteklenen para birimleri. */
-export const SUPPORTED_CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP'] as const;
-export type Currency = (typeof SUPPORTED_CURRENCIES)[number];
+/**
+ * Para birimi kodu — ISO 4217 alpha-3.
+ *
+ * TİP `string`, DERLEME ZAMANI UNION DEĞİL. Sebep: para birimleri artık
+ * REFERANS VERİSİ (`public.currencies`). Yeni bir para birimi eklemek bir
+ * satır eklemektir; kod dağıtımı gerektirmemelidir. Sabit bir union, 21
+ * para birimini kodun içine gömer ve 22.'si için derleme gerektirirdi.
+ *
+ * KAYBEDİLEN NE: `formatMoney(x, 'TRYY')` artık derlemede değil, ÇALIŞMA
+ * ANINDA yakalanır.
+ *
+ * YERİNE KONAN ÜÇ KATMAN:
+ *   1. Veritabanı  — products/sources.currency → currencies(code) yabancı
+ *                    anahtarı; uydurma kod satıra giremez.
+ *   2. Sınır       — schemas.ts biçim doğrulaması (üç büyük harf).
+ *   3. Gösterim    — `formatMoney` geçersiz kodda ÇÖKMEZ (aşağıya bak).
+ */
+export type Currency = string;
+
+/**
+ * ISO 4217 biçimi: tam olarak üç büyük harf.
+ *
+ * Bu bir ÜYELİK kontrolü DEĞİL, BİÇİM kontrolü. Hangi kodların gerçekten
+ * var olduğunu `currencies` tablosu bilir; burada onun kopyasını tutmak
+ * tam da kaçınmaya çalıştığımız ikinci doğruluk kaynağı olurdu.
+ */
+const PARA_BIRIMI_BICIMI = /^[A-Z]{3}$/;
+
+export function isCurrencyCode(value: unknown): value is Currency {
+  return typeof value === 'string' && PARA_BIRIMI_BICIMI.test(value);
+}
 
 /**
  * Para biriminin "ana vatanı" — kullanıcının dili bilinmediğinde kullanılır.
@@ -21,12 +49,15 @@ export type Currency = (typeof SUPPORTED_CURRENCIES)[number];
  * "$1,234.56"dır -- yani AYIRICILAR okuyanın dilinden, SEMBOL paranın
  * kendisinden gelir.
  */
-const CURRENCY_LOCALES: Record<Currency, string> = {
+const CURRENCY_LOCALES: Record<string, string> = {
   TRY: 'tr-TR',
   USD: 'en-US',
   EUR: 'de-DE',
   GBP: 'en-GB',
 };
+
+/** Tanınmayan para birimi için nötr biçim — hiçbir ülkeye ayrıcalık tanımaz. */
+const VARSAYILAN_BICIM_ETIKETI = 'en-US';
 
 /**
  * Kuruş cinsinden tutarı yerelleştirilmiş metne çevirir.
@@ -43,12 +74,35 @@ export function formatMoney(
   currency: Currency = 'TRY',
   numberLocale?: string,
 ): string {
-  return new Intl.NumberFormat(numberLocale ?? CURRENCY_LOCALES[currency], {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(cents / 100);
+  /*
+   * GEÇERSİZ PARA BİRİMİNDE ÇÖKMEZ.
+   *
+   * `formatMoney` React render yolunda kullanılıyor (ProductCard, CartDrawer,
+   * PriceHistory…). Bir istisna fırlatmak, tek bozuk satır yüzünden TÜM
+   * SAYFAYI düşürürdü. Ama sessizce sıfır ya da uydurma bir sembol
+   * göstermek daha kötü olurdu: yanlış fiyat, eksik fiyattan pahalıdır.
+   *
+   * Doğru davranış: tutarı GÖSTER, kodu HAM hâliyle yanına yaz. Kullanıcı
+   * sayıyı görür, operatör bozukluğu görür, hiçbir şey uydurulmaz.
+   */
+  if (!isCurrencyCode(currency)) {
+    return `${(cents / 100).toFixed(2)} ${String(currency)}`;
+  }
+
+  try {
+    return new Intl.NumberFormat(
+      numberLocale ?? CURRENCY_LOCALES[currency] ?? VARSAYILAN_BICIM_ETIKETI,
+      {
+        style: 'currency',
+        currency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      },
+    ).format(cents / 100);
+  } catch {
+    // Biçimi geçerli ama Intl'in tanımadığı bir etiket/kod: yine de çökme.
+    return `${(cents / 100).toFixed(2)} ${currency}`;
+  }
 }
 
 /**

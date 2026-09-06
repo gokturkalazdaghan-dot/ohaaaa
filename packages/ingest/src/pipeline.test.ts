@@ -17,7 +17,8 @@ const SOURCE: SourceConfig = {
   merchantId: 'merchant-1',
   kind: 'feed_csv',
   endpointUrl: 'https://magaza.example/feed.csv',
-  market: 'TR',
+  marketCode: 'TR',
+  countryCode: 'TR',
   currency: 'TRY',
   allowedHosts: ['magaza.example'],
   fieldMapping: {
@@ -57,7 +58,7 @@ function fakeRepository(overrides: Partial<IngestRepository> = {}) {
       }
     >,
     /** upsertOffers'a hangi pazarın geçtiği — pazar izolasyonunun kanıtı. */
-    upsertMarkets: [] as Array<SourceConfig['market']>,
+    upsertMarkets: [] as Array<SourceConfig['marketCode']>,
     createdGroups: [] as string[],
     finished: [] as IngestSummary[],
   };
@@ -300,11 +301,19 @@ test('farklı pazardaki kaynak kendi pazarını taşır', async () => {
   const { repository, calls } = fakeRepository();
 
   await runSource(
-    { ...SOURCE, market: 'DE', currency: 'EUR' },
+    { ...SOURCE, marketCode: 'EU', countryCode: 'DE', currency: 'EUR' },
     { fetcher: fakeFetcher(CSV), repository },
   );
 
-  assert.deepEqual(calls.upsertMarkets, ['DE']);
+  /*
+   * BEKLENEN 'EU', 'DE' DEĞİL -- ve bu bir gevşetme değil, düzeltme.
+   *
+   * Kaynağın ÜLKESİ Almanya, PAZARI ise EU. Teklife yazılan şey pazardır:
+   * arama pazara göre süzer ve Almanya tek başına bir pazar değil, EU'nun
+   * bir üyesi. Eski beklenti ikisini aynı sanıyordu; global modelde bu
+   * varsayım yanlış (NORDICS 5 ülke, GCC 6 ülke).
+   */
+  assert.deepEqual(calls.upsertMarkets, ['EU']);
   // Pazar değişti diye teklifler kaybolmamalı.
   assert.equal(calls.upserted.length, 2);
 });
@@ -469,7 +478,7 @@ test('DELTA: pazar değişince aynı kalem CHANGED sayılır', async () => {
   // Aynı dış kimlikler, farklı pazar.
   const de = deltaRepository(trIzler);
   await runSource(
-    { ...SOURCE, market: 'DE', currency: 'EUR' },
+    { ...SOURCE, marketCode: 'EU', countryCode: 'DE', currency: 'EUR' },
     { fetcher: fakeFetcher(CSV), repository: de.repository },
   );
 
@@ -833,7 +842,7 @@ test('YOKLAMA: TR alımı yalnızca TR kaynağının planını yazar', async () 
 
   const de = deltaRepository(new Map());
   await runSource(
-    { ...SOURCE, id: 'src-de', slug: 'de-feed', market: 'DE', currency: 'EUR' },
+    { ...SOURCE, id: 'src-de', slug: 'de-feed', marketCode: 'EU', countryCode: 'DE', currency: 'EUR' },
     { fetcher: fakeFetcher(CSV), repository: de.repository },
   );
 

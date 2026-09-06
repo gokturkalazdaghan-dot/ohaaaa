@@ -7,7 +7,6 @@
  */
 
 import { z } from 'zod';
-import { SUPPORTED_CURRENCIES } from './money.js';
 import { API_SCOPES } from './types.js';
 import { useTurkishZodMessages } from './zodTurkish.js';
 
@@ -53,7 +52,18 @@ const productFeedItemObject = z
 
     price_cents: centsSchema,
     compare_at_price_cents: centsSchema.nullish(),
-    currency: z.enum(SUPPORTED_CURRENCIES).default('TRY'),
+    /*
+     * SINIR DOĞRULAMASI — üyelik değil BİÇİM.
+     *
+     * Hangi para birimlerinin gerçekten var olduğunu `public.currencies`
+     * tablosu bilir ve yabancı anahtar onu zorlar. Buraya sabit bir liste
+     * yazmak ikinci bir doğruluk kaynağı olurdu: tabloya eklenen bir para
+     * birimi burada sessizce reddedilirdi.
+     */
+    currency: z
+      .string()
+      .regex(/^[A-Z]{3}$/, 'Para birimi ISO 4217 (uc buyuk harf) olmali')
+      .default('TRY'),
 
     stock: z.number().int().min(0).max(1_000_000),
     condition: z.enum(['new', 'refurbished', 'used']).default('new'),

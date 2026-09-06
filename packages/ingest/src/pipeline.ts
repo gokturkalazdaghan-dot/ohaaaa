@@ -86,8 +86,8 @@ export interface IngestRepository {
         categoryId: string | null;
       }
     >,
-    /** Tekliflerin yazılacağı pazar — kaynağın pazarı. */
-    market: SourceConfig['market'],
+    /** Tekliflerin yazılacağı ticari bölge — kaynağın pazarı. */
+    marketCode: SourceConfig['marketCode'],
   ): Promise<{ created: number; updated: number }>;
   /**
    * Bu kaynağın bilinen parmak izleri: dış kimlik → parmak izi.
@@ -434,7 +434,7 @@ export async function runSource(
         source.merchantId,
         source.id,
         yazilacaklar,
-        source.market,
+        source.marketCode,
       );
       summary.itemsCreated = created;
       summary.itemsUpdated = updated;
@@ -717,9 +717,9 @@ function fingerprintInput(
 ): FingerprintInput {
   return {
     externalId: offer.externalId,
-    // Pazar parmak izine GİRER: aynı dış kimliğe sahip TR ve DE teklifi
+    // Pazar parmak izine GİRER: aynı dış kimliğe sahip TR ve EU teklifi
     // aynı entity gibi karşılaştırılmamalı.
-    market: source.market,
+    market: source.marketCode,
     merchantId: source.merchantId,
     title: offer.title,
     priceCents: offer.priceCents,

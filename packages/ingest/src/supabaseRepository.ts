@@ -145,7 +145,7 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
       return result;
     },
 
-    async upsertOffers(merchantId, sourceId, rows, market) {
+    async upsertOffers(merchantId, sourceId, rows, marketCode) {
       if (rows.length === 0) return { created: 0, updated: 0 };
 
       // Hangilerinin yeni olduğunu bilmek için önce mevcutları oku.
@@ -183,11 +183,16 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
         price_cents: row.priceCents,
         compare_at_price_cents: row.compareAtPriceCents,
         currency: row.currency,
-        // Pazar KAYNAKTAN gelir, fiyattan tahmin edilmez. Şema bugün ayrıca
-        // pazar ile para biriminin uyumunu zorunlu kılıyor
-        // (products_market_currency_uyumlu) -- global market modelinde bu
-        // kısıt kalkacak ve para birimi kendi referans tablosuna bağlanacak.
-        market,
+        /*
+         * Pazar KAYNAKTAN gelir, fiyattan ya da para biriminden türetilmez.
+         * `market_code` bir REFERANS: markets tablosuna yabancı anahtarla
+         * bağlı, uydurma bir değer satıra giremez.
+         *
+         * Eski `market` enum sütunu bilerek YAZILMIYOR: M4 onu düşürecek ve
+         * enum yalnızca TR/DE/US taşıdığı için bir EU teklifi için doğru bir
+         * değer zaten üretilemezdi. Köprü döneminde o sütun donduruldu.
+         */
+        market_code: marketCode,
         // Bir sonraki turda "değişti mi" sorusunu yanıtlayacak olan özet.
         fingerprint: row.fingerprint,
         stock: row.stock,
@@ -400,8 +405,8 @@ export async function loadSources(
   let query = supabase
     .from('sources')
     .select(
-      `id, slug, merchant_id, kind, endpoint_url, field_mapping, currency, market,
-       auth_type, auth_secret_ref,
+      `id, slug, merchant_id, kind, endpoint_url, field_mapping, currency,
+       market_code, country_code, auth_type, auth_secret_ref,
        merchant:merchants!inner ( id, status, homepage_url, deeplink_template )`,
     )
     .eq('is_enabled', true)
@@ -435,7 +440,17 @@ export async function loadSources(
       endpointUrl: row.endpoint_url ? String(row.endpoint_url) : null,
       fieldMapping: (row.field_mapping ?? {}) as SourceConfig['fieldMapping'],
       currency: String(row.currency ?? 'TRY'),
-      market: (String(row.market ?? 'TR') as SourceConfig['market']),
+      /*
+       * Pazar kodu VARSAYILANA DÜŞMEZ.
+       *
+       * Eskiden `row.market ?? 'TR'` yazıyordu: pazarı yazılmamış bir
+       * kaynağın teklifleri sessizce Türkiye pazarına giriyordu. Global
+       * modelde bu, bir Alman feed'ini Türk kullanıcıya "en ucuz" diye
+       * göstermek demek. Artık boşsa boş kalır ve aşağıdaki süzgeç o
+       * kaynağı alım hattına HİÇ SOKMAZ -- fail closed.
+       */
+      marketCode: row.market_code ? String(row.market_code) : '',
+      countryCode: row.country_code ? String(row.country_code) : null,
       allowedHosts: host ? [host] : [],
       authType: isAuthType(row.auth_type) ? row.auth_type : 'query',
       authSecretRef: row.auth_secret_ref ? String(row.auth_secret_ref) : null,

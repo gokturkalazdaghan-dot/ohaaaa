@@ -46,7 +46,10 @@ export function createQueueRepository(
               ? (row.payload as Record<string, unknown>)
               : {},
           attempt: Number(row.attempt ?? 0),
-          market: row.market === null || row.market === undefined ? null : String(row.market),
+          marketCode:
+            row.market_code === null || row.market_code === undefined
+              ? null
+              : String(row.market_code),
           sourceId:
             row.source_id === null || row.source_id === undefined
               ? null
