@@ -10,6 +10,7 @@ export * from './cart.js';
 export * from './priceHistory.js';
 export * from './searchIntent.js';
 export * from './partners.js';
+export * from './onboardingHandoff.js';
 export * from './aiProvider.js';
 export * from './orchestrator/index.js';
 export * from './dataengine/index.js';

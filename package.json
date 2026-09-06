@@ -25,7 +25,8 @@
     "verify:routes": "node scripts/verify-routes.mjs",
     "verify:brand": "node scripts/verify-brand.mjs",
     "verify:headers": "node scripts/verify-headers.mjs",
-    "verify:secrets": "node scripts/verify-secrets.mjs"
+    "verify:secrets": "node scripts/verify-secrets.mjs",
+    "verify:transitions": "node scripts/verify-transition-parity.mjs"
   },
   "devDependencies": {
     "axe-core": "^4.10.0",

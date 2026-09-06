@@ -39,3 +39,9 @@ export {
   allCapabilities,
   requireCapability,
 } from './capabilities.js';
+export {
+  APPLICATION_STATES,
+  APPLICATION_TRANSITIONS,
+  canTransition,
+  isApprovalFinal,
+} from './applicationTransitions.js';

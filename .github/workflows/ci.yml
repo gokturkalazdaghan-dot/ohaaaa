@@ -112,6 +112,17 @@ jobs:
       - name: Sir taramasi
         run: npm run verify:secrets
 
+      # Basvuru durum gecis tablosu IKI yerde: TypeScript'te (motor once
+      # orada duruyor) ve gocteki kapida (son kapi). Ayrismalari iki ayri
+      # SESSIZ hata uretir -- kod genisse motor bosuna dener ve denetim izi
+      # sahte veritabani hatalariyla dolar; kod darsa motor serbest bir
+      # gecisi yasak sanar ve program yerinde cakili kalir, hicbir hata
+      # dusmeden. Ikisi de kendi icinde tutarli oldugu icin birim testleri
+      # bunu yakalamaz; yakalanabilecek tek yer iki kaynagin karsilastirildigi
+      # bu adim.
+      - name: Gecis tablosu paritesi
+        run: npm run verify:transitions
+
       - name: Birim testleri
         run: npm test
 
