@@ -36,6 +36,8 @@ import { NextResponse, type NextRequest } from 'next/server';
  */
 import { safeInternalPath } from '@ohaaaa/shared/types';
 
+import { isAffiliateOnly } from '@/lib/env';
+
 /**
  * İçerik Güvenlik Politikası (CSP).
  *
@@ -106,6 +108,41 @@ function applyCsp(request: NextRequest, response: NextResponse, nonce: string): 
 const PROTECTED_PREFIXES = [
   '/tasoron/panel',
   '/yonetim',
+  '/siparislerim',
+  '/degerlendirmelerim',
+  '/adreslerim',
+];
+
+/*
+ * PROTECTED_PREFIXES icindeki PAZAR YERI yollari.
+ *
+ * ÖLÇÜLDÜ (üretim, www.ohaaaa.com):
+ *   /odeme         -> 404   (dogru)
+ *   /siparislerim  -> 200, x-matched-path: /giris   (YANLIS)
+ *
+ * Sebep sira: bu middleware kimlik kontrolunu sayfanin ICINDEKI
+ * `requireMarketplaceMode()` kapisindan ONCE yapiyordu. Oturumu olmayan
+ * ziyaretci giris sayfasina yonlendiriliyor ve boylece yuzeyin VAR OLDUGUNU
+ * ogreniyordu -- `commerceGuard.ts`'in acikca reddettigi davranis:
+ *
+ *   "403 'burada bir sey var ama giremezsin' der ve pazar yeri yuzeyinin
+ *    VARLIGINI dogrular. Ortaklik kipinde o yuzey kavramsal olarak YOK;
+ *    dogru cevap 'boyle bir sayfa yok'."
+ *
+ * Bir erisim asimi DEGILDI (giris yapan da 404 goruyordu); ortaklik agi
+ * denetcisine ve arama motoruna pazar yeri yuzeyini dogrulayan bir BILGI
+ * SIZINTISIYDI.
+ *
+ * COZUM YENI BIR 404 MEKANIZMASI DEGIL: ortaklik kipinde bu yollarda oturum
+ * yonlendirmesi ATLANIR ve istek sayfaya ulasir; sayfadaki mevcut kapi zaten
+ * dogru 404'u uretir. Tek kapi, tek davranis.
+ *
+ * `/yonetim` BILEREK DISARIDA: yonetim paneli bir pazar yeri yuzeyi degil,
+ * her iki kipte de calisan operator araci. Oraya oturumsuz erisim serbest
+ * birakilamaz.
+ */
+const MARKETPLACE_PREFIXES = [
+  '/tasoron/panel',
   '/siparislerim',
   '/degerlendirmelerim',
   '/adreslerim',
@@ -212,7 +249,17 @@ export async function middleware(request: NextRequest) {
     );
   }
 
-  const needsAuth = PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  /*
+   * Ortaklik kipinde pazar yeri yollari oturum kapisina HIC gelmez: istek
+   * sayfaya birakilir ve `requireMarketplaceMode()` 404 uretir. Gerekcesi
+   * MARKETPLACE_PREFIXES tanimindaki notta.
+   */
+  const isHiddenMarketplacePath =
+    isAffiliateOnly && MARKETPLACE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+
+  const needsAuth =
+    !isHiddenMarketplacePath &&
+    PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 
   if (needsAuth && !user) {
     const redirectUrl = request.nextUrl.clone();
