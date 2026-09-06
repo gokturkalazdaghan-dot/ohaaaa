@@ -5,7 +5,7 @@
   ],
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "cd ../.. && npm install",
-  "buildCommand": "cd ../.. && npm run build --workspace @ohaaaa/shared && npm run build --workspace @ohaaaa/web",
+  "buildCommand": "cd ../.. && npm run build --workspace @ohaaaa/shared && npm run build --workspace @ohaaaa/ingest && npm run build --workspace @ohaaaa/web",
   "headers": [
     {
       "source": "/(.*)",
