@@ -13,6 +13,7 @@ export * from './refreshSignals.js';
 export * from './applicationRepository.js';
 export * from './programApplication.js';
 export * from './approvalTracking.js';
+export * from './incrementalSync.js';
 export { parseCsv } from './adapters/csv.js';
 export { parseXml } from './adapters/xml.js';
 export { parseJson } from './adapters/json.js';

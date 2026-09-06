@@ -45,7 +45,14 @@ export interface SyncResult {
 }
 
 /** Türkçe karakterleri ASCII'ye indirger — SQL'deki normalize_search ile aynı. */
-function normalize(value: string): string {
+/**
+ * `public.normalize_search()` ile BİREBİR aynı: Türkçe karakterleri ASCII'ye
+ * indirger ve küçültür.
+ *
+ * Dışa açık, çünkü kanonik anahtar hesabı da aynı zinciri kullanmak zorunda.
+ * İkinci bir uygulama yazmak, üçüncü bir ayrışma yüzeyi açmak olurdu.
+ */
+export function normalizeSearch(value: string): string {
   return value
     .replace(/[ĞÜŞİÖÇIğüşıöçÂÎÛâîû]/g, (char) => {
       const map: Record<string, string> = {
@@ -96,7 +103,7 @@ export function describeSignatureError(message: string): string {
  * sırasıdır (SQL tarafında `collate "C"`).
  */
 export function productSignature(title: string, brand: string | null | undefined): string {
-  const normalizedTitle = normalize(title)
+  const normalizedTitle = normalizeSearch(title)
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
     .split(' ')
@@ -104,14 +111,14 @@ export function productSignature(title: string, brand: string | null | undefined
     .sort()               // kelime sırası farkı eşleşmeyi bozmasın
     .join(' ');
 
-  return `${normalize(brand ?? '')}|${normalizedTitle}`;
+  return `${normalizeSearch(brand ?? '')}|${normalizedTitle}`;
 }
 
 /** Dosya içi kısa ad. */
 const signature = productSignature;
 
 function slugify(value: string): string {
-  return normalize(value)
+  return normalizeSearch(value)
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);
@@ -368,4 +375,4 @@ async function resolveProductGroups(
   return result;
 }
 
-export const __testing = { signature, slugify, normalize };
+export const __testing = { signature, slugify, normalize: normalizeSearch };

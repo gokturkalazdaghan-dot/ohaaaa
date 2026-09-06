@@ -74,6 +74,16 @@ if command -v node >/dev/null 2>&1; then
   DATABASE_URL="$DB_URL" node "$ROOT/scripts/verify-signature-parity.mjs"
 fi
 
+# Kanonik urun anahtari da iki yerde hesaplanir: SQL'de URETILMIS sutun
+# tekilligi tasir, JS'te alim hatti partiyi yazmadan once ayni urune dusen
+# satirlari birlestirir. Ayrisirlarsa `on conflict` hic eslesmez ve HER TUR
+# ayni urun icin yeni kanonik satir acilir -- katalog ayni telefonu 400 kez
+# gosterir, hicbir hata dusmeden.
+if command -v node >/dev/null 2>&1; then
+  echo "▸ Kanonik anahtar eşitliği (JavaScript = SQL)"
+  DATABASE_URL="$DB_URL" node "$ROOT/scripts/verify-canonical-parity.mjs"
+fi
+
 # Şema hazırken, uygulamanın attığı sorguların ona uyduğunu da doğrula.
 # Supabase kod yolu demo modunda hiç çalışmaz; bir tablo/sütun/fonksiyon adı
 # tutmuyorsa bu ancak canlıda, ilk ziyaretçide ortaya çıkardı.

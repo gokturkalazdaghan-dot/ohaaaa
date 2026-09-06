@@ -32,7 +32,11 @@ declare
     ['product_groups', 'match_signature',
      'Baslik/marka/GTIN''den turetilmis eslestirme imzasi. Vitrinde kullaniliyor, gizli bilgi tasimiyor.'],
     ['risk_thresholds', 'key',
-     'Esik adi (ornek: median_ratio_block). Zaten istemciye kapali; kalibla adi yuzunden esleşiyor.']
+     'Esik adi (ornek: median_ratio_block). Zaten istemciye kapali; kalibla adi yuzunden esleşiyor.'],
+    ['product_groups', 'canonical_key',
+     'GTIN/marka/MPN/basliktan URETILMIS eslestirme anahtari. Kaynak alanlarin '
+     'hepsi zaten vitrinde gorunuyor; anahtar onlardan turetildigi icin yeni '
+     'hicbir bilgi tasimiyor. Adi "_key" ile bittigi icin kalibla esleşiyor.']
   ];
   muaf_mi boolean;
 begin
