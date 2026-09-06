@@ -385,7 +385,7 @@ function SistemDurumu({
         <ul className="mt-4 space-y-1 border-t border-line pt-3 text-xs text-muted">
           {saglik.map((kaynak) => (
             <li key={kaynak.sourceSlug}>
-              <code className="font-mono">{kaynak.sourceSlug}</code> ({kaynak.market}) —{' '}
+              <code className="font-mono">{kaynak.sourceSlug}</code> ({kaynak.marketCode}) —{' '}
               {kaynak.detail}
               {kaynak.runCount === 0
                 ? ' Hiç çalışma kaydı yok.'

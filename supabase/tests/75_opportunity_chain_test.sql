@@ -30,7 +30,7 @@ values
    'https://zincir.gecersiz/git?u={url}', 'TR', now());
 
 insert into public.sources
-  (merchant_id, slug, name, kind, endpoint_url, market, currency)
+  (merchant_id, slug, name, kind, endpoint_url, market_code, currency)
 select id, 'zincir-feed', 'Zincir Feed', 'feed_csv',
        'https://zincir.gecersiz/feed.csv', 'TR', 'TRY'
   from public.merchants where slug = 'zincir-magaza';
@@ -56,7 +56,7 @@ select ok(
 -- --- 3) PAZAR TEKLİFİ ------------------------------------------------------
 insert into public.products
   (merchant_id, source_id, group_id, external_id, title,
-   price_cents, currency, market, status, fulfillment, product_url,
+   price_cents, currency, market_code, status, fulfillment, product_url,
    stock, shipping_fee_cents)
 select m.id, s.id, g.id, 'ZK-1', 'Zincir Oyuncu Kulakligi',
        120000, 'TRY', 'TR', 'active', 'affiliate',
@@ -69,7 +69,7 @@ select m.id, s.id, g.id, 'ZK-1', 'Zincir Oyuncu Kulakligi',
 
 select ok(
   exists (select 1 from public.products
-           where external_id = 'ZK-1' and market = 'TR' and currency = 'TRY'),
+           where external_id = 'ZK-1' and market_code = 'TR' and currency = 'TRY'),
   '3) teklif pazariyla ve para birimiyle birlikte yazildi'
 );
 
@@ -124,7 +124,7 @@ values ('tek-olcum-urun', 'Tek Olcum Urun', 'ZincirMarka');
 
 insert into public.products
   (merchant_id, source_id, group_id, external_id, title,
-   price_cents, currency, market, status, fulfillment, product_url, stock)
+   price_cents, currency, market_code, status, fulfillment, product_url, stock)
 select m.id, s.id, g.id, 'ZK-2', 'Tek Olcum Urun',
        90000, 'TRY', 'TR', 'active', 'affiliate',
        'https://zincir.gecersiz/u/zk-2', 5
@@ -199,9 +199,9 @@ values
 
 insert into public.products
   (merchant_id, group_id, external_id, title,
-   price_cents, currency, market, status, fulfillment, product_url, stock)
+   price_cents, currency, market_code, status, fulfillment, product_url, stock)
 select m.id, g.id, 'ZK-1-DE', 'Zincir Oyuncu Kulakligi',
-       3000, 'EUR', 'DE', 'active', 'affiliate',
+       3000, 'EUR', 'EU', 'active', 'affiliate',
        'https://zincir.de.gecersiz/u/zk1', 4
   from public.merchants m
   cross join public.product_groups g
@@ -210,7 +210,7 @@ select m.id, g.id, 'ZK-1-DE', 'Zincir Oyuncu Kulakligi',
 select is(
   (select count(*) from public.products
     where group_id = (select id from public.product_groups where slug = 'zincir-kulaklik')
-      and market = 'TR'),
+      and market_code = 'TR'),
   1::bigint,
   '12) ayni kanonik urunun DE teklifi TR pazarina sizmiyor'
 );

@@ -33,7 +33,7 @@ values
    'https://sag.gecersiz/g?u={url}', 'TR', now());
 
 insert into public.sources
-  (merchant_id, slug, name, kind, endpoint_url, market, currency)
+  (merchant_id, slug, name, kind, endpoint_url, market_code, currency)
 select id, 'saglik-feed', 'Saglik Feed', 'feed_csv',
        'https://sag.gecersiz/f.csv', 'TR', 'TRY'
   from public.merchants where slug = 'saglik-m';

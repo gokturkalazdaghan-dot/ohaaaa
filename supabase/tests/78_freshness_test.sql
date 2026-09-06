@@ -8,7 +8,7 @@ values ('taze-m', 'Taze Magaza', 'https://taze.gecersiz', 'direct', 'active',
         'https://taze.gecersiz/g?u={url}', 'TR', now());
 
 insert into public.products
-  (merchant_id, external_id, title, price_cents, currency, market, status,
+  (merchant_id, external_id, title, price_cents, currency, market_code, status,
    fulfillment, product_url, stock)
 select id, 'TZ-1', 'Taze Urun', 100000, 'TRY', 'TR', 'active',
        'affiliate', 'https://taze.gecersiz/u/1', 10

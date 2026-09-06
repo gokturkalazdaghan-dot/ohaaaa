@@ -41,7 +41,7 @@ select col_default_is('public', 'sources', 'auth_type', 'query',
  */
 select throws_ok(
   $$ insert into public.sources
-       (merchant_id, slug, name, kind, endpoint_url, currency, market,
+       (merchant_id, slug, name, kind, endpoint_url, currency, market_code,
         auth_type, auth_secret_ref)
      values (
        (select id from public.merchants limit 1),
@@ -56,7 +56,7 @@ select throws_ok(
 
 select lives_ok(
   $$ insert into public.sources
-       (merchant_id, slug, name, kind, endpoint_url, currency, market,
+       (merchant_id, slug, name, kind, endpoint_url, currency, market_code,
         auth_type, auth_secret_ref)
      values (
        (select id from public.merchants limit 1),
@@ -75,7 +75,7 @@ select lives_ok(
  */
 select throws_ok(
   $$ insert into public.sources
-       (merchant_id, slug, name, kind, endpoint_url, currency, market,
+       (merchant_id, slug, name, kind, endpoint_url, currency, market_code,
         auth_type, auth_secret_ref)
      values (
        (select id from public.merchants limit 1),
@@ -90,7 +90,7 @@ select throws_ok(
 
 select lives_ok(
   $$ insert into public.sources
-       (merchant_id, slug, name, kind, endpoint_url, currency, market, auth_type)
+       (merchant_id, slug, name, kind, endpoint_url, currency, market_code, auth_type)
      values (
        (select id from public.merchants limit 1),
        'auth-query-testi', 'Test', 'feed_csv',

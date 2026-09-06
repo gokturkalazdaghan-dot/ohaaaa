@@ -23,7 +23,12 @@ export interface SystemAlert {
 export interface SourceHealth {
   sourceSlug: string;
   merchantSlug: string;
-  market: string;
+  /**
+   * `markets.code` (TR, EU, NORDICS...). M4'ten once bu alan `market`
+   * enum'unu tasiyordu; pazar artik bir ULKE degil bir kod ve serbest
+   * metin de degil -- `sources.market_code` yabanci anahtarla bagli.
+   */
+  marketCode: string;
   state: 'saglikli' | 'yavas' | 'bayat' | 'basarisiz' | 'hic_calismadi';
   lastRunAt: string | null;
   minutesSinceRun: number | null;
@@ -96,7 +101,7 @@ export async function getSourceHealth(): Promise<SourceHealth[] | null> {
   return (data ?? []).map((row: Record<string, unknown>) => ({
     sourceSlug: String(row.source_slug),
     merchantSlug: String(row.merchant_slug),
-    market: String(row.market),
+    marketCode: String(row.market_code),
     state: row.state as SourceHealth['state'],
     lastRunAt: row.last_run_at === null ? null : String(row.last_run_at),
     minutesSinceRun:

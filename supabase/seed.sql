@@ -125,73 +125,73 @@ on conflict (id) do nothing;
 insert into public.products
   (id, vendor_id, group_id, external_id, sku, title, brand, category_id,
    image_urls, price_cents, compare_at_price_cents, stock,
-   shipping_fee_cents, free_shipping_threshold_cents, estimated_delivery_days, status)
+   shipping_fee_cents, free_shipping_threshold_cents, estimated_delivery_days, status, market_code)
 values
   -- iPhone 15 — 3 taşeron teklifi
   ('50000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-00000000000a',
    '40000000-0000-4000-8000-000000000001', 'TM-IP15-128-BLK', 'IP15128BLK',
    'Apple iPhone 15 128GB Siyah', 'Apple', 'c0000000-0000-4000-8000-000000000011',
-   '{https://images.ohaaaa.com/p/iphone-15.jpg}', 5499900, 6299900, 42, 0, 50000, 1, 'active'),
+   '{https://images.ohaaaa.com/p/iphone-15.jpg}', 5499900, 6299900, 42, 0, 50000, 1, 'active', 'TR'),
 
   ('50000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-00000000000b',
    '40000000-0000-4000-8000-000000000001', 'MV-APPLE-IP15', 'MVIP15',
    'iPhone 15 128 GB Siyah (Distribütör Garantili)', 'Apple', 'c0000000-0000-4000-8000-000000000011',
-   '{https://images.ohaaaa.com/p/iphone-15.jpg}', 5389900, null, 7, 4999, null, 3, 'active'),
+   '{https://images.ohaaaa.com/p/iphone-15.jpg}', 5389900, null, 7, 4999, null, 3, 'active', 'TR'),
 
   ('50000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-00000000000c',
    '40000000-0000-4000-8000-000000000001', 'EBD-IPHONE15', 'EBDIP15',
    'Apple iPhone 15 128GB', 'Apple', 'c0000000-0000-4000-8000-000000000011',
-   '{https://images.ohaaaa.com/p/iphone-15.jpg}', 5629900, null, 3, 0, 30000, 2, 'active'),
+   '{https://images.ohaaaa.com/p/iphone-15.jpg}', 5629900, null, 3, 0, 30000, 2, 'active', 'TR'),
 
   -- Sony WH-1000XM5 — 2 teklif
   ('50000000-0000-4000-8000-000000000004', 'a0000000-0000-4000-8000-00000000000a',
    '40000000-0000-4000-8000-000000000002', 'TM-SONY-XM5', 'TMXM5',
    'Sony WH-1000XM5 Kablosuz Kulaklık Siyah', 'Sony', 'c0000000-0000-4000-8000-000000000013',
-   '{https://images.ohaaaa.com/p/wh1000xm5.jpg}', 1189900, 1449900, 128, 0, 50000, 1, 'active'),
+   '{https://images.ohaaaa.com/p/wh1000xm5.jpg}', 1189900, 1449900, 128, 0, 50000, 1, 'active', 'TR'),
 
   ('50000000-0000-4000-8000-000000000005', 'a0000000-0000-4000-8000-00000000000b',
    '40000000-0000-4000-8000-000000000002', 'MV-XM5-BLACK', 'MVXM5',
    'Sony WH-1000XM5 ANC Kulaklık', 'Sony', 'c0000000-0000-4000-8000-000000000013',
-   '{https://images.ohaaaa.com/p/wh1000xm5.jpg}', 1249000, null, 15, 2999, null, 2, 'active'),
+   '{https://images.ohaaaa.com/p/wh1000xm5.jpg}', 1249000, null, 15, 2999, null, 2, 'active', 'TR'),
 
   -- Lenovo IdeaPad — 2 teklif
   ('50000000-0000-4000-8000-000000000006', 'a0000000-0000-4000-8000-00000000000a',
    '40000000-0000-4000-8000-000000000003', 'TM-LEN-IPS3', 'TMIPS3',
    'Lenovo IdeaPad Slim 3 Ryzen 7 16GB 512GB', 'Lenovo', 'c0000000-0000-4000-8000-000000000012',
-   '{https://images.ohaaaa.com/p/ideapad-slim-3.jpg}', 2199900, 2599900, 23, 0, 50000, 2, 'active'),
+   '{https://images.ohaaaa.com/p/ideapad-slim-3.jpg}', 2199900, 2599900, 23, 0, 50000, 2, 'active', 'TR'),
 
   ('50000000-0000-4000-8000-000000000007', 'a0000000-0000-4000-8000-00000000000c',
    '40000000-0000-4000-8000-000000000003', 'EBD-LENOVO-S3', 'EBDLS3',
    'Lenovo IdeaPad Slim 3 16GB RAM', 'Lenovo', 'c0000000-0000-4000-8000-000000000012',
-   '{https://images.ohaaaa.com/p/ideapad-slim-3.jpg}', 2249000, null, 5, 0, 30000, 4, 'active'),
+   '{https://images.ohaaaa.com/p/ideapad-slim-3.jpg}', 2249000, null, 5, 0, 30000, 4, 'active', 'TR'),
 
   -- Dyson — 2 teklif
   ('50000000-0000-4000-8000-000000000008', 'a0000000-0000-4000-8000-00000000000c',
    '40000000-0000-4000-8000-000000000004', 'EBD-DYSON-V12', 'EBDV12',
    'Dyson V12 Detect Slim Absolute', 'Dyson', 'c0000000-0000-4000-8000-000000000003',
-   '{https://images.ohaaaa.com/p/dyson-v12.jpg}', 2899900, 3299900, 11, 0, 30000, 2, 'active'),
+   '{https://images.ohaaaa.com/p/dyson-v12.jpg}', 2899900, 3299900, 11, 0, 30000, 2, 'active', 'TR'),
 
   ('50000000-0000-4000-8000-000000000009', 'a0000000-0000-4000-8000-00000000000a',
    '40000000-0000-4000-8000-000000000004', 'TM-DYSON-V12', 'TMV12',
    'Dyson V12 Detect Slim Kablosuz Süpürge', 'Dyson', 'c0000000-0000-4000-8000-000000000003',
-   '{https://images.ohaaaa.com/p/dyson-v12.jpg}', 2949900, null, 4, 0, 50000, 1, 'active'),
+   '{https://images.ohaaaa.com/p/dyson-v12.jpg}', 2949900, null, 4, 0, 50000, 1, 'active', 'TR'),
 
   -- Nike Pegasus 40 — 1 teklif
   ('50000000-0000-4000-8000-00000000000a', 'a0000000-0000-4000-8000-00000000000b',
    '40000000-0000-4000-8000-000000000005', 'MV-NIKE-PEG40', 'MVPEG40',
    'Nike Air Zoom Pegasus 40 Koşu Ayakkabısı', 'Nike', 'c0000000-0000-4000-8000-000000000004',
-   '{https://images.ohaaaa.com/p/pegasus-40.jpg}', 449900, 549900, 64, 2999, 100000, 2, 'active'),
+   '{https://images.ohaaaa.com/p/pegasus-40.jpg}', 449900, 549900, 64, 2999, 100000, 2, 'active', 'TR'),
 
   -- Philips Airfryer — 2 teklif
   ('50000000-0000-4000-8000-00000000000b', 'a0000000-0000-4000-8000-00000000000c',
    '40000000-0000-4000-8000-000000000006', 'EBD-PHIL-AF-XXL', 'EBDAFXXL',
    'Philips Airfryer XXL 7.3L Siyah', 'Philips', 'c0000000-0000-4000-8000-000000000003',
-   '{https://images.ohaaaa.com/p/airfryer-xxl.jpg}', 799900, 999900, 37, 0, 30000, 2, 'active'),
+   '{https://images.ohaaaa.com/p/airfryer-xxl.jpg}', 799900, 999900, 37, 0, 30000, 2, 'active', 'TR'),
 
   ('50000000-0000-4000-8000-00000000000c', 'a0000000-0000-4000-8000-00000000000a',
    '40000000-0000-4000-8000-000000000006', 'TM-AIRFRYER-XXL', 'TMAFXXL',
    'Philips Airfryer XXL', 'Philips', 'c0000000-0000-4000-8000-000000000003',
-   '{https://images.ohaaaa.com/p/airfryer-xxl.jpg}', 824900, null, 19, 0, 50000, 1, 'active')
+   '{https://images.ohaaaa.com/p/airfryer-xxl.jpg}', 824900, null, 19, 0, 50000, 1, 'active', 'TR')
 on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------------------
@@ -240,28 +240,28 @@ values
 on conflict (id) do nothing;
 
 insert into public.sources
-  (id, merchant_id, slug, name, kind, endpoint_url, field_mapping, schedule_cron)
+  (id, merchant_id, slug, name, kind, endpoint_url, field_mapping, schedule_cron, market_code)
 values
   ('c1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001',
    'magaza-a-genel', 'Örnek Mağaza A — genel feed', 'feed_csv',
    'https://magaza-a.example/feeds/products.csv',
    '{"external_id":"id","title":"title","price":"sale_price","gtin":"gtin",
      "url":"link","image":"image_link","stock":"availability","brand":"brand"}',
-   '0 */6 * * *'),
+   '0 */6 * * *', 'TR'),
 
   ('c1000000-0000-4000-8000-000000000002', 'b1000000-0000-4000-8000-000000000002',
    'magaza-b-genel', 'Örnek Mağaza B — genel feed', 'feed_xml',
    'https://magaza-b.example/feeds/products.xml',
    '{"external_id":"g:id","title":"g:title","price":"g:price","gtin":"g:gtin",
      "url":"g:link","image":"g:image_link","brand":"g:brand"}',
-   '0 */6 * * *')
+   '0 */6 * * *', 'TR')
 on conflict (id) do nothing;
 
 insert into public.products
   (id, fulfillment, merchant_id, source_id, group_id, external_id, title, brand,
    category_id, image_urls, price_cents, compare_at_price_cents, stock,
    shipping_fee_cents, free_shipping_threshold_cents, estimated_delivery_days,
-   product_url, commission_rate, status)
+   product_url, commission_rate, status, market_code)
 values
   -- iPhone 15: taşeron tekliflerinin yanına iki ortak mağaza teklifi
   ('60000000-0000-4000-8000-000000000001', 'affiliate',
@@ -269,14 +269,14 @@ values
    '40000000-0000-4000-8000-000000000001', 'MA-IP15-128',
    'Apple iPhone 15 128GB Siyah', 'Apple', 'c0000000-0000-4000-8000-000000000011',
    '{https://images.ohaaaa.com/p/iphone-15.jpg}', 5349900, 6299900, 25,
-   0, 30000, 2, 'https://magaza-a.example/urun/iphone-15-128', 0.0250, 'active'),
+   0, 30000, 2, 'https://magaza-a.example/urun/iphone-15-128', 0.0250, 'active', 'TR'),
 
   ('60000000-0000-4000-8000-000000000002', 'affiliate',
    'b1000000-0000-4000-8000-000000000002', 'c1000000-0000-4000-8000-000000000002',
    '40000000-0000-4000-8000-000000000001', 'MB-APPLE-IP15',
    'iPhone 15 128 GB', 'Apple', 'c0000000-0000-4000-8000-000000000011',
    '{https://images.ohaaaa.com/p/iphone-15.jpg}', 5459900, null, 8,
-   2999, null, 3, 'https://magaza-b.example/p/iphone15-128gb', null, 'active'),
+   2999, null, 3, 'https://magaza-b.example/p/iphone15-128gb', null, 'active', 'TR'),
 
   -- Sony XM5
   ('60000000-0000-4000-8000-000000000003', 'affiliate',
@@ -284,7 +284,7 @@ values
    '40000000-0000-4000-8000-000000000002', 'MA-SONY-XM5',
    'Sony WH-1000XM5 Kulaklık', 'Sony', 'c0000000-0000-4000-8000-000000000013',
    '{https://images.ohaaaa.com/p/wh1000xm5.jpg}', 1149900, 1449900, 60,
-   0, 30000, 2, 'https://magaza-a.example/urun/sony-wh1000xm5', 0.0500, 'active'),
+   0, 30000, 2, 'https://magaza-a.example/urun/sony-wh1000xm5', 0.0500, 'active', 'TR'),
 
   -- Airfryer
   ('60000000-0000-4000-8000-000000000004', 'affiliate',
@@ -292,7 +292,7 @@ values
    '40000000-0000-4000-8000-000000000006', 'MB-PHILIPS-AFXXL',
    'Philips Airfryer XXL 7.3L', 'Philips', 'c0000000-0000-4000-8000-000000000003',
    '{https://images.ohaaaa.com/p/airfryer-xxl.jpg}', 774900, 999900, 14,
-   0, 30000, 3, 'https://magaza-b.example/p/philips-airfryer-xxl', null, 'active')
+   0, 30000, 3, 'https://magaza-b.example/p/philips-airfryer-xxl', null, 'active', 'TR')
 on conflict (id) do nothing;
 
 commit;

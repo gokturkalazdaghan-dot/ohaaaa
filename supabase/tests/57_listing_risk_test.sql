@@ -40,10 +40,10 @@ begin
   values (gen_random_uuid(), 'risk-test-urun', 'Risk Test Urunu', v_cat)
   returning id into v_group;
 
-  insert into public.products (vendor_id, external_id, title, price_cents, stock, status, group_id, category_id)
-  values (v_v2, 'RT-1', 'Risk Test Urunu', 100000, 5, 'active', v_group, v_cat),
-         (v_v3, 'RT-2', 'Risk Test Urunu', 110000, 5, 'active', v_group, v_cat),
-         (v_v2, 'RT-3', 'Risk Test Urunu', 120000, 5, 'active', v_group, v_cat);
+  insert into public.products (vendor_id, external_id, title, price_cents, stock, status, group_id, category_id, market_code)
+  values (v_v2, 'RT-1', 'Risk Test Urunu', 100000, 5, 'active', v_group, v_cat, 'TR'),
+         (v_v3, 'RT-2', 'Risk Test Urunu', 110000, 5, 'active', v_group, v_cat, 'TR'),
+         (v_v2, 'RT-3', 'Risk Test Urunu', 120000, 5, 'active', v_group, v_cat, 'TR');
 
   select percentile_cont(0.5) within group (order by price_cents) into v_medyan
     from public.products where group_id = v_group and status = 'active';
@@ -53,8 +53,8 @@ begin
   raise notice '✓ referans grup kuruldu, medyan % kurus', v_medyan;
 
   -- --- 1) NORMAL fiyat yayina girer (yanlis pozitif yok) -------------------
-  insert into public.products (vendor_id, external_id, title, price_cents, stock, status, group_id, category_id)
-  values (v_vendor, 'RT-OK', 'Risk Test Urunu', 95000, 5, 'active', v_group, v_cat)
+  insert into public.products (vendor_id, external_id, title, price_cents, stock, status, group_id, category_id, market_code)
+  values (v_vendor, 'RT-OK', 'Risk Test Urunu', 95000, 5, 'active', v_group, v_cat, 'TR')
   returning id into v_id;
   select status into v_status from public.products where id = v_id;
   if v_status <> 'active' then
@@ -64,8 +64,8 @@ begin
 
   -- --- 2) Medyanin %40 ALTI ENGELLENIR -------------------------------------
   -- 30.000 kurus = medyanin %27si -> engel
-  insert into public.products (vendor_id, external_id, title, price_cents, stock, status, group_id, category_id)
-  values (v_vendor, 'RT-UCUZ', 'Risk Test Urunu', 30000, 5, 'active', v_group, v_cat)
+  insert into public.products (vendor_id, external_id, title, price_cents, stock, status, group_id, category_id, market_code)
+  values (v_vendor, 'RT-UCUZ', 'Risk Test Urunu', 30000, 5, 'active', v_group, v_cat, 'TR')
   returning id into v_id;
   select status into v_status from public.products where id = v_id;
   if v_status <> 'draft' then
@@ -90,8 +90,8 @@ begin
 
   -- --- 4) Uyari SEVIYESI yayini DURDURMAZ ----------------------------------
   -- 55.000 = medyanin %50si -> uyari araliginda (%40-%60)
-  insert into public.products (vendor_id, external_id, title, price_cents, stock, status, group_id, category_id)
-  values (v_vendor, 'RT-UYARI', 'Risk Test Urunu', 55000, 5, 'active', v_group, v_cat)
+  insert into public.products (vendor_id, external_id, title, price_cents, stock, status, group_id, category_id, market_code)
+  values (v_vendor, 'RT-UYARI', 'Risk Test Urunu', 55000, 5, 'active', v_group, v_cat, 'TR')
   returning id into v_id;
   select status into v_status from public.products where id = v_id;
   if v_status <> 'active' then
@@ -104,8 +104,8 @@ begin
 
   -- --- 5) Imkansiz indirim iddiasi ENGELLENIR ------------------------------
   insert into public.products
-    (vendor_id, external_id, title, price_cents, compare_at_price_cents, stock, status, category_id)
-  values (v_vendor, 'RT-INDIRIM', 'Tekil Urun', 5000, 1000000, 5, 'active', v_cat)
+    (vendor_id, external_id, title, price_cents, compare_at_price_cents, stock, status, category_id, market_code)
+  values (v_vendor, 'RT-INDIRIM', 'Tekil Urun', 5000, 1000000, 5, 'active', v_cat, 'TR')
   returning id into v_id;
   select status into v_status from public.products where id = v_id;
   if v_status <> 'draft' then
@@ -120,11 +120,11 @@ begin
   values (gen_random_uuid(), 'risk-tekil-grup', 'Tekil Grup', v_cat)
   returning id into v_group;
 
-  insert into public.products (vendor_id, external_id, title, price_cents, stock, status, group_id, category_id)
-  values (v_v2, 'RT-TEK-1', 'Tekil Grup', 100000, 5, 'active', v_group, v_cat);
+  insert into public.products (vendor_id, external_id, title, price_cents, stock, status, group_id, category_id, market_code)
+  values (v_v2, 'RT-TEK-1', 'Tekil Grup', 100000, 5, 'active', v_group, v_cat, 'TR');
 
-  insert into public.products (vendor_id, external_id, title, price_cents, stock, status, group_id, category_id)
-  values (v_vendor, 'RT-TEK-2', 'Tekil Grup', 1000, 5, 'active', v_group, v_cat)
+  insert into public.products (vendor_id, external_id, title, price_cents, stock, status, group_id, category_id, market_code)
+  values (v_vendor, 'RT-TEK-2', 'Tekil Grup', 1000, 5, 'active', v_group, v_cat, 'TR')
   returning id into v_id;
   select status into v_status from public.products where id = v_id;
   if v_status <> 'active' then
@@ -144,8 +144,8 @@ begin
   -- --- 8) Esikler tablodan okunuyor (koda gomulu degil) --------------------
   update public.risk_thresholds set value = 0.05 where key = 'median_ratio_block';
   select id into v_group from public.product_groups where slug = 'risk-test-urun';
-  insert into public.products (vendor_id, external_id, title, price_cents, stock, status, group_id, category_id)
-  values (v_vendor, 'RT-ESIK', 'Risk Test Urunu', 30000, 5, 'active', v_group, v_cat)
+  insert into public.products (vendor_id, external_id, title, price_cents, stock, status, group_id, category_id, market_code)
+  values (v_vendor, 'RT-ESIK', 'Risk Test Urunu', 30000, 5, 'active', v_group, v_cat, 'TR')
   returning id into v_id;
   select status into v_status from public.products where id = v_id;
   if v_status <> 'active' then
