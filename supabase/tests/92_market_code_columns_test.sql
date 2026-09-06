@@ -59,10 +59,10 @@ select is(
 -- Gecerli bir pazar kodu kabul edilir.
 select lives_ok(
   $$ insert into public.sources
-       (merchant_id, slug, name, kind, endpoint_url, market, currency,
+       (merchant_id, slug, name, kind, endpoint_url, currency,
         market_code, country_code)
      select id, 'm3-eu-kaynak', 'EU Kaynak', 'feed_csv',
-            'https://ornek.gecersiz/f.csv', 'DE', 'EUR', 'EU', 'DE'
+            'https://ornek.gecersiz/f.csv', 'EUR', 'EU', 'DE'
        from public.merchants where slug = 'm3-testi-magaza' $$,
   '11) EU pazari + DE ulkesi olan kaynak acilabiliyor'
 );
@@ -70,9 +70,9 @@ select lives_ok(
 -- 'DE' bir PAZAR kodu olarak REDDEDILIR.
 select throws_ok(
   $$ insert into public.sources
-       (merchant_id, slug, name, kind, endpoint_url, market, currency, market_code)
+       (merchant_id, slug, name, kind, endpoint_url, currency, market_code)
      select id, 'm3-de-kaynak', 'DE Kaynak', 'feed_csv',
-            'https://ornek.gecersiz/f2.csv', 'DE', 'EUR', 'DE'
+            'https://ornek.gecersiz/f2.csv', 'EUR', 'DE'
        from public.merchants where slug = 'm3-testi-magaza' $$,
   '23503',
   null,
@@ -82,10 +82,10 @@ select throws_ok(
 -- Pazar ve ulke BAGIMSIZ: EU pazarinda Ispanya kaynagi acilabilir.
 select lives_ok(
   $$ insert into public.sources
-       (merchant_id, slug, name, kind, endpoint_url, market, currency,
+       (merchant_id, slug, name, kind, endpoint_url, currency,
         market_code, country_code)
      select id, 'm3-es-kaynak', 'ES Kaynak', 'feed_csv',
-            'https://ornek.gecersiz/f3.csv', 'DE', 'EUR', 'EU', 'ES'
+            'https://ornek.gecersiz/f3.csv', 'EUR', 'EU', 'ES'
        from public.merchants where slug = 'm3-testi-magaza' $$,
   '13) ayni EU pazarinda farkli ulke (ES) kaynagi acilabiliyor'
 );
@@ -93,11 +93,20 @@ select lives_ok(
 -- ---------------------------------------------------------------------------
 -- C) KOPRU SAGLAM MI
 -- ---------------------------------------------------------------------------
-select has_column('public', 'products', 'market',
-  '14) eski products.market sutunu HALA duruyor (geri donus yolu)');
+/*
+ * 14-15) M3 YAZILDIGINDA bu ikisi kopruunun ACIK oldugunu olcuyordu: kod
+ * dagitimi ters giderse eski enum yoluna donulebilmeliydi ve "donulebilir"
+ * ifadesinin testi buydu. Kod dagitildi, M4 kopruyu kaldirdi.
+ *
+ * Iddialar silinmedi, yonu cevrildi -- ve boylece dosya artik iki seyi
+ * birden kanitliyor: M3'un ekledigi sutunlar duruyor (1-13) VE M3'un
+ * bilerek birakti eski yol kapandi (14-15).
+ */
+select hasnt_column('public', 'products', 'market',
+  '14) eski products.market sutunu M4 ile dusuruldu');
 
-select has_type('public', 'market',
-  '15) public.market enum''u HALA duruyor (M4''un isi)');
+select hasnt_type('public', 'market',
+  '15) public.market enum''u M4 ile dusuruldu');
 
 select * from finish();
 rollback;

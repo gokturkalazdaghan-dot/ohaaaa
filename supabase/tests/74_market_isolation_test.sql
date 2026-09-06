@@ -29,16 +29,42 @@ values
   ('de-magaza', 'DE Magaza', 'https://de.gecersiz', 'direct', 'active',
    'https://de.gecersiz/g?u={url}', 'DE', now());
 
--- --- 1) Pazar → para birimi eşlemesi --------------------------------------
-select is(public.market_currency('TR'), 'TRY'::char(3), 'TR pazari TRY kullanir');
-select is(public.market_currency('DE'), 'EUR'::char(3), 'DE pazari EUR kullanir');
-select is(public.market_currency('US'), 'USD'::char(3), 'US pazari USD kullanir');
+-- --- 1) Pazar → para birimi eşlemesi ARTIK YOK ----------------------------
+--
+-- Bu üç iddia eskiden `market_currency()`'nin TR→TRY, DE→EUR, US→USD
+-- döndürdüğünü ölçüyordu. M4 o fonksiyonu düşürdü; iddialar silinmedi,
+-- YÖNÜ ÇEVRİLDİ: artık eşlemenin var olmadığını ve VAR OLAMAYACAĞINI
+-- kanıtlıyorlar. Silinseydi plan 9'dan 6'ya inerdi ve modelin en pahalı
+-- kararı testsiz kalırdı.
+select is(
+  (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'market_currency'),
+  0,
+  'market_currency() yok -- pazardan para birimi turetilemez'
+);
+
+-- Çok para birimli bir pazarın varsayılanı UYDURULMAZ, NULL bırakılır.
+select is(
+  (select default_currency from public.markets where code = 'NORDICS'),
+  null::char(3),
+  'NORDICS varsayilan para birimi tasimaz'
+);
+
+-- Ve sebebi ölçülebilir: beş ülke, birden çok para birimi.
+select cmp_ok(
+  (select count(distinct c.default_currency)::int
+     from public.market_countries mc
+     join public.countries c on c.code = mc.country_code
+    where mc.market_code = 'NORDICS'),
+  '>', 1,
+  'NORDICS birden cok para birimi tasiyor -- tek esleme imkansiz'
+);
 
 -- --- 2) Mevcut satırlar bozulmadı -----------------------------------------
 -- Migration'dan sonra eski kaynaklarin hepsi TR pazarinda olmali; aksi hâlde
 -- gecmis veri "pazarsiz" kalirdi.
 select is(
-  (select count(*) from public.sources where market is null),
+  (select count(*) from public.sources where market_code is null),
   0::bigint,
   'pazari olmayan kaynak yok'
 );
@@ -52,20 +78,20 @@ select is(
  */
 select lives_ok(
   $$ insert into public.sources
-       (merchant_id, slug, name, kind, endpoint_url, market, currency)
+       (merchant_id, slug, name, kind, endpoint_url, market_code, currency)
      select id, 'uyumsuz', 'Pazardan Farkli Para Birimi', 'feed_csv',
-            'https://x.gecersiz/f.csv', 'DE', 'TRY'
+            'https://x.gecersiz/f.csv', 'EU', 'TRY'
        from public.merchants where slug = 'de-magaza' $$,
-  'DE pazarinda TRY fiyatli kaynak ARTIK kabul ediliyor (para birimi pazardan ayri)'
+  'EU pazarinda TRY fiyatli kaynak ARTIK kabul ediliyor (para birimi pazardan ayri)'
 );
 
 insert into public.sources
-  (merchant_id, slug, name, kind, endpoint_url, market, currency)
-select id, 'de-feed', 'DE Feed', 'feed_csv', 'https://de.gecersiz/f.csv', 'DE', 'EUR'
+  (merchant_id, slug, name, kind, endpoint_url, market_code, currency)
+select id, 'de-feed', 'DE Feed', 'feed_csv', 'https://de.gecersiz/f.csv', 'EU', 'EUR'
   from public.merchants where slug = 'de-magaza';
 
 select ok(
-  exists (select 1 from public.sources where slug = 'de-feed' and market = 'DE'),
+  exists (select 1 from public.sources where slug = 'de-feed' and market_code = 'EU'),
   'uyumlu kaynak kabul edildi'
 );
 
@@ -81,7 +107,7 @@ select ok(
  */
 select lives_ok(
   $$ insert into public.products
-       (merchant_id, external_id, title, price_cents, currency, market,
+       (merchant_id, external_id, title, price_cents, currency, market_code,
         status, fulfillment, product_url)
      select id, 'X1', 'Pazardan Farkli Para Birimi', 1000, 'TRY', 'US', 'active',
             'affiliate', 'https://de.gecersiz/u/x1'
@@ -91,16 +117,16 @@ select lives_ok(
 
 -- --- 5) İki pazarın teklifleri BİRBİRİNE KARIŞMAZ -------------------------
 insert into public.products
-  (merchant_id, external_id, title, price_cents, currency, market, status,
+  (merchant_id, external_id, title, price_cents, currency, market_code, status,
    fulfillment, product_url)
 select id, 'TR1', 'Ayni Urun', 100000, 'TRY', 'TR', 'active',
        'affiliate', 'https://tr.gecersiz/u/tr1'
   from public.merchants where slug = 'tr-magaza';
 
 insert into public.products
-  (merchant_id, external_id, title, price_cents, currency, market, status,
+  (merchant_id, external_id, title, price_cents, currency, market_code, status,
    fulfillment, product_url)
-select id, 'DE1', 'Ayni Urun', 3000, 'EUR', 'DE', 'active',
+select id, 'DE1', 'Ayni Urun', 3000, 'EUR', 'EU', 'active',
        'affiliate', 'https://de.gecersiz/u/de1'
   from public.merchants where slug = 'de-magaza';
 
@@ -108,7 +134,7 @@ select id, 'DE1', 'Ayni Urun', 3000, 'EUR', 'DE', 'active',
 -- iceriyor ve global sayim testi seed'in buyuklugune bagimli kilardi.
 select is(
   (select count(*) from public.products
-    where market = 'TR' and external_id in ('TR1', 'DE1')),
+    where market_code = 'TR' and external_id in ('TR1', 'DE1')),
   1::bigint,
   'TR pazarinda yalnizca TR teklifi gorunuyor'
 );
@@ -124,9 +150,9 @@ select is(
  */
 select is(
   (select count(*) from public.products
-    where market = 'DE' and external_id in ('TR1', 'DE1')),
+    where market_code = 'EU' and external_id in ('TR1', 'DE1')),
   1::bigint,
-  'DE teklifi TR listesine sizmiyor'
+  'EU teklifi TR listesine sizmiyor'
 );
 
 select * from finish();

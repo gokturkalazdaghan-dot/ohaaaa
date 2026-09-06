@@ -19,10 +19,10 @@ values
 
 -- Taslak (yayınlanmamış) ürün: vitrinde ASLA görünmemeli.
 insert into public.products
-  (id, vendor_id, external_id, title, price_cents, stock, status)
+  (id, vendor_id, external_id, title, price_cents, stock, status, market_code)
 values
   ('50000000-0000-4000-8000-0000000000ff', 'a0000000-0000-4000-8000-00000000000a',
-   'TM-GIZLI-TASLAK', 'Henüz yayınlanmamış gizli ürün', 100000, 5, 'draft');
+   'TM-GIZLI-TASLAK', 'Henüz yayınlanmamış gizli ürün', 100000, 5, 'draft', 'TR');
 
 -- ---------------------------------------------------------------------------
 -- 1) anon: yalnızca yayınlanmış katalog

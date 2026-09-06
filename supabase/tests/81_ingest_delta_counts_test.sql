@@ -7,7 +7,7 @@ insert into public.merchants
 values ('dc-m', 'DC Magaza', 'https://dc.gecersiz', 'direct', 'active',
         'https://dc.gecersiz/g?u={url}', 'TR', now());
 
-insert into public.sources (merchant_id, slug, name, kind, endpoint_url, market, currency)
+insert into public.sources (merchant_id, slug, name, kind, endpoint_url, market_code, currency)
 select id, 'dc-feed', 'DC Feed', 'feed_csv', 'https://dc.gecersiz/f.csv', 'TR', 'TRY'
   from public.merchants where slug = 'dc-m';
 

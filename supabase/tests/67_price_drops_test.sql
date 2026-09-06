@@ -43,9 +43,9 @@ begin
 
   insert into public.products
     (id, vendor_id, group_id, external_id, title, category_id,
-     price_cents, compare_at_price_cents, stock, status)
+     price_cents, compare_at_price_cents, stock, status, market_code)
   values (v_urun, v_satici, v_grup, 'TEST-FIRSAT-1', 'Test Fırsat Ürünü',
-          v_elektronik, 100000, 150000, 10, 'active');
+          v_elektronik, 100000, 150000, 10, 'active', 'TR');
 
   ---------------------------------------------------------------------------
   -- 1) TEK ÖLÇÜM = DÜŞÜŞ YOK
@@ -144,9 +144,9 @@ begin
 
   insert into public.products
     (id, vendor_id, group_id, external_id, title, category_id,
-     price_cents, stock, status)
+     price_cents, stock, status, market_code)
   values (v_urun2, v_satici, v_grup2, 'TEST-FIRSAT-2', 'Test Moda Ürünü',
-          v_moda, 20000, 10, 'active');
+          v_moda, 20000, 10, 'active', 'TR');
   update public.products set price_cents = 10000 where id = v_urun2;
 
   select count(*) into n from public.price_drops(30, 0.05, v_elektronik, 100)

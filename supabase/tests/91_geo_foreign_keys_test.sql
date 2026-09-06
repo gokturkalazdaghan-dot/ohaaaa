@@ -52,7 +52,7 @@ select lives_ok(
 select throws_ok(
   $$ insert into public.products
        (fulfillment, merchant_id, external_id, title, price_cents, stock,
-        product_url, market, currency, status)
+        product_url, market_code, currency, status)
      select 'affiliate', id, 'M2-COP', 'Cop Para Birimi', 1000, 5,
             'https://ornek.gecersiz/cop', 'TR', 'ZZZ', 'active'
        from public.merchants where slug = 'm2-testi-magaza' $$,
@@ -87,18 +87,18 @@ select is_empty(
 select lives_ok(
   $$ insert into public.products
        (fulfillment, merchant_id, external_id, title, price_cents, stock,
-        product_url, market, currency, status)
+        product_url, market_code, currency, status)
      select 'affiliate', id, 'M2-DE-TRY', 'Alman Pazari TRY Fiyat', 1000, 5,
-            'https://ornek.gecersiz/de-try', 'DE', 'TRY', 'active'
+            'https://ornek.gecersiz/de-try', 'EU', 'TRY', 'active'
        from public.merchants where slug = 'm2-testi-magaza' $$,
   '10) market ile currency ARTIK BAGIMSIZ: DE pazarinda TRY fiyat kabul ediliyor'
 );
 
 select lives_ok(
   $$ insert into public.sources
-       (merchant_id, slug, name, kind, endpoint_url, market, currency)
+       (merchant_id, slug, name, kind, endpoint_url, market_code, currency)
      select id, 'm2-de-usd', 'DE Kaynak USD', 'feed_csv',
-            'https://ornek.gecersiz/f.csv', 'DE', 'USD'
+            'https://ornek.gecersiz/f.csv', 'EU', 'USD'
        from public.merchants where slug = 'm2-testi-magaza' $$,
   '11) kaynak tarafinda da pazar/para birimi bagimsiz'
 );
@@ -106,10 +106,25 @@ select lives_ok(
 -- ---------------------------------------------------------------------------
 -- C) M4'UN ISI BURADA YAPILMADI
 -- ---------------------------------------------------------------------------
-select has_type('public', 'market', '12) public.market enum''u HALA YERINDE (M4''un isi)');
+/*
+ * 12-13) M2 YAZILDIGINDA bu iki iddia enum'un ve market_currency()'nin HALA
+ * YERINDE oldugunu olcuyordu -- cunku M2 onlari bilerek dokunmadan birakti
+ * ve "dokunmadim" ifadesinin testi buydu. M4 ikisini de dusurdu.
+ *
+ * Iddialar silinmedi, yonu cevrildi: M2'nin garantisi "para birimi pazardan
+ * AYRIK" idi; o garanti enum gittikten sonra da gecerli ve asagida hala
+ * olculuyor (8-11). Buradaki ikisi artik daralmanin tamamlandigini
+ * kanitliyor. Silinselerdi plan 14'ten 12'ye iner ve M4'un gercekten
+ * calistigina dair bu dosyada hicbir iz kalmazdi.
+ */
+select hasnt_type('public', 'market', '12) public.market enum''u M4 ile dusuruldu');
 
-select has_function('public', 'market_currency',
-  '13) market_currency() HALA YERINDE -- artik oneri, kisit degil');
+select is(
+  (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'market_currency'),
+  0,
+  '13) market_currency() M4 ile dusuruldu -- curutulmus varsayim semada kalmadi'
+);
 
 -- Referans veri bozulmadi.
 select is(

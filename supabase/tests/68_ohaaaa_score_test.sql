@@ -46,9 +46,9 @@ begin
   ---------------------------------------------------------------------------
   insert into public.products
     (id, vendor_id, group_id, external_id, title, category_id,
-     price_cents, stock, estimated_delivery_days, status)
+     price_cents, stock, estimated_delivery_days, status, market_code)
   values (v_urun, v_satici, null, 'SKOR-1', 'Skor Test Ürünü', v_elektronik,
-          100000, 10, 1, 'active');
+          100000, 10, 1, 'active', 'TR');
 
   s := public.ohaaaa_score(v_urun);
 
@@ -135,9 +135,9 @@ begin
   -- İkinci teklif: karşılaştırma bileşeni ölçülebilsin.
   insert into public.products
     (id, vendor_id, group_id, external_id, title, category_id,
-     price_cents, stock, estimated_delivery_days, status)
+     price_cents, stock, estimated_delivery_days, status, market_code)
   values (v_urun2, v_satici, v_grup, 'SKOR-2', 'Skor Test Ürünü', v_elektronik,
-          90000, 10, 2, 'active');
+          90000, 10, 2, 'active', 'TR');
 
   update public.products set price_cents = 40000 where id = v_urun;   -- dip
   s := public.ohaaaa_score(v_urun);

@@ -14,9 +14,9 @@ values
 update public.sources set is_enabled = false;
 
 insert into public.sources
-  (merchant_id, slug, name, kind, endpoint_url, market, currency, next_refresh_at)
+  (merchant_id, slug, name, kind, endpoint_url, market_code, currency, next_refresh_at)
 select m.id, v.slug, v.slug, 'feed_csv', 'https://x.gecersiz/f.csv',
-       v.market::public.market, v.cur, v.nra
+       v.market_code, v.cur, v.nra
   from (values
     -- Geçmişte: due
     ('due-tr',    'TR', 'TRY', now() - interval '1 minute', 'sch-tr'),
@@ -25,8 +25,8 @@ select m.id, v.slug, v.slug, 'feed_csv', 'https://x.gecersiz/f.csv',
     -- Planı hiç yok: due (hiç çalışmamış)
     ('plansiz',   'TR', 'TRY', null,                        'sch-tr'),
     -- Başka pazar, gelecekte
-    ('future-de', 'DE', 'EUR', now() + interval '2 hours',  'sch-de')
-  ) as v(slug, market, cur, nra, msl)
+    ('future-de', 'EU', 'EUR', now() + interval '2 hours',  'sch-de')
+  ) as v(slug, market_code, cur, nra, msl)
   join public.merchants m on m.slug = v.msl;
 
 -- --- 1-4) DUE SEÇİMİ ------------------------------------------------------
