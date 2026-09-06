@@ -14,7 +14,7 @@
 --   3. Dayanaksız artımlı kip: kaynak sessizce boşalır, durum kodu bunu
 --      göstermez.
 begin;
-select plan(20);
+select plan(26);
 
 -- =========================================================================
 -- KANONİK ÜRÜN KİMLİĞİ
@@ -146,6 +146,43 @@ select throws_ok(
   $$ update public.sources set batch_size = 100000 where slug = 'olcek-kaynak' $$,
   '23514', null,
   '20) sinirsiz parti boyutu reddediliyor -- isci EN BUYUK feed de duserdi');
+
+-- =========================================================================
+-- TEKLİF → KANONİK ÜRÜN BAĞI
+-- =========================================================================
+select has_column('public', 'products', 'canonical_key',
+  '21) TEKLIF de kanonik anahtar tasiyor -- olmadan group_id hic dolmazdi');
+
+-- 22-23: aynı ürün iki gösterimden TEK gruba
+select is(
+  public.resolve_canonical_group('0555000111002', 'OlcekMarka', null, 'Olcek Telefon'),
+  public.resolve_canonical_group('00555000111002', 'OlcekMarka', null, 'Olcek Telefon'),
+  '22) ayni urun iki gosterimden TEK kanonik gruba dusuyor');
+
+select isnt(
+  public.resolve_canonical_group('0555000111002', 'OlcekMarka', null, 'Olcek Telefon'),
+  public.resolve_canonical_group('0987654321098', 'OlcekMarka', null, 'Baska Telefon'),
+  '23) FARKLI urun ayri grup -- kapatma fazla kapatmamis');
+
+-- 24: başlıksız teklif bağlanmıyor
+select is(
+  public.resolve_canonical_group(null, null, null, '   '),
+  null::uuid,
+  '24) basliksiz teklif baglanmiyor -- hepsi tek sahte urune yigilirdi');
+
+-- 25: mevcut veri ezilmiyor
+select is(
+  (select brand from public.product_groups
+    where id = public.resolve_canonical_group('0555000111002', null, null, 'Olcek Telefon')),
+  'OlcekMarka',
+  '25) ikinci feed ilk feed in verisini EZMIYOR');
+
+-- 26: teklif ve grup ayni anahtari uretiyor
+select is(
+  (select canonical_key from public.product_groups
+    where id = public.resolve_canonical_group('0555000111002', 'OlcekMarka', null, 'Olcek Telefon')),
+  public.canonical_product_key('0555000111002', 'OlcekMarka', null, 'Olcek Telefon'),
+  '26) teklif ve grup anahtarlari AYRISMIYOR');
 
 select * from finish();
 rollback;
