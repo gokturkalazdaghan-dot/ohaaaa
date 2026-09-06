@@ -210,6 +210,21 @@ export interface ApplicationResult {
   checkedAt: string;
 }
 
+/**
+ * Keşfin TEK SAYFASI.
+ *
+ * `discoverPrograms` tüm katalogu tek dizide döndürür ve küçük ağlarda bu
+ * doğru. Milyonlarca programlı bir ağda değil: tek dizi belleğe sığmaz ve
+ * tur yarıda düşerse baştan başlar. `nextCursor` o turu sürdürülebilir
+ * kılıyor -- imleç OPAKTIR, çağıran onu ayrıştırmaz, yalnız saklar ve geri
+ * verir.
+ */
+export interface DiscoveryPage {
+  programs: NormalizedProgram[];
+  /** Sonraki sayfanın imleci. null = katalogun SONU. */
+  nextCursor: string | null;
+}
+
 /** Ağdan keşfedilen feed — adres doğrulanmadan source açılmaz. */
 export interface DiscoveredFeed {
   url: string;
@@ -263,6 +278,14 @@ export interface AffiliateProvider {
    * çalışıyormuş gibi görünürdü.
    */
   discoverPrograms?(ctx: ProviderContext): Promise<NormalizedProgram[]>;
+  /**
+   * Sayfalı keşif. Bir ağ bunu YA DA `discoverPrograms`ı yazar; ikisi de
+   * `program_discovery` yeteneğine bağlıdır.
+   *
+   * Sayfalı olan tercih edilir: tek dizi milyonlarca programda belleğe
+   * sığmaz ve yarıda düşen tur baştan başlar.
+   */
+  discoverProgramsPage?(ctx: ProviderContext, cursor: string | null): Promise<DiscoveryPage>;
   lookupProgram?(ctx: ProviderContext, networkProgramId: string): Promise<NormalizedProgram | null>;
   submitApplication?(ctx: ProviderContext, networkProgramId: string): Promise<ApplicationResult>;
   applicationStatus?(ctx: ProviderContext, networkProgramId: string): Promise<ApplicationResult>;

@@ -2,6 +2,7 @@ export type {
   ApplicationResult,
   ApplicationState,
   DiscoveredFeed,
+  DiscoveryPage,
   NormalizedProgram,
   ProviderContext,
   ProviderFetcher,
