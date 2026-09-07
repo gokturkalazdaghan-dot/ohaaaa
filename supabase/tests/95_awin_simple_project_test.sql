@@ -8,7 +8,7 @@
 -- (MID, sablon, dogrulanmis komisyon) yerine bir varsayilan konmadigi ve
 -- eksikligin gercek bir KAPI olarak durdugudur.
 begin;
-select plan(10);
+select plan(11);
 
 -- --- 1-3: onay kaydedildi -------------------------------------------------
 select is(
@@ -93,11 +93,30 @@ select throws_ok(
 -- sayima bagli bir iddia, gocla ilgisiz bir sebepten duserdi. Kararli olan
 -- degismez, `terms_verified_at`in yalnizca dizin kanitiyla doldurulmus 14
 -- firmada dolu olmasi.
+--
+-- ...ve iddia tam da bunu yazdiktan sonra BUTUN awin kayitlarini sayiyordu.
+-- Boyle bir sayim "dogrulama devralinmadi" degil "kimse bir daha
+-- dogrulanmadi" der. 20260907340000 Alison'i KENDI kanitiyla (komisyon %20
+-- VE cerez 30 gun) ekledigi anda, bu gocla hicbir ilgisi olmayan bir
+-- sebepten dustu.
+--
+-- Dizinden dogrulanan kume artik KARARLI bir yuklemle sabit: o 14 firma,
+-- bizim sira numaramizi (partner_rank) tasiyan tek gruptur.
 select is(
   (select count(*)::int from public.merchants
-    where network = 'awin' and terms_verified_at is not null),
+    where network = 'awin' and terms_verified_at is not null
+      and partner_rank is not null),
   14,
-  '9) dogrulanmis sart sayisi hala 14 -- Simple Project dogrulama devralmadi');
+  '9) dizinden dogrulanan 14 firma hala 14 -- kume buyumedi');
+
+-- Ve BU GOCUN oznesi icin iddia sayimdan cikip DOGRUDAN kayda bakiyor:
+-- Simple Project'in kendisi dogrulama devralmadi. Onceki hali, Simple
+-- Project dogrulama devralsa bile baska bir kayit kaybettiginde toplami
+-- 14'te tutup GECEBILIRDI.
+select is(
+  (select terms_verified_at from public.merchants where slug = 'simple-project'),
+  null,
+  '9b) Simple Project dogrulama devralmadi -- sartlari bildirilmedi');
 
 
 /*

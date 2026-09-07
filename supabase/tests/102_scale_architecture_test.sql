@@ -74,25 +74,41 @@ select has_table('public', 'merchant_network_links',
   '10) merchant ag baglari tablosu var -- merchant modeli agdan bagimsiz');
 
 -- --- 11-14: aynı mağaza birden çok ağda -----------------------------------
+--
+-- FIKSTUR KENDI MAGAZASINI ACIYOR. Onceki hali alfabetik olarak ILK GERCEK
+-- magazayi oduncu aliyordu. Bu, testi goc verisine baglar: 20260907340000
+-- 'alison'i ekledigi anda ilk sira 'aosom-uk'tan 'alison'a gecti, Alison'in
+-- zaten bir awin bagi vardi ve test -- sinadigi kisitla hicbir ilgisi olmayan
+-- bir sebepten -- dustu.
+--
+-- Iki adet kendi magazasi, testi veriden bagimsiz ve YINELENEBILIR yapiyor.
+insert into public.merchants (slug, display_name) values
+  ('olcek-magaza-1', 'Olcek Magaza 1'),
+  ('olcek-magaza-2', 'Olcek Magaza 2');
+
 insert into public.merchant_network_links
   (merchant_id, network, network_program_id, commission_rate, is_primary)
-select id, 'awin', 'OLCEK-MID-1', 0.10, true from public.merchants order by slug limit 1;
+select id, 'awin', 'OLCEK-MID-1', 0.10, true
+  from public.merchants where slug = 'olcek-magaza-1';
 
 select lives_ok(
   $$ insert into public.merchant_network_links
        (merchant_id, network, network_program_id, commission_rate)
-     select id, 'direct', 'OLCEK-MID-1', 0.15 from public.merchants order by slug limit 1 $$,
+     select id, 'direct', 'OLCEK-MID-1', 0.15
+          from public.merchants where slug = 'olcek-magaza-1' $$,
   '11) AYNI MAGAZA iki agda bulunabiliyor ve komisyonlari FARKLI');
 
 select throws_ok(
   $$ insert into public.merchant_network_links (merchant_id, network, network_program_id)
-     select id, 'awin', 'OLCEK-MID-1' from public.merchants order by slug desc limit 1 $$,
+     select id, 'awin', 'OLCEK-MID-1'
+          from public.merchants where slug = 'olcek-magaza-2' $$,
   '23505', null,
   '12) ayni ag programi iki magazaya baglanamiyor -- gelir mutabakati bozulurdu');
 
 select throws_ok(
   $$ insert into public.merchant_network_links (merchant_id, network, network_program_id)
-     select id, 'awin', 'OLCEK-MID-2' from public.merchants order by slug limit 1 $$,
+     select id, 'awin', 'OLCEK-MID-2'
+          from public.merchants where slug = 'olcek-magaza-1' $$,
   '23505', null,
   '13) ayni magaza ayni agda iki kez listelenemiyor');
 
@@ -135,7 +151,7 @@ select is(
 insert into public.sources (merchant_id, slug, name, kind, endpoint_url, market_code, last_full_sync_at)
 select id, 'olcek-kaynak', 'Olcek Kaynak', 'feed_csv', 'https://ornek.example/feed.csv',
        (select code from public.markets order by code limit 1), now()
-  from public.merchants order by slug limit 1;
+  from public.merchants where slug = 'olcek-magaza-1';
 
 select throws_ok(
   $$ update public.sources set sync_mode = 'incremental' where slug = 'olcek-kaynak' $$,

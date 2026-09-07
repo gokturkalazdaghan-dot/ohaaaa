@@ -6,7 +6,7 @@
 -- her alani uydurma degerle dolduran bir goc de gecerdi -- ve bu gocun tum
 -- meselesi tam olarak o alanlari DOLDURMAMAKTI.
 begin;
-select plan(13);
+select plan(14);
 
 -- --- 1-4: dordu de dogru MID ile var ------------------------------------
 select is(
@@ -121,11 +121,35 @@ select throws_ok(
 -- dizin kanitiyla doldurdugu 14 firmada dolu. Yeni eklenen hicbir kayit onu
 -- DEVRALMAZ; devralsaydi merchants_active_needs_verified_terms kapisi o
 -- kayitlar icin sessizce acilirdi.
+--
+-- AYNI TUZAGA IKINCI KEZ DUSMUSTU. Iddia yukaridaki uyariyi yazdiktan sonra
+-- yine BUTUN awin kayitlarini sayiyordu: "network = 'awin' and
+-- terms_verified_at is not null = 14". Bu, "dogrulama devralinmadi" degil
+-- "kimse bir daha dogrulanmadi" demektir -- ve 20260907340000 Alison'i KENDI
+-- kanitiyla (komisyon %20 VE cerez 30 gun, hesap sahibi bildirimi) eklediginde
+-- bu gocle hicbir ilgisi olmayan bir sebepten dustu.
+--
+-- Kume artik KARARLI bir yuklemle sabitleniyor: 20260905120000'in doldurdugu
+-- 14 firma, bizim sira numaramizi (partner_rank) tasiyan tek gruptur. Yeni bir
+-- kayit o kumeye ancak kendisine sira numarasi VERILEREK girebilir -- yani
+-- sessizce degil.
 select is(
   (select count(*)::int from public.merchants
-    where network = 'awin' and terms_verified_at is not null),
+    where network = 'awin' and terms_verified_at is not null
+      and partner_rank is not null),
   14,
-  '12) dogrulanmis sart sayisi hala 14 -- yeni kayitlar dogrulama devralmadi');
+  '12) dizinden dogrulanan 14 firma hala 14 -- kume buyumedi');
+
+-- Ve BU GOCUN kendi dort MID'i icin iddia GEVSEMEDI, sertlesti: sayim degil,
+-- dogrudan o dort kayit sinaniyor. Onceki hali, dort kayittan biri dogrulama
+-- devralsa bile baska bir kayit dogrulamasini kaybettiginde toplami 14'te
+-- tutup GECEBILIRDI.
+select is(
+  (select count(*)::int from public.merchants
+    where network_advertiser_id in ('25962','61655','17453','115809')
+      and terms_verified_at is not null),
+  0,
+  '13) bu gocun dort MID''i dogrulama devralmadi');
 
 select * from finish();
 rollback;
