@@ -5,8 +5,19 @@
  * BU DOSYA BİLEREK YARIM. NEDENİNİ OKUYUN.
  * ======================================================================
  * Awin publisher başvurusu (publisher ID 3074081) yazıldığı sırada
- * İNCELEMEDEYDİ. Awin'in resmî dokümanlarına bu ortamdan erişilemedi
- * (wiki.awin.com ve developer.awin.com ağ politikasıyla engelli).
+ * İNCELEMEDEYDİ. Awin'in resmî dokümanlarına bu ortamdan erişilemedi.
+ *
+ * SON DOĞRULAMA (2026-09-07) — hangi kapının kapalı olduğu önemli, çünkü
+ * ikisinin çözümü farklı:
+ *   • help.awin.com, wiki.awin.com, developer.awin.com → egress politikası
+ *     CONNECT'e 403 veriyor. Hem curl hem WebFetch aynı sonucu veriyor.
+ *     Çözüm: bu üç alan adını ortamın izin listesine eklemek (ya da doküman
+ *     sayfalarını depoya elle geçirmek).
+ *   • api.awin.com → ERİŞİLEBİLİR (401 döndürüyor, yani ağ engeli yok).
+ *     Ortamdaki `awin_OAuth2` belirteci ile denendi; Awin `invalid_token`
+ *     yanıtladı. Çözüm: geçerli bir yayıncı API belirteci. Bu tek başına
+ *     yeterli olabilir — /publishers/3074081/transactions gerçek şemayı
+ *     tahmine gerek kalmadan gösterir.
  *
  * Dolayısıyla AŞAĞIDAKİLER YAZILMADI:
  *   • Postback/dönüşüm bildiriminin imza algoritması
