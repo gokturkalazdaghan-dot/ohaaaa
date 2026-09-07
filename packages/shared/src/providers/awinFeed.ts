@@ -9,6 +9,24 @@
  * anında anahtarla birleştirilerek üretilir ve hiçbir yere yazılmaz.
  *
  * Aynı kalıp `deeplink_template`in MID'den türetilmesiyle aynıdır.
+ *
+ * ---------------------------------------------------------------------------
+ * BU MODÜL "CREATE-A-FEED" DATAFEED ANAHTARINI KULLANIR -- OAuth2'yi DEĞİL
+ * ---------------------------------------------------------------------------
+ *
+ * Awin'in yayıncı tarafında BİRDEN ÇOK kimlik yüzeyi var ve bunlar
+ * birbirinin yerine geçmez. Bu modül, ürün feed'i indirmeye yarayan datafeed
+ * anahtarını varsayar (`AWIN_DATAFEED_API_KEY`).
+ *
+ * Hesabın Publisher API için ayrı bir OAuth2 kimlik bilgisi olabilir. O
+ * kimlik bilgisinin bu indirme yüzeyinde geçerli olup olmadığı BU DEPODA
+ * DOĞRULANMADI: Awin'in belge ve API hostları (developer/api/productdata)
+ * bu ortamın egress izin listesinde değil, yani resmî sözleşmeye birinci
+ * elden bakılamadı.
+ *
+ * Bu yüzden burada OAuth2 akışı UYGULANMADI. Uydurulmuş bir alan adı
+ * ("client_id" mi "clientId" mi, token ucu hangisi) ile yazılmış bir akış,
+ * ilk gerçek çağrıda sessizce 401 döner ve hatayı Awin'e yıktırırdı.
  */
 
 /** Awin yayıncı feed indirme kökü. */
