@@ -84,30 +84,77 @@ export function safeAwinError(error: unknown): string {
 // AWIN_OAUTH2 -- HESABIN GERÇEKTEN SAHİP OLDUĞU KİMLİK BİLGİSİ
 // ---------------------------------------------------------------------------
 //
-// Hesap sahibi kimlik bilgisini Vercel'de `AWIN_OAUTH2` adıyla tutuyor.
-// Aşağıdaki erişimci onu SUNUCU TARAFINDA okur, maskeleme defterine yazar ve
-// yoksa fail-closed davranır.
+// Hesap sahibi kimlik bilgisini Vercel'de `AWIN_OAUTH2` adıyla tutuyor. Bu
+// çalıştırma ortamına ise `awin_OAuth2` adıyla enjekte ediliyor. İKİ AD DA
+// ÖLÇÜLDÜ, ikisi de UYDURULMADI:
 //
-// BU KİMLİK BİLGİSİ HİÇBİR İSTEĞE BAĞLANMADI. Sebep, eksiklik değil KARAR:
+//   AWIN_OAUTH2   hesap sahibinin beyanı (Vercel Production)
+//   awin_OAuth2   bu ortamda `env` çıktısında GÖRÜLEN ad
 //
-//   * Awin'in OAuth2 sözleşmesi (token ucu, grant type, alan adları, sürenin
-//     nasıl yenilendiği) bu ortamda DOĞRULANAMIYOR: developer/help/wiki/api/
-//     productdata.awin.com hostlarının beşi de egress izin listesinde değil
-//     (ölçüldü: http=000).
-//   * Ürün feed indirmenin `productdata.awin.com/.../apikey/<x>/...` biçimi
-//     AYRI bir kimlik yüzeyi. OAuth2 jetonunun o yüzeyde geçerli olup
-//     olmadığı da doğrulanamadı.
+// Aşağıdaki erişimci ikisini SIRAYLA dener. Tek ada kilitlenseydi kimlik
+// bilgisi ortamda dururken "tanımlı değil" denirdi -- ve o hata, eksik bir
+// secret'la birebir aynı görünürdü.
 //
-// Tahminle yazılmış bir akış -- "client_id mi clientId mi", "Bearer mı
-// X-Api-Key mi" -- ilk gerçek çağrıda sessizce 401 döner ve hatayı Awin'e
-// yıktırırdı. Doğrulanana kadar bu değer OKUNUR ama KULLANILMAZ.
+// ---------------------------------------------------------------------------
+// KİMLİK BİLGİSİ HÂLÂ HİÇBİR İSTEĞE BAĞLI DEĞİL -- ARTIK BAŞKA SEBEPLE
+// ---------------------------------------------------------------------------
+//
+// EGRESS ARTIK ENGEL DEĞİL. 07/09/2026 ölçümü:
+//
+//   productdata.awin.com   ULAŞILABİLİR (CloudFront, HTTP/2 404 + x-amz-cf-id)
+//   api.awin.com           ULAŞILABİLİR (401 invalid_token -- Awin'in kendi
+//                          cevabı, vekilin değil)
+//   developer.awin.com     ULAŞILABİLİR (301)
+//   ui.awin.com            ENGELLİ (CONNECT'e 403)
+//   help.awin.com          ENGELLİ (CONNECT'e 403)
+//   wiki.awin.com          ENGELLİ (CONNECT'e 403)
+//
+// ENGEL ARTIK KİMLİK BİLGİSİNİN KENDİSİ. Ortamdaki değer 36 karakterlik bir
+// UUID (değeri okunmadı, YALNIZCA biçimi ölçüldü) ve İKİ YÜZEYİN DE hiçbirinde
+// kabul edilmiyor:
+//
+//   api.awin.com          `Authorization: Bearer <değer>` -> 401 invalid_token
+//   productdata.awin.com  `/apikey/<değer>/` -> cevaplar, AYNI BİÇİMDE
+//                         UYDURULMUŞ bir UUID'ninkiyle KARAKTERİ KARAKTERİNE
+//                         AYNI (fid'siz 400 "You need to specify at least
+//                         one of...", fid 111515 ile 404 "Feed not found").
+//
+// Son satır belirleyici: uç, gerçek değerle sahte değeri AYIRT ETMİYOR. Yani
+// bu UUID bir Product Feed API anahtarı DEĞİL. En olası açıklama, OAuth2
+// uygulamasının `client_id`si olması -- ama bu bir ÇIKARIM, doğrulanmadı:
+// token ucunu, grant type'ı ve alan adlarını yazan help/wiki hostları hâlâ
+// engelli.
+//
+// Bu yüzden karar değişmedi, gerekçesi değişti: değer OKUNUR, maskeleme
+// defterine yazılır, HİÇBİR İSTEĞE BAĞLANMAZ. Tahminle kurulmuş bir token
+// akışı ilk gerçek çağrıda 401 döner ve hatayı Awin'e yıktırırdı.
 
-/** Kimlik bilgisinin okunacağı ortam değişkeni. DEĞER DEĞİL, AD. */
+/** Kimlik bilgisinin okunacağı ortam değişkeni (kanonik ad). DEĞER DEĞİL, AD. */
 export const AWIN_OAUTH2_ENV = 'AWIN_OAUTH2';
+
+/**
+ * Kimlik bilgisinin arandığı ADLAR, sırayla.
+ *
+ * İkisi de GÖZLEMLENMİŞ addır; buraya tahminle bir ad EKLENMEZ. Yeni bir ad
+ * ancak o adla enjekte edildiği ölçüldüğünde eklenir -- aksi hâlde liste,
+ * "bir yerlerde şöyle de denebilir" tahminlerinin çöplüğüne döner.
+ */
+export const AWIN_OAUTH2_ENV_NAMES = [AWIN_OAUTH2_ENV, 'awin_OAuth2'] as const;
+
+/** Kimlik bilgisini TAŞIYAN değişkenin ADINI döndürür; değeri DÖNDÜRMEZ. */
+export function resolveAwinOAuth2EnvName(
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  for (const ad of AWIN_OAUTH2_ENV_NAMES) {
+    const deger = env[ad];
+    if (typeof deger === 'string' && deger.trim().length > 0) return ad;
+  }
+  return null;
+}
 
 /** Kimlik bilgisi tanımlı mı? Değeri DÖNDÜRMEZ. */
 export function hasAwinOAuth2Credential(env: NodeJS.ProcessEnv = process.env): boolean {
-  return typeof env[AWIN_OAUTH2_ENV] === 'string' && env[AWIN_OAUTH2_ENV]!.trim().length > 0;
+  return resolveAwinOAuth2EnvName(env) !== null;
 }
 
 /**
@@ -119,13 +166,14 @@ export function hasAwinOAuth2Credential(env: NodeJS.ProcessEnv = process.env): b
  * yorumlar.
  */
 export function requireAwinOAuth2Credential(env: NodeJS.ProcessEnv = process.env): string {
-  const deger = env[AWIN_OAUTH2_ENV]?.trim();
-  if (!deger) {
+  const ad = resolveAwinOAuth2EnvName(env);
+  if (ad === null) {
     throw new AwinFeedError(
-      `${AWIN_OAUTH2_ENV} tanımlı değil; Awin kimlik doğrulaması yapılamaz.`,
+      `${AWIN_OAUTH2_ENV_NAMES.join(' / ')} tanımlı değil; Awin kimlik doğrulaması yapılamaz.`,
       'missing_api_key',
     );
   }
+  const deger = env[ad]!.trim();
   registerSecret(deger);
   return deger;
 }
