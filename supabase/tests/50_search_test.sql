@@ -16,7 +16,21 @@ declare
   v_max       bigint;
   v_first     uuid;
   v_first_p2  uuid;
+  v_pb        char(3);
+  v_serbest   bigint;
 begin
+  /*
+   * KATALOGUN PARA BIRIMI VERIDEN OKUNUYOR, SABIT YAZILMIYOR.
+   * 20260907360000'den beri fiyat suzgeci yalnizca bir para birimi
+   * verildiginde uygulaniyor; 'TRY' yazip gecmek, tohum verisi degistigi gun
+   * testi ilgisiz bir sebepten dusururdu.
+   */
+  select price_currency into v_pb
+    from public.product_groups
+   where offer_count > 0 and price_currency is not null
+   group by price_currency
+   order by count(*) desc, price_currency asc
+   limit 1;
   -- 1) total_count sayfadaki satir sayisi degil, TOPLAM eslesme olmali.
   --    Ayni sey olsaydi ikinci sayfa diye bir sey olmazdi.
   select count(*), max(s.total_count)
@@ -67,16 +81,33 @@ begin
     raise notice '✓ ust kategori alt kategorileri kapsiyor';
   end if;
 
-  -- 4) Fiyat filtresi gercekten daraltmali.
+  -- 4) Fiyat filtresi gercekten daraltmali -- PARA BIRIMI ICINDE.
+  --
+  -- Cagri onceden para birimsizdi. 20260907360000 o durumu artik "fiyat
+  -- suzgecini hic uygulama" olarak tanimliyor (5000 hem kurus hem sent hem
+  -- forint olabilir), yani eski cagri hicbir seyi daraltmiyor ve bu DOGRU.
+  -- Iddia zayiflamadi: asagida IKI YON de sinaniyor.
   select max(s.total_count) into v_total
     from public.search_products(null, null, null, null, 'relevance', 1, 0) s;
   select coalesce(max(s.total_count), 0) into v_total_p2
-    from public.search_products(null, null, 1, 2, 'relevance', 1, 0) s;
+    from public.search_products(null, null, 1, 2, 'relevance', 1, 0, null, false, v_pb) s;
 
   if v_total_p2 >= v_total then
     raise exception 'imkansiz fiyat araligi sonuclari daraltmadi: % -> %', v_total, v_total_p2;
   end if;
   raise notice '✓ fiyat araligi filtresi uygulaniyor';
+
+  -- 4b) ...ve para birimi VERILMEDIGINDE daraltmiyor. 4. iddia tek basina
+  --     "her zaman daralt" diyen bir uygulamayla da gecerdi; bu, para
+  --     birimleri arasinda karsilastirma yapilmadigini kanitlar.
+  select coalesce(max(s.total_count), 0) into v_serbest
+    from public.search_products(null, null, 1, 2, 'relevance', 1, 0) s;
+
+  if v_serbest <> v_total then
+    raise exception 'para birimi yokken fiyat suzgeci uygulandi: % -> %',
+      v_total, v_serbest;
+  end if;
+  raise notice '✓ para birimi yokken fiyat suzgeci uygulanmiyor';
 
   -- 5) search_facets gercek sinirlari vermeli.
   v_facets := public.search_facets(null, null);

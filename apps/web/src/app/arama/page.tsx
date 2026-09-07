@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 
 import { formatMoney, intentToSearchParams, looksLikeNaturalLanguage } from '@ohaaaa/shared';
 
+import { getRequestLocale } from '@/lib/locale';
 import { tuketButce } from '@/lib/rateBudget';
 import { logAgentDecision, recordAgentOutcome } from '@/lib/agentLog';
 import { MODEL, PROMPT_VERSION, parseSearchIntent } from '@/lib/searchIntent';
@@ -46,6 +47,12 @@ type SearchPageProps = {
     kargo?: string;
     /** '1' ise adres doğal dil çözümünden geldi; tekrar modele sorulmaz. */
     ai?: string;
+    /*
+     * Fiyat sınırlarının PARA BİRİMİ (ISO 4217). Doğal dil çözümü
+     * kullanıcının söylediğini buraya yazar ("$200" -> pb=USD).
+     * Verilmezse ziyaretçinin pazarının para birimi kullanılır.
+     */
+    pb?: string;
     /** Doğal dil kararının kimliği; sonucu ölçmek için taşınır. */
     karar?: string;
   }>;
@@ -157,8 +164,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         input: q,
         decision: {
           query: sonuc.intent.query,
-          minPriceTl: sonuc.intent.minPriceTl,
-          maxPriceTl: sonuc.intent.maxPriceTl,
+          minPrice: sonuc.intent.minPrice,
+          maxPrice: sonuc.intent.maxPrice,
+          currency: sonuc.intent.currency,
           brands: sonuc.intent.brands,
           freeShipping: sonuc.intent.freeShipping,
           sort: sonuc.intent.sort,
@@ -228,6 +236,25 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
   const freeShipping = params.kargo === 'bedava';
 
+  /*
+   * FİYAT SINIRLARININ PARA BİRİMİ.
+   *
+   * Öncelik: adreste açıkça yazan (`?pb`, doğal dil çözümünden gelir) →
+   * ziyaretçinin pazarının para birimi. Bir para birimi HER ZAMAN
+   * belirlenir çünkü `search_products` para birimi olmadan fiyat süzgecini
+   * hiç uygulamaz: "5000'e kadar" yazan kullanıcı, sessizce süzgeçsiz bir
+   * liste görürdü.
+   *
+   * Adresteki değer BİÇİM olarak doğrulanıyor; hangi kodların gerçekten var
+   * olduğunu `currencies` tablosu bilir ve tanınmayan bir kod yalnızca
+   * SONUÇ SAYISINI daraltır -- güvenlik sorunu üretmez, çünkü değer tipli
+   * parametre olarak gidiyor.
+   */
+  const istenenPb = String(params.pb ?? '').trim().toUpperCase();
+  const paraBirimi = /^[A-Z]{3}$/.test(istenenPb)
+    ? istenenPb
+    : (await getRequestLocale()).currency;
+
   // Filtre seridi ikincildir: alinamazsa arama yine calismali. Bu yuzden
   // aramadan ayri ve hata firlatmayan bir cagri.
   const facets: SearchFacets = await getSearchFacets({
@@ -235,6 +262,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     categoryId: undefined,
     brands: selectedBrands,
     freeShipping,
+    currency: paraBirimi,
   }).catch(() => ({
     minPriceCents: null,
     maxPriceCents: null,
@@ -258,6 +286,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       offset: (page - 1) * PAGE_SIZE,
       brands: selectedBrands,
       freeShipping,
+      currency: paraBirimi,
     });
   } catch (error) {
     console.error(
@@ -408,6 +437,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
                 hasPriceFilter={hasPriceFilter}
                 selectedBrands={selectedBrands}
                 freeShipping={freeShipping}
+                paraBirimi={paraBirimi}
               />
             </div>
           </details>
@@ -426,6 +456,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
               hasPriceFilter={hasPriceFilter}
               selectedBrands={selectedBrands}
               freeShipping={freeShipping}
+              paraBirimi={paraBirimi}
             />
           </div>
         </aside>
@@ -501,6 +532,7 @@ function FilterPanel({
   hasPriceFilter,
   selectedBrands,
   freeShipping,
+  paraBirimi,
 }: {
   idPrefix: string;
   facets: SearchFacets;
@@ -514,6 +546,8 @@ function FilterPanel({
   hasPriceFilter: boolean;
   selectedBrands: string[];
   freeShipping: boolean;
+  /** Sınırların para birimi; etiketsiz tutar TRY sayılırdı. */
+  paraBirimi: string;
 }) {
   /*
    * Marka SEÇİMİ EKLEMELİDİR, değiştirmeli değil: kullanıcı "Sony"nin
@@ -552,6 +586,7 @@ function FilterPanel({
       <PriceFilter
         idPrefix={idPrefix}
         facets={facets}
+        paraBirimi={paraBirimi}
         q={q}
         kategori={kategori}
         sort={sort}
@@ -671,6 +706,7 @@ function PriceFilter({
   active,
   selectedBrands,
   freeShipping,
+  paraBirimi,
 }: {
   idPrefix: string;
   facets: SearchFacets;
@@ -683,7 +719,15 @@ function PriceFilter({
   active: boolean;
   selectedBrands: string[];
   freeShipping: boolean;
+  paraBirimi: string;
 }) {
+  /*
+   * Sınırlar YALNIZCA TEK PARA BİRİMİNDE anlamlı. `search_facets` kapsam
+   * birden fazla para birimi içeriyorsa NULL döndürür ("tek bir aralıkla
+   * ifade edilemez") ve şerit hiç çizilmez -- iki para biriminin
+   * sayılarından yapılmış bir aralık göstermektense hiçbir şey göstermek
+   * doğrudur.
+   */
   if (facets.minPriceCents === null || facets.maxPriceCents === null) return null;
 
   const floorTl = Math.floor(facets.minPriceCents / 100);
@@ -693,7 +737,8 @@ function PriceFilter({
     <section>
       <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">Fiyat</h2>
       <p className="mt-2 text-xs text-subtle">
-        {formatMoney(facets.minPriceCents)} – {formatMoney(facets.maxPriceCents)}
+        {formatMoney(facets.minPriceCents, paraBirimi)} –{' '}
+        {formatMoney(facets.maxPriceCents, paraBirimi)}
       </p>
 
       {/* GET formu: JavaScript gerektirmez, sonuc paylasilabilir bir URL olur. */}

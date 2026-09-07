@@ -37,6 +37,12 @@ const KAPSAM = [
   'apps/web/src/components/ProductCard.tsx',
   'apps/web/src/components/PriceHistory.tsx',
   'apps/web/src/components/PriceDropCard.tsx',
+  /*
+   * Arama sayfası da bir karşılaştırma yüzeyi: filtre şeridindeki "en düşük
+   * – en yüksek" aralığı etiketsiz basılıyordu. Kapsama alınmasaydı, aynı
+   * hata bir sonraki turda buradan geri gelirdi.
+   */
+  'apps/web/src/app/arama/page.tsx',
 ];
 
 const bulgular = [];

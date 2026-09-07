@@ -69,8 +69,9 @@ const JSON_SEMASI = {
   additionalProperties: false,
   required: [
     'query',
-    'maxPriceTl',
-    'minPriceTl',
+    'maxPrice',
+    'minPrice',
+    'currency',
     'brands',
     'freeShipping',
     'sort',
@@ -79,8 +80,14 @@ const JSON_SEMASI = {
   ],
   properties: {
     query: { type: 'string', maxLength: 120 },
-    maxPriceTl: { type: ['integer', 'null'], minimum: 0, maximum: 100000000 },
-    minPriceTl: { type: ['integer', 'null'], minimum: 0, maximum: 100000000 },
+    maxPrice: { type: ['integer', 'null'], minimum: 0, maximum: 100000000 },
+    minPrice: { type: ['integer', 'null'], minimum: 0, maximum: 100000000 },
+    /*
+     * Para birimi ÜRETİMDE de kısıtlanıyor: üç büyük harf ya da null.
+     * Modelin "TL" ya da "dolar" yazması, Zod tarafında elenip bütün
+     * niyeti çöpe atardı -- kalıbı burada dayatmak o turu kurtarır.
+     */
+    currency: { type: ['string', 'null'], pattern: '^[A-Z]{3}$' },
     brands: {
       type: 'array',
       maxItems: 5,
@@ -93,7 +100,13 @@ const JSON_SEMASI = {
   },
 } as const;
 
-export const PROMPT_VERSION = 'arama-niyeti-v1';
+/*
+ * v2: fiyat alanları para biriminden ayrıldı (`maxPriceTl` -> `maxPrice` +
+ * `currency`). Sürüm dizesi denetim kaydında (`agent_decisions`) duruyor;
+ * artırmamak, iki farklı şemayla üretilmiş kararları aynı adla saklamak
+ * olurdu ve sonradan hangisinin hangisi olduğu ayırt edilemezdi.
+ */
+export const PROMPT_VERSION = 'arama-niyeti-v2';
 
 const SISTEM = [
   'Bir alışveriş sitesinin arama kutususun. Görevin TEK: kullanıcının Türkçe',
@@ -102,9 +115,13 @@ const SISTEM = [
   'Kurallar:',
   '- `query` alanına YALNIZCA ürün terimini yaz. Fiyat, şehir, "bul", "istiyorum"',
   '  gibi kısımları çıkar. Örnek: "5 bin liraya kadar oyuncu kulaklığı bul"',
-  '  -> query: "oyuncu kulaklığı", maxPriceTl: 5000.',
+  '  -> query: "oyuncu kulaklığı", maxPrice: 5000, currency: "TRY".',
   '- "5 bin" = 5000, "2,5 bin" = 2500, "1 milyon" = 1000000.',
   '- Fiyat söylenmediyse null bırak. TAHMİN ETME.',
+  '- `currency`: kullanıcı bir para birimi SÖYLEDİYSE ISO kodunu yaz --',
+  '  "TL/lira/₺" -> "TRY", "$/dolar/usd" -> "USD", "€/euro/avro" -> "EUR",',
+  '  "£/sterlin" -> "GBP". SÖYLEMEDİYSE null. Fiyatın hangi para biriminde',
+  '  olduğunu ASLA tahmin etme: "200 altı kulaklık" -> currency: null.',
   '- Marka yalnızca kullanıcı açıkça söylediyse yazılır.',
   '- Kullanıcı ürün aramıyorsa (selamlaşma, soru, alakasız metin)',
   '  understood: false ver ve diğer alanları boş bırak.',

@@ -28,10 +28,31 @@ export const searchIntentSchema = z.object({
    */
   query: z.string().trim().max(120),
 
-  /** Kullanıcı bir üst limit söylediyse TL cinsinden. */
-  maxPriceTl: z.number().int().min(0).max(100_000_000).nullable(),
-  /** "5000 TL üstü", "en az 2 bin" gibi bir alt limit söylediyse. */
-  minPriceTl: z.number().int().min(0).max(100_000_000).nullable(),
+  /*
+   * FİYAT SINIRLARI VE ONLARIN PARA BİRİMİ.
+   *
+   * Alanlar önceden `maxPriceTl` / `minPriceTl` adını taşıyordu ve ADIN
+   * KENDİSİ hatanın kaynağıydı: "gaming headset under $200" yazan bir
+   * kullanıcının 200'ü, hiçbir şey sorulmadan 200 TL'ye (~5,5 USD)
+   * dönüşüyordu. Sonuç boş bir liste -- hata mesajı yok, `understood: true`,
+   * özet satırında da "200 TL altı" yazıyor. Yanlış cevabın sessiz hâli.
+   *
+   * Sayı ile para birimi artık AYRILMAZ: `currency` null ise sayı hâlâ
+   * anlamlıdır ama hangi paranın sayısı olduğunu ÇAĞIRAN belirler (pazarın
+   * varsayılan para birimi). Uydurulmuş bir varsayılanı buraya gömmek,
+   * aynı hatayı bir kat aşağı taşımak olurdu.
+   */
+  maxPrice: z.number().int().min(0).max(100_000_000).nullable(),
+  minPrice: z.number().int().min(0).max(100_000_000).nullable(),
+
+  /**
+   * Kullanıcının AÇIKÇA söylediği para birimi ("$200", "200 euro", "200 TL").
+   * Söylemediyse null -- tahmin edilmez.
+   */
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .nullable(),
 
   /*
    * Marka adları. Serbest metin ama arama tarafında `lower()` ile
@@ -87,7 +108,15 @@ export function looksLikeNaturalLanguage(raw: string): boolean {
    * arıyordum ve "₺2.500 altı bluetooth hoparlör" doğal dil sayılmıyordu --
    * test yakaladı.
    */
-  const fiyatKalibi = /((tl|₺|lira)\s*\d|\d[\d.,]*\s*(tl|₺|lira)|\bbin\b|\bmilyon\b)/i;
+  /*
+   * Para birimleri YALNIZCA TÜRK LİRASI DEĞİL. Katalog US/CA programlarıyla
+   * birlikte çok para birimli hâle geldi; "$200 gaming headset" yazan biri
+   * bu kalıba takılmıyordu ve cümle doğal dil sayılmadığı için modele hiç
+   * gitmiyordu -- yani hem fiyat hem para birimi ayıklanmadan, cümlenin
+   * tamamı arama terimi oluyordu.
+   */
+  const fiyatKalibi =
+    /((tl|₺|lira|usd|eur|gbp|dolar|euro|avro|sterlin|[$€£])\s*\d|\d[\d.,]*\s*(tl|₺|lira|usd|eur|gbp|dolar|euro|avro|sterlin|[$€£])|\bbin\b|\bmilyon\b)/i;
 
   /*
    * Niyet sinyali: kullanıcı bir şey İSTİYOR, terim yazmıyor. Ekli hâller de
@@ -103,14 +132,20 @@ export function looksLikeNaturalLanguage(raw: string): boolean {
 }
 
 /**
- * TL -> kuruş.
+ * Ana birimden alt birime (lira -> kuruş, dolar -> sent).
  *
- * Para her yerde kuruş (tam sayı) olarak taşınır; kayan noktalı TL ile
+ * Para her yerde alt birimde (tam sayı) taşınır; kayan noktalı tutarla
  * hesap yapmak, 0.1 + 0.2 problemini faturaya taşımak olurdu.
+ *
+ * ÇARPAN 100 ve bu depo genelinde böyle: `formatMoney` de `cents / 100`
+ * yapıyor, veritabanı sütunları da `_cents`. Sıfır ondalıklı para birimleri
+ * (JPY, KRW) bu varsayımı bozar -- ama düzeltmesi tek bir işlev değil, para
+ * biriminin alt birim basamağını her yerde okumak demek; burada sessizce
+ * ayrışan ikinci bir kural yaratmak, o işi zorlaştırırdı.
  */
-export function tlToCents(tl: number | null): number | null {
-  if (tl === null || !Number.isFinite(tl) || tl < 0) return null;
-  return Math.round(tl * 100);
+export function majorToCents(major: number | null): number | null {
+  if (major === null || !Number.isFinite(major) || major < 0) return null;
+  return Math.round(major * 100);
 }
 
 /**
@@ -126,8 +161,16 @@ export function intentToSearchParams(intent: SearchIntent): URLSearchParams {
   const params = new URLSearchParams();
 
   if (intent.query) params.set('q', intent.query);
-  if (intent.minPriceTl !== null) params.set('min', String(intent.minPriceTl));
-  if (intent.maxPriceTl !== null) params.set('max', String(intent.maxPriceTl));
+  if (intent.minPrice !== null) params.set('min', String(intent.minPrice));
+  if (intent.maxPrice !== null) params.set('max', String(intent.maxPrice));
+
+  /*
+   * Para birimi adreste `pb` ile taşınır ve YALNIZCA model açıkça bir para
+   * birimi duyduysa yazılır. Yazılmadığında arama sayfası pazarın kendi
+   * para birimini kullanır; buraya bir varsayılan gömmek, "$200" ile "200"
+   * arasındaki farkı tam da kaybettiğimiz yerde tekrar kaybetmek olurdu.
+   */
+  if (intent.currency !== null) params.set('pb', intent.currency);
 
   /*
    * Marka VİRGÜLLE taşınır ve kargo değeri 'bedava'dır.

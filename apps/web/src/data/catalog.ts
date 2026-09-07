@@ -68,6 +68,14 @@ export interface SearchParams {
   brands?: string[];
   /** Yalnızca ücretsiz kargolu teklifi olan ürünler. */
   freeShipping?: boolean;
+  /*
+   * Fiyat karşılaştırmasının yapılacağı para birimi (ISO 4217).
+   *
+   * VERİLMEZSE FİYAT SÜZGECİ UYGULANMAZ -- `search_products` bunu böyle
+   * tanımlıyor. 5000'i hem kuruşa hem cente uygulamak, sessizce yanlış
+   * sonuç göstermenin en kısa yolu.
+   */
+  currency?: string;
 }
 
 /*
@@ -85,7 +93,11 @@ export interface SearchParams {
  * göstermektense filtre şeridi gizlenir (bkz. searchFacets: eski imzada
  * marka listesi boş döner ve arayüz o bölümü çizmez).
  */
-type RpcSignature = 'yeni' | 'eski';
+/*
+ * ÜÇ KUŞAK: 'pb' (para birimi parametreli, en yeni) -> 'yeni' (marka/kargo)
+ * -> 'eski'. Her düşüş bir kez denenir ve modül ömrü boyunca hatırlanır.
+ */
+type RpcSignature = 'pb' | 'yeni' | 'eski';
 let searchSignature: RpcSignature | null = null;
 
 /** PostgREST'in "bu imzada fonksiyon yok" hatası. */
@@ -148,24 +160,43 @@ export async function searchProducts(params: SearchParams): Promise<SearchPage> 
       p_brands: params.brands?.length ? params.brands : null,
       p_free_shipping: params.freeShipping ?? false,
     };
+    const withCurrency = { ...withFilters, p_currency: params.currency ?? null };
 
-    let response =
-      searchSignature === 'eski'
-        ? await supabase.rpc('search_products', base)
-        : await supabase.rpc('search_products', withFilters);
+    function callFor(signature: RpcSignature) {
+      if (signature === 'eski') return supabase!.rpc('search_products', base);
+      if (signature === 'yeni') return supabase!.rpc('search_products', withFilters);
+      return supabase!.rpc('search_products', withCurrency);
+    }
 
+    let response = await callFor(searchSignature ?? 'pb');
+
+    /*
+     * DÜŞÜŞ SIRAYLA: pb -> yeni -> eski. İki basamak var çünkü iki ayrı göç
+     * penceresi var; birini atlayıp doğrudan 'eski'ye düşmek, uygulanmış olan
+     * marka/kargo filtrelerini de gereksiz yere kapatırdı.
+     */
     if (searchSignature === null && isMissingSignature(response.error)) {
-      // Göç henüz uygulanmamış. Aramayı kırmak yerine eski imzaya düşülür.
       console.warn(
         JSON.stringify({
           level: 'warn',
-          msg: 'search_products eski imzayla çağrılıyor — filtre göçü uygulanmamış',
+          msg: 'search_products para birimi parametresini tanımıyor — göç uygulanmamış',
         }),
       );
-      searchSignature = 'eski';
-      response = await supabase.rpc('search_products', base);
-    } else if (searchSignature === null && !response.error) {
       searchSignature = 'yeni';
+      response = await callFor('yeni');
+
+      if (isMissingSignature(response.error)) {
+        console.warn(
+          JSON.stringify({
+            level: 'warn',
+            msg: 'search_products eski imzayla çağrılıyor — filtre göçü uygulanmamış',
+          }),
+        );
+        searchSignature = 'eski';
+        response = await callFor('eski');
+      }
+    } else if (searchSignature === null && !response.error) {
+      searchSignature = 'pb';
     }
 
     const { data, error } = response;
@@ -231,15 +262,24 @@ export async function getSearchFacets(params: SearchParams): Promise<SearchFacet
     p_brands: params.brands?.length ? params.brands : null,
     p_free_shipping: params.freeShipping ?? false,
   };
+  const currencyArgs = { ...filterArgs, p_currency: params.currency ?? null };
 
-  let facetResponse =
-    searchSignature === 'eski'
-      ? await supabase.rpc('search_facets', baseArgs)
-      : await supabase.rpc('search_facets', filterArgs);
+  function facetsFor(signature: RpcSignature) {
+    if (signature === 'eski') return supabase!.rpc('search_facets', baseArgs);
+    if (signature === 'yeni') return supabase!.rpc('search_facets', filterArgs);
+    return supabase!.rpc('search_facets', currencyArgs);
+  }
+
+  let facetResponse = await facetsFor(searchSignature ?? 'pb');
 
   if (isMissingSignature(facetResponse.error)) {
-    searchSignature = 'eski';
-    facetResponse = await supabase.rpc('search_facets', baseArgs);
+    searchSignature = 'yeni';
+    facetResponse = await facetsFor('yeni');
+
+    if (isMissingSignature(facetResponse.error)) {
+      searchSignature = 'eski';
+      facetResponse = await facetsFor('eski');
+    }
   }
 
   const { data, error } = facetResponse;
