@@ -43,6 +43,14 @@ const KAPSAM = [
    * hata bir sonraki turda buradan geri gelirdi.
    */
   'apps/web/src/app/arama/page.tsx',
+  /*
+   * Sepet ve ödeme yüzeyleri. Burada etiketsiz bir tutar yalnızca yanlış
+   * GÖRÜNMEZ: kullanıcı ona bakıp ödeme düğmesine basar. Ölçüldü -- bu üç
+   * dosyada 20 tutar para birimi taşımıyordu ve hepsi TRY sayılıyordu.
+   */
+  'apps/web/src/components/CartDrawer.tsx',
+  'apps/web/src/components/CheckoutFlow.tsx',
+  'apps/web/src/app/siparislerim/page.tsx',
 ];
 
 const bulgular = [];

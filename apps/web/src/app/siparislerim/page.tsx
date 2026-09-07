@@ -136,7 +136,7 @@ export default async function CustomerOrdersPage() {
                 </div>
                 <p className="text-right">
                   <span className="tabular text-lg font-bold text-fg">
-                    {formatMoney(order.grandTotalCents)}
+                    {formatMoney(order.grandTotalCents, order.currency)}
                   </span>
                   <span className="block text-xs text-muted">
                     {order.paidAt ? 'Ödendi' : 'Ödeme bekleniyor'}
@@ -187,7 +187,7 @@ export default async function CustomerOrdersPage() {
                               )}
                             </span>
                             <span className="tabular shrink-0 text-muted">
-                              {formatMoney(item.lineTotalCents)}
+                              {formatMoney(item.lineTotalCents, order.currency)}
                             </span>
                           </li>
                         ))}

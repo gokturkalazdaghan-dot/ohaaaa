@@ -37,6 +37,13 @@ export function CartDrawer() {
   const remove = useCart((state) => state.remove);
   const setQuantity = useCart((state) => state.setQuantity);
   const summary = useCartSummary();
+  /*
+   * SEPETIN PARA BIRIMI. Etiketsiz bir tutar `formatMoney` tarafindan TRY
+   * sayilir: 199 USD'lik bir kalem "₺199,00" gorunurdu. Sepet tek para
+   * biriminde (`addToCart` farklisini kabul etmiyor), bos sepette de
+   * gosterilecek tutar yok.
+   */
+  const pb = summary.currency ?? undefined;
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   // Açılış/kapanış tarayıcıya bırakılır; React yalnızca hangi durumda
@@ -130,7 +137,7 @@ export function CartDrawer() {
                         <div className="min-w-0 flex-1">
                           <p className="line-clamp-2 text-sm text-fg">{item.title}</p>
                           <p className="tabular mt-1 text-sm font-semibold text-fg">
-                            {formatMoney(item.priceCents)}
+                            {formatMoney(item.priceCents, item.currency)}
                           </p>
 
                           <div className="mt-2 flex items-center gap-2">
@@ -167,7 +174,7 @@ export function CartDrawer() {
                         </div>
 
                         <span className="tabular shrink-0 text-sm font-semibold">
-                          {formatMoney(item.priceCents * item.quantity)}
+                          {formatMoney(item.priceCents * item.quantity, item.currency)}
                         </span>
                       </li>
                     ))}
@@ -179,17 +186,17 @@ export function CartDrawer() {
                       {group.shippingCents === 0 ? (
                         <span className="text-success">Ücretsiz kargo</span>
                       ) : (
-                        <span>Kargo {formatMoney(group.shippingCents)}</span>
+                        <span>Kargo {formatMoney(group.shippingCents, pb)}</span>
                       )}
                     </span>
                     <span className="tabular font-semibold text-fg">
-                      {formatMoney(group.totalCents)}
+                      {formatMoney(group.totalCents, pb)}
                     </span>
                   </div>
 
                   {group.freeShippingRemainingCents !== null && (
                     <p className="mt-2 rounded-lg bg-brand/10 px-3 py-2 text-2xs text-brand-soft">
-                      {formatMoney(group.freeShippingRemainingCents)} daha ekleyin, kargo bedava
+                      {formatMoney(group.freeShippingRemainingCents, pb)} daha ekleyin, kargo bedava
                       olsun.
                     </p>
                   )}
@@ -208,19 +215,19 @@ export function CartDrawer() {
               <dl className="space-y-1.5 text-sm">
                 <div className="flex justify-between text-muted">
                   <dt>Ara toplam</dt>
-                  <dd className="tabular">{formatMoney(summary.itemsSubtotalCents)}</dd>
+                  <dd className="tabular">{formatMoney(summary.itemsSubtotalCents, pb)}</dd>
                 </div>
                 <div className="flex justify-between text-muted">
                   <dt>Kargo</dt>
                   <dd className="tabular">
                     {summary.shippingTotalCents === 0
                       ? 'Ücretsiz'
-                      : formatMoney(summary.shippingTotalCents)}
+                      : formatMoney(summary.shippingTotalCents, pb)}
                   </dd>
                 </div>
                 <div className="flex justify-between border-t border-line pt-2 text-base font-bold text-fg">
                   <dt>Toplam</dt>
-                  <dd className="tabular">{formatMoney(summary.grandTotalCents)}</dd>
+                  <dd className="tabular">{formatMoney(summary.grandTotalCents, pb)}</dd>
                 </div>
               </dl>
 

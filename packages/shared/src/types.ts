@@ -250,6 +250,14 @@ export interface CartItem {
   title: string;
   imageUrl: string | null;
   priceCents: number;
+  /*
+   * Fiyatın para birimi. `priceCents` tek başına bir tutar DEĞİLDİR: 19900
+   * hem ₺199,00 hem $199.00 olabilir ve sepet ikisini toplarsa müşteriden
+   * yanlış tutar istenir. `create_order` karışık para birimli sepeti
+   * reddediyor; arayüz aynı kuralı ÖNCEDEN uygulamalı ki kullanıcı
+   * ödemeye kadar gidip orada reddedilmesin.
+   */
+  currency: string;
   quantity: number;
   vendorId: string;
   vendorName: string;
@@ -276,6 +284,11 @@ export interface CartVendorGroup {
 
 export interface CartSummary {
   groups: CartVendorGroup[];
+  /**
+   * Sepetin para birimi. Sepet boşken null; doluyken TEK bir değer --
+   * `addToCart` farklı para birimli kalemi kabul etmiyor.
+   */
+  currency: string | null;
   itemCount: number;
   itemsSubtotalCents: number;
   shippingTotalCents: number;

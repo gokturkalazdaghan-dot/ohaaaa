@@ -26,6 +26,7 @@ function item(overrides: Partial<CartItem> & Pick<CartItem, 'productId' | 'vendo
     title: 'Test Ürün',
     imageUrl: null,
     priceCents: 100_00,
+    currency: 'TRY',
     quantity: 1,
     vendorName: `Taşeron ${overrides.vendorId}`,
     vendorSlug: `tasoron-${overrides.vendorId}`,
@@ -285,4 +286,44 @@ test('devam parametresi yalnizca uygulama ici yol kabul eder', () => {
   ]) {
     assert.equal(safeInternalPath(kotu), null, `kabul edilmemeliydi: ${String(kotu)}`);
   }
+});
+
+
+/*
+ * SEPET TEK PARA BIRIMINDE OLMAK ZORUNDA.
+ *
+ * Bir siparisin TEK bir toplami ve TEK bir `currency` alani var; `create_order`
+ * (20260907370000) karisik sepeti reddediyor. Arayuz ayni kurali ONCEDEN
+ * uygulamazsa kullanici sepeti doldurur, adres yazar, odemeye basar ve ANCAK
+ * ORADA reddedilir.
+ *
+ * Sessizce toplamak en kotusu olurdu: 199 USD'lik urun 19900 "kurus" sayilir
+ * ve musteriden yanlis tutar istenirdi.
+ */
+test('farkli para birimli kalem sepete eklenmiyor', () => {
+  const sepet = addToCart([], item({ productId: 'p1', vendorId: 'v1' }));
+  assert.equal(sepet.length, 1);
+
+  const reddedilen = addToCart(
+    sepet,
+    item({ productId: 'p2', vendorId: 'v1', currency: 'USD' }),
+  );
+  assert.equal(reddedilen.length, 1, 'USD kalem TRY sepete eklenmemeli');
+  assert.equal(reddedilen, sepet, 'sepet degismemis olmali');
+});
+
+test('ayni para birimli kalem normal ekleniyor', () => {
+  const sepet = addToCart([], item({ productId: 'p1', vendorId: 'v1' }));
+  const iki = addToCart(sepet, item({ productId: 'p2', vendorId: 'v2' }));
+  assert.equal(iki.length, 2);
+});
+
+/* Ozet, tutarlarin hangi para biriminde oldugunu TASIR: etiketsiz bir toplam
+ * `formatMoney` tarafindan TRY sayilir ve 199 USD "₺199,00" gorunurdu. */
+test('sepet ozeti para birimini tasiyor', () => {
+  assert.equal(summarizeCart([]).currency, null, 'bos sepetin para birimi yok');
+  assert.equal(
+    summarizeCart([item({ productId: 'p1', vendorId: 'v1', currency: 'USD' })]).currency,
+    'USD',
+  );
 });

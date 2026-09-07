@@ -85,11 +85,20 @@ export function summarizeCart(items: CartItem[]): CartSummary {
     (a, b) => b.itemsSubtotalCents - a.itemsSubtotalCents || a.vendorName.localeCompare(b.vendorName, 'tr'),
   );
 
+  /*
+   * SEPET TEK PARA BIRIMINDE. `addToCart` farkli para birimli kalemi kabul
+   * etmiyor, yani ilk kalemin para birimi sepetin para birimidir. Yine de
+   * BURADAN okunuyor, sabit yazilmiyor: sepet dis kaynaktan (localStorage,
+   * eski surumden kalan bir kayit) da doldurulabilir.
+   */
+  const currency = items[0]?.currency ?? null;
+
   const itemsSubtotalCents = groups.reduce((s, g) => s + g.itemsSubtotalCents, 0);
   const shippingTotalCents = groups.reduce((s, g) => s + g.shippingCents, 0);
 
   return {
     groups,
+    currency,
     itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
     itemsSubtotalCents,
     shippingTotalCents,
@@ -103,6 +112,25 @@ export function summarizeCart(items: CartItem[]): CartSummary {
  * Aynı ürün tekrar eklenirse adetler birleşir, stok üst sınırı aşılmaz.
  */
 export function addToCart(items: CartItem[], incoming: CartItem): CartItem[] {
+  /*
+   * TEK SEPET, TEK PARA BIRIMI.
+   *
+   * Bir siparisin TEK bir toplami ve TEK bir para birimi var; `create_order`
+   * karisik sepeti reddediyor (20260907370000). Kural burada da uygulanmazsa
+   * kullanici sepeti doldurur, adres yazar, odemeye basar ve ANCAK ORADA
+   * reddedilir -- en pahali anda.
+   *
+   * Sessizce toplamak ise en kotusu olurdu: 199 USD'lik urun 19900 "kurus"
+   * sayilir ve musteriden yanlis tutar istenirdi.
+   *
+   * Kalem EKLENMEZ; cagiran (`useCart`) bunu farkin kalmamasindan anlar ve
+   * kullaniciya soyler.
+   */
+  const mevcutParaBirimi = items[0]?.currency;
+  if (mevcutParaBirimi !== undefined && incoming.currency !== mevcutParaBirimi) {
+    return items;
+  }
+
   const index = items.findIndex((item) => item.productId === incoming.productId);
 
   if (index === -1) {

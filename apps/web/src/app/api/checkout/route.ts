@@ -12,7 +12,7 @@
 
 import { NextResponse } from 'next/server';
 
-import { checkoutSchema, summarizeCart, type CartItem } from '@ohaaaa/shared';
+import { checkoutSchema, formatMoney, summarizeCart, type CartItem } from '@ohaaaa/shared';
 
 import { createClient } from '@/lib/supabase/server';
 import { isAffiliateOnly } from '@/lib/env';
@@ -153,6 +153,7 @@ export async function POST(request: Request) {
         imageUrl: null,
         // Fiyat istemciden DEĞİL, sunucudaki kaynaktan okunur.
         priceCents: offer.priceCents,
+        currency: offer.currency,
         quantity: Math.min(requested.quantity, offer.stock),
         vendorId: offer.vendorId,
         vendorName: offer.vendor?.displayName ?? 'Mağaza',
@@ -171,6 +172,7 @@ export async function POST(request: Request) {
         order_number: `OHA-DEMO-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
         status: 'paid',
         demo: true,
+        currency: summary.currency ?? 'TRY',
         items_subtotal_cents: summary.itemsSubtotalCents,
         shipping_total_cents: summary.shippingTotalCents,
         grand_total_cents: summary.grandTotalCents,
@@ -212,7 +214,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const created = order as { id: string; order_number: string };
+  const created = order as {
+    id: string;
+    order_number: string;
+    currency: string;
+    grand_total_cents: number;
+  };
 
   /*
    * Ödeme sağlayıcısı entegrasyonu buraya girer (iyzico, PayTR, Stripe…).
@@ -288,7 +295,15 @@ export async function POST(request: Request) {
     to: input.email,
     ...orderConfirmationMail({
       orderNumber: created.order_number,
-      totalText: `${(toplam / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} TL`,
+      /*
+       * SIPARIS ONAY E-POSTASI TUTARI SABIT "TL" YAZIYORDU.
+       *
+       * `create_order` artik siparisin gercek para birimini kaydediyor
+       * (20260907370000); e-posta onu okumazsa musteriye 199 USD'lik bir
+       * siparis icin "199,00 TL" yazan bir onay gider -- yanlis tutarin
+       * yaziya dokulmus, arsivlenmis hâli.
+       */
+      totalText: formatMoney(toplam, created.currency),
       vendorNames: vendorRows.map((v) => v.name),
       siteUrl,
     }),
@@ -299,6 +314,8 @@ export async function POST(request: Request) {
       order_number: created.order_number,
       status: 'paid',
       demo: false,
+      currency: created.currency,
+      grand_total_cents: Number(created.grand_total_cents),
       vendor_orders: (vendorOrders ?? []).map((row: Record<string, unknown>) => {
         const rawVendor = row.vendor;
         const vendor = (Array.isArray(rawVendor) ? rawVendor[0] : rawVendor) as

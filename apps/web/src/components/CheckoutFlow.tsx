@@ -22,6 +22,8 @@ interface VendorOrderResult {
 interface OrderResult {
   order_number: string;
   demo: boolean;
+  /** Siparişin para birimi; etiketsiz tutar TRY sayılırdı. */
+  currency?: string;
   grand_total_cents?: number;
   vendor_orders: VendorOrderResult[];
 }
@@ -38,6 +40,8 @@ export function CheckoutFlow({ addresses = [] }: { addresses?: SavedAddress[] })
   const items = useCart((state) => state.items);
   const clear = useCart((state) => state.clear);
   const summary = useCartSummary();
+  /* Sepetin para birimi; sepet tek para biriminde (bkz. addToCart). */
+  const pb = summary.currency ?? undefined;
 
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -288,7 +292,7 @@ export function CheckoutFlow({ addresses = [] }: { addresses?: SavedAddress[] })
                         {item.quantity}× {item.title}
                       </span>
                       <span className="tabular shrink-0">
-                        {formatMoney(item.priceCents * item.quantity)}
+                        {formatMoney(item.priceCents * item.quantity, item.currency)}
                       </span>
                     </li>
                   ))}
@@ -297,9 +301,9 @@ export function CheckoutFlow({ addresses = [] }: { addresses?: SavedAddress[] })
                 <div className="mt-2 flex justify-between border-t border-line pt-2 text-xs">
                   <span className="flex items-center gap-1 text-muted">
                     <TruckIcon className="h-3.5 w-3.5" />
-                    {group.shippingCents === 0 ? 'Ücretsiz' : formatMoney(group.shippingCents)}
+                    {group.shippingCents === 0 ? 'Ücretsiz' : formatMoney(group.shippingCents, pb)}
                   </span>
-                  <span className="tabular font-semibold">{formatMoney(group.totalCents)}</span>
+                  <span className="tabular font-semibold">{formatMoney(group.totalCents, pb)}</span>
                 </div>
               </div>
             ))}
@@ -308,17 +312,17 @@ export function CheckoutFlow({ addresses = [] }: { addresses?: SavedAddress[] })
           <dl className="mt-5 space-y-1.5 border-t border-line pt-4 text-sm">
             <div className="flex justify-between text-muted">
               <dt>Ara toplam</dt>
-              <dd className="tabular">{formatMoney(summary.itemsSubtotalCents)}</dd>
+              <dd className="tabular">{formatMoney(summary.itemsSubtotalCents, pb)}</dd>
             </div>
             <div className="flex justify-between text-muted">
               <dt>Kargo ({summary.vendorCount} gönderi)</dt>
               <dd className="tabular">
-                {summary.shippingTotalCents === 0 ? 'Ücretsiz' : formatMoney(summary.shippingTotalCents)}
+                {summary.shippingTotalCents === 0 ? 'Ücretsiz' : formatMoney(summary.shippingTotalCents, pb)}
               </dd>
             </div>
             <div className="flex justify-between border-t border-line pt-2 text-lg font-black">
               <dt>Toplam</dt>
-              <dd className="tabular">{formatMoney(summary.grandTotalCents)}</dd>
+              <dd className="tabular">{formatMoney(summary.grandTotalCents, pb)}</dd>
             </div>
           </dl>
 
@@ -334,7 +338,7 @@ export function CheckoutFlow({ addresses = [] }: { addresses?: SavedAddress[] })
             disabled={submitting}
             className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl press bg-brand-cta px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {submitting ? 'İşleniyor…' : `${formatMoney(summary.grandTotalCents)} öde`}
+            {submitting ? 'İşleniyor…' : `${formatMoney(summary.grandTotalCents, pb)} öde`}
           </button>
 
           {/*
@@ -395,20 +399,20 @@ function OrderSuccess({ result }: { result: OrderResult }) {
                   <p className="text-2xs text-muted">
                     {vendorOrder.shipping_cents === 0
                       ? 'Ücretsiz kargo'
-                      : `Kargo ${formatMoney(vendorOrder.shipping_cents)}`}
+                      : `Kargo ${formatMoney(vendorOrder.shipping_cents, result.currency)}`}
                     {vendorOrder.estimated_delivery_days
                       ? ` · ${vendorOrder.estimated_delivery_days} günde teslim`
                       : ''}
                   </p>
                 </div>
               </div>
-              <span className="tabular font-semibold">{formatMoney(vendorOrder.total_cents)}</span>
+              <span className="tabular font-semibold">{formatMoney(vendorOrder.total_cents, result.currency)}</span>
             </div>
           ))}
 
           <div className="flex justify-between rounded-xl bg-surface-2 p-4 text-base font-black">
             <span>Toplam</span>
-            <span className="tabular">{formatMoney(result.grand_total_cents ?? total)}</span>
+            <span className="tabular">{formatMoney(result.grand_total_cents ?? total, result.currency)}</span>
           </div>
         </div>
 

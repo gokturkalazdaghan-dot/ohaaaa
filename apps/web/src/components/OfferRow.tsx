@@ -50,7 +50,15 @@ export function OfferRow({
   badges?: OfferBadge[];
 }) {
   const add = useCart((state) => state.add);
+  /*
+   * Sepetin mevcut para birimi. Sepet TEK para biriminde olmak zorunda
+   * (`addToCart` farklisini kabul etmiyor, `create_order` karisik siparisi
+   * reddediyor). Bu deger olmadan buton "Eklendi" derdi ve HICBIR SEY
+   * eklenmemis olurdu -- sessiz yalan.
+   */
+  const sepetParaBirimi = useCart((state) => state.items[0]?.currency);
   const [added, setAdded] = useState(false);
+  const [reddedildi, setReddedildi] = useState(false);
 
   const percent = discountPercent(offer.priceCents, offer.compareAtPriceCents);
   /*
@@ -69,12 +77,26 @@ export function OfferRow({
     // Ortak mağaza teklifleri sepete eklenemez; bu düğme onlarda çıkmaz.
     if (isAffiliate || !offer.vendorId) return;
 
+    /*
+     * KARIŞIK PARA BİRİMİ SEPETTE DEĞİL, BURADA DURDURULUYOR.
+     *
+     * Kural veritabanında da var (`create_order` reddediyor) ama orada
+     * durdurmak, kullanıcının sepeti doldurup adres yazıp ödemeye basmasını
+     * ve ANCAK ORADA reddedilmesini gerektirirdi -- en pahalı an.
+     */
+    if (sepetParaBirimi !== undefined && sepetParaBirimi !== offer.currency) {
+      setReddedildi(true);
+      setTimeout(() => setReddedildi(false), 4000);
+      return;
+    }
+
     add({
       productId: offer.id,
       groupSlug,
       title: offer.title,
       imageUrl: offer.imageUrls[0] ?? null,
       priceCents: offer.priceCents,
+      currency: offer.currency,
       quantity: 1,
       vendorId: offer.vendorId,
       vendorName: sellerName,
@@ -238,6 +260,16 @@ export function OfferRow({
             {offer.stock === 0 ? 'Tükendi' : added ? 'Eklendi' : 'Sepete ekle'}
           </span>
         </button>
+      )}
+
+      {/* Neden eklenmediği SÖYLENİYOR: sessizce hiçbir şey olmaması,
+          kullanıcıya sitenin bozuk olduğunu düşündürür. */}
+      {reddedildi && (
+        <p role="status" className="text-2xs leading-relaxed text-warning sm:w-44">
+          Sepetinizdeki ürünler {sepetParaBirimi} cinsinden; bu teklif{' '}
+          {offer.currency} cinsinden. Tek sipariş tek para biriminde
+          oluşturulur — önce mevcut sepeti tamamlayın.
+        </p>
       )}
     </li>
   );

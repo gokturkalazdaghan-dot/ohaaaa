@@ -1354,6 +1354,12 @@ export interface CustomerOrder {
   orderNumber: string;
   createdAt: string;
   grandTotalCents: number;
+  /*
+   * Siparişin para birimi. `orders.currency` 20260907370000'den beri
+   * ürünlerden yazılıyor; okumamak, tutarı `formatMoney`ye etiketsiz vermek
+   * ve her siparişi TRY göstermek olurdu.
+   */
+  currency: string;
   paidAt: string | null;
   /** Aynı sipariş birden çok mağazaya bölünmüş olabilir. */
   vendorOrders: CustomerVendorOrder[];
@@ -1367,7 +1373,7 @@ export async function getCustomerOrders(limit = 20): Promise<CustomerOrder[]> {
   const { data, error } = await supabase
     .from('orders')
     .select(
-      `id, order_number, created_at, grand_total_cents, paid_at,
+      `id, order_number, created_at, grand_total_cents, currency, paid_at,
        vendor_orders:vendor_orders (
          id, status, carrier, tracking_number, shipped_at, delivered_at,
          vendor:vendors!vendor_id ( display_name, slug ),
@@ -1412,6 +1418,7 @@ export async function getCustomerOrders(limit = 20): Promise<CustomerOrder[]> {
       orderNumber: String(order.order_number),
       createdAt: String(order.created_at),
       grandTotalCents: Number(order.grand_total_cents ?? 0),
+      currency: String(order.currency ?? 'TRY'),
       paidAt: order.paid_at ? String(order.paid_at) : null,
       vendorOrders: vendorOrderRows.map((vo): CustomerVendorOrder => {
         const vendor = unwrapRelation(vo.vendor);
