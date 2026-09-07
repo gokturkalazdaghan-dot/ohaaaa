@@ -1034,6 +1034,7 @@ export async function getRelatedGroups(
 export async function getPriceHistory(
   groupId: string,
   days = 90,
+  currency?: string,
 ): Promise<PricePoint[]> {
   const supabase = createAnonClient();
   if (!supabase) return [];
@@ -1056,10 +1057,40 @@ export async function getPriceHistory(
     return [];
   }
 
-  return (data ?? []).map((row: { day: string; min_price_cents: number | string }) => ({
-    day: String(row.day).slice(0, 10),
-    minPriceCents: Number(row.min_price_cents),
-  }));
+  /*
+   * TEK PARA BİRİMİ SEÇİLİR, KARIŞTIRILMAZ.
+   *
+   * `price_history` artık para birimi başına satır döndürüyor: iki para
+   * birimli bir grupta aynı gün İKİ satır gelir. Hepsini olduğu gibi
+   * çizmek, grafikte aynı günü iki kez göstermek ve 10 USD ile 10 TRY'yi
+   * aynı eğriye koymak olurdu -- düzeltilen hatanın arayüz tarafındaki
+   * hâli.
+   *
+   * Para birimi verilmediyse EN ÇOK GÖZLEMİ olan seçilir: keyfi değil,
+   * belirlenimci ve o grubun baskın pazarını temsil ediyor.
+   */
+  type Satir = { day: string; currency: string | null; min_price_cents: number | string };
+  const satirlar = (data ?? []) as Satir[];
+
+  const sayim = new Map<string, number>();
+  for (const r of satirlar) {
+    if (!r.currency) continue;
+    sayim.set(r.currency, (sayim.get(r.currency) ?? 0) + 1);
+  }
+
+  const secilen =
+    currency ??
+    [...sayim.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
+
+  if (!secilen) return [];
+
+  return satirlar
+    .filter((row) => row.currency === secilen)
+    .map((row) => ({
+      day: String(row.day).slice(0, 10),
+      minPriceCents: Number(row.min_price_cents),
+      currency: secilen,
+    }));
 }
 
 // ---------------------------------------------------------------------------

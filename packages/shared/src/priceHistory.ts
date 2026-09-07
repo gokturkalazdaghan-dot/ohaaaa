@@ -17,11 +17,19 @@
  * yetersiz veride `null` döner ve arayüz sessiz kalır.
  */
 
-/** Bir günün, gruptaki tüm tekliflerdeki en düşük fiyatı. */
+/**
+ * Bir günün, gruptaki tüm tekliflerdeki en düşük fiyatı.
+ *
+ * `currency` İSTEĞE BAĞLI ama verildiğinde tüm dizi TEK para birimindendir.
+ * Bir dizide iki para birimini karıştırmak, 10 USD ile 10 TRY'yi aynı
+ * eğriye koymak demektir: grafik yanlış, hata yok.
+ */
 export interface PricePoint {
   /** ISO tarih (YYYY-MM-DD). */
   day: string;
   minPriceCents: number;
+  /** ISO-4217. Kaynağı bilinmiyorsa tanımsız. */
+  currency?: string;
 }
 
 export interface PriceSummary {

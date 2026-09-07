@@ -327,8 +327,10 @@ begin
   begin
     select id into v_v from public.vendors limit 1;
     if v_v is not null then
-      insert into public.products (vendor_id, external_id, title, price_cents, currency, stock)
-           values (v_v, 'GOC-FIYAT-1', 'Goc Fiyat Testi', 1999, 'USD', 5)
+      insert into public.products
+        (vendor_id, external_id, title, price_cents, currency, stock, market_code)
+           values (v_v, 'GOC-FIYAT-1', 'Goc Fiyat Testi', 1999, 'USD', 5,
+                   (select code from public.markets order by code limit 1))
         returning id into v_pr;
 
       select count(*) into v_pb from public.price_points
