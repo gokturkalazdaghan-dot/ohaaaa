@@ -84,6 +84,70 @@ export function normalizeGtin(gtin: string | null | undefined): string | null {
   return rakamlar.padStart(14, '0');
 }
 
+/**
+ * UPC-E (8 hane) -> UPC-A (12 hane) genişletmesi.
+ *
+ * NEDEN AYRI BİR İŞLEV, `normalizeGtin`İN İÇİNDE DEĞİL
+ *
+ * `normalizeGtin`in bir SQL ikizi var (`public.normalize_gtin`) ve ikisinin
+ * eşitliği `verify-canonical-parity.mjs` ile kilitli. Genişletmeyi oraya
+ * koymak, iki uygulamayı ayrıştırır ya da aynı kuralı iki dilde iki kez
+ * yazmayı gerektirirdi. İhtiyaç da orada değil: BESLEMELER UPC-E GÖNDERMEZ,
+ * UPC-A/EAN-13 gönderir. UPC-E yalnızca KAMERADAN gelir -- küçük Amerikan
+ * ambalajlarında yaygındır ve katalog US/CA programlarına açıldı.
+ *
+ * NEDEN GEREKLİ
+ *
+ * UPC-E'nin kontrol basamağı, 8 hanenin kendisi üzerinden DEĞİL, açılmış
+ * UPC-A üzerinden hesaplanır. Yani geçerli bir UPC-E, `normalizeGtin`
+ * tarafından "kontrol basamağı tutmuyor" diye reddedilir. Ölçüldü:
+ * `04252614` (gerçek bir UPC-E) reddediliyordu; açılımı `042100005264`
+ * sorunsuz geçiyor.
+ *
+ * GS1 açma kuralı, son hanenin (d6) değerine göre:
+ *   0,1,2 -> N d1 d2 d6 0 0 0 0 d3 d4 d5 C
+ *   3     -> N d1 d2 d3 0 0 0 0 0 d4 d5 C
+ *   4     -> N d1 d2 d3 d4 0 0 0 0 0 d5 C
+ *   5-9   -> N d1 d2 d3 d4 d5 0 0 0 0 d6 C
+ *
+ * Yalnızca sayı sistemi 0 ya da 1 olan kodlar UPC-E'dir; başka bir ilk
+ * hane geldiğinde `null` döner ve çağıran onu EAN-8 olarak okumaya devam
+ * eder.
+ */
+export function expandUpcE(raw: string | null | undefined): string | null {
+  if (raw === null || raw === undefined) return null;
+
+  const d = String(raw).replace(/[^0-9]/g, '');
+  if (d.length !== 8) return null;
+  if (d[0] !== '0' && d[0] !== '1') return null;
+
+  const n = d[0];
+  const [d1, d2, d3, d4, d5, d6] = d.slice(1, 7);
+  const c = d[7];
+
+  let body: string;
+  if (d6 === '0' || d6 === '1' || d6 === '2') body = `${n}${d1}${d2}${d6}0000${d3}${d4}${d5}`;
+  else if (d6 === '3') body = `${n}${d1}${d2}${d3}00000${d4}${d5}`;
+  else if (d6 === '4') body = `${n}${d1}${d2}${d3}${d4}00000${d5}`;
+  else body = `${n}${d1}${d2}${d3}${d4}${d5}0000${d6}`;
+
+  return `${body}${c}`;
+}
+
+/**
+ * Kameradan ya da adresten gelen bir barkodu kanonik GTIN-14'e çevirir.
+ *
+ * SIRALAMA ÖNEMLİ. Sekiz haneli bir kod hem EAN-8 hem UPC-E olabilir ve
+ * ikisi FARKLI ürünlerdir. Önce EAN-8 denenir (kontrol basamağı 8 hanenin
+ * kendisi üzerinden); yalnızca o tutmazsa UPC-E açılımı denenir. Ters sıra,
+ * geçerli bir EAN-8'i başka bir ürüne çevirebilirdi.
+ */
+export function normalizeScannedGtin(raw: string | null | undefined): string | null {
+  const dogrudan = normalizeGtin(raw);
+  if (dogrudan) return dogrudan;
+  return normalizeGtin(expandUpcE(raw));
+}
+
 export interface CanonicalKeyInput {
   gtin: string | null;
   brand: string | null;

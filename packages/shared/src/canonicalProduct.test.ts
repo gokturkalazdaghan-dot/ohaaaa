@@ -5,7 +5,9 @@ import {
   canonicalProductKey,
   collapseSpace,
   groupByCanonicalKey,
+  expandUpcE,
   normalizeGtin,
+  normalizeScannedGtin,
 } from './canonicalProduct.js';
 
 /* =========================================================================
@@ -155,4 +157,56 @@ test('12) AYNI ÜRÜN FARKLI MERCHANT/NETWORK: kanonik anahtar aynı', () => {
 
   assert.equal(magazaA, magazaB);
   assert.ok(!magazaA.includes('awin') && !magazaA.includes('merchant'));
+});
+
+/*
+ * KAMERADAN OKUNAN BARKOD.
+ *
+ * Tarayıcının `BarcodeDetector`i dört biçim okuyor: ean_13, ean_8, upc_a,
+ * upc_e. UPC-E'nin kontrol basamağı 8 hanenin KENDİSİ üzerinden değil,
+ * açılmış UPC-A üzerinden hesaplanır -- yani geçerli bir UPC-E doğrudan
+ * `normalizeGtin`e verildiğinde REDDEDİLİR. Listelediğimiz bir biçimin
+ * hiçbir zaman eşleşmemesi demekti.
+ */
+test('UPC-E, UPC-A ya acilarak taniniyor', () => {
+  // Bilinen çift: UPC-E 04252614 <-> UPC-A 042100005264.
+  assert.equal(expandUpcE('04252614'), '042100005264');
+  assert.equal(normalizeScannedGtin('04252614'), '00042100005264');
+  assert.equal(
+    normalizeScannedGtin('04252614'),
+    normalizeGtin('042100005264'),
+    'acilmis UPC-E ile UPC-A ayni kanonik anahtari vermeli',
+  );
+});
+
+/*
+ * SEKİZ HANE İKİ ANLAMA GELİR ve ikisi FARKLI ürünlerdir. Önce EAN-8
+ * denenir; ters sıra, geçerli bir EAN-8'i başka bir ürüne çevirebilirdi.
+ */
+test('gecerli EAN-8 UPC-E olarak yeniden yorumlanmiyor', () => {
+  assert.equal(normalizeScannedGtin('01234565'), normalizeGtin('01234565'));
+  assert.equal(normalizeScannedGtin('01234565'), '00000001234565');
+});
+
+/* Sayı sistemi 0/1 değilse UPC-E değildir. */
+test('UPC-E olmayan sekiz hane acilmiyor', () => {
+  assert.equal(expandUpcE('45678901'), null);
+  assert.equal(expandUpcE('1234567'), null, 'yedi hane UPC-E degil');
+  assert.equal(expandUpcE(null), null);
+});
+
+/*
+ * ÖLÇÜLEN HATA: 20260907300000 bütün GTIN'leri 14 haneye tamamlıyor, yani
+ * katalogda EAN-13 `05012345678900` olarak duruyor. Kameradan okunan
+ * 13 haneli hâl HAM olarak arandığında sıfır satır buluyordu.
+ */
+test('okunan barkod katalogdaki 14 haneli hâlle ayni anahtari veriyor', () => {
+  assert.equal(normalizeScannedGtin('5012345678900'), '05012345678900');
+});
+
+/* Kontrol basamağı tutmayan okuma veritabanına HİÇ gitmemeli. */
+test('yanlis okunan barkod reddediliyor', () => {
+  assert.equal(normalizeScannedGtin('5012345678901'), null);
+  assert.equal(normalizeScannedGtin('https://ornek.example'), null);
+  assert.equal(normalizeScannedGtin(''), null);
 });

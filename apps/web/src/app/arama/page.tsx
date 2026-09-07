@@ -2,7 +2,12 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 
-import { formatMoney, intentToSearchParams, looksLikeNaturalLanguage } from '@ohaaaa/shared';
+import {
+  formatMoney,
+  intentToSearchParams,
+  looksLikeNaturalLanguage,
+  normalizeScannedGtin,
+} from '@ohaaaa/shared';
 
 import { getRequestLocale } from '@/lib/locale';
 import { tuketButce } from '@/lib/rateBudget';
@@ -59,16 +64,29 @@ type SearchPageProps = {
 };
 
 /**
- * Barkod biçimi doğrulaması.
+ * Barkod doğrulaması ve kanonik biçime çevirme.
  *
- * EAN-8, UPC-E, UPC-A, EAN-13 ve ITF-14: hepsi yalnızca rakamdır ve 8-14
- * hane arasındadır. Biçim tutmuyorsa veritabanına hiç gidilmez — URL'e
- * herkes her şeyi yazabilir.
+ * ÖNCEDEN YALNIZCA BİÇİM BAKILIYORDU: 8-14 rakam. Bu iki şeyi kaçırıyordu.
+ *
+ *   1) KONTROL BASAMAĞI. GTIN'in son hanesi bir sağlamadır; kamera bir
+ *      haneyi yanlış okuduğunda ya da kullanıcı adrese elle bir sayı
+ *      yazdığında biçim yine tutar. Doğrulanmadan veritabanına gidiyordu.
+ *   2) 14 HANEYE TAMAMLAMA. Katalogdaki her GTIN 14 hane olarak duruyor
+ *      (20260907300000). Okunan 13 haneli EAN-13 ham hâliyle hiçbir satırla
+ *      eşleşmiyordu.
+ *
+ * `normalizeScannedGtin` ikisini birden yapar; çekirdeğindeki
+ * `normalizeGtin` alım hattında da kullanılıyor, yani kameranın ürettiği
+ * anahtar ile beslemenin ürettiği anahtar TANIM GEREĞİ aynı. İki ayrı
+ * doğrulama yazmak, ikisinin er geç ayrışması demekti.
+ *
+ * Tarayıcı `upc_e` biçimini de okuyor ve UPC-E'nin kontrol basamağı 8
+ * hanenin kendisi üzerinden tutmaz; `normalizeScannedGtin` o kodu önce
+ * UPC-A'ya açar. Açmasaydık, listelediğimiz bir barkod biçimi hiçbir zaman
+ * eşleşmezdi.
  */
 function readGtin(raw: string | undefined): string | null {
-  if (!raw) return null;
-  const trimmed = raw.trim();
-  return /^[0-9]{8,14}$/.test(trimmed) ? trimmed : null;
+  return normalizeScannedGtin(raw ?? null);
 }
 
 export async function generateMetadata({ searchParams }: SearchPageProps): Promise<Metadata> {
@@ -193,15 +211,32 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
      */
   }
 
-  const gtin = readGtin(params.barkod);
+  /*
+   * OKUNAN barkod ile KANONİK barkod ayrı tutuluyor.
+   *
+   * Arama kanonik biçimle (14 hane) yapılır; kullanıcıya gösterilen ise
+   * kutunun üstünde YAZAN sayıdır. `05012345678900` yazmak, kullanıcıya
+   * taradığı şeyden farklı bir numara göstermek olurdu.
+   */
+  const okunanBarkod = String(params.barkod ?? '').trim();
+  const gtin = readGtin(okunanBarkod);
+
+  /** Barkod okundu ama katalogda yok. */
   let barcodeMiss: string | null = null;
+  /*
+   * Barkod GELDİ ama geçerli bir GTIN değil (kontrol basamağı tutmuyor ya da
+   * biçim bozuk). Bunu sessizce yok saymak, kullanıcının kamerayı kutuya
+   * tutup HİÇBİR ŞEY olmadığını görmesi demekti -- aramanın bozuk olduğunu
+   * düşündürür. "Bulunamadı" demek de yanlış olurdu: aranmadı bile.
+   */
+  const barcodeUnreadable = okunanBarkod.length > 0 && gtin === null;
 
   if (gtin) {
     // Barkod araması başarısız olursa sayfa DÜŞMEZ: metin aramasına devam
     // edilir ve kullanıcıya barkodun bulunamadığı söylenir.
     const match = await findGroupByGtin(gtin).catch(() => null);
     if (match) redirect(`/urun/${match.slug}`);
-    barcodeMiss = gtin;
+    barcodeMiss = okunanBarkod;
   }
 
   const sort = SORT_OPTIONS.some((option) => option.value === sirala)
@@ -368,6 +403,17 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         >
           <strong className="text-fg">{barcodeMiss}</strong> barkodlu ürün henüz katalogda
           yok. Ürün adını yazarak arayabilirsiniz.
+        </p>
+      )}
+
+      {/* Barkod okundu ama geçerli bir GTIN değil: aranmadı bile. */}
+      {barcodeUnreadable && (
+        <p
+          role="status"
+          className="mb-6 rounded-xl border border-line bg-surface px-4 py-3 text-sm text-muted"
+        >
+          Barkod okunamadı. Kamerayı biraz daha yaklaştırıp yeniden deneyin ya
+          da ürün adını yazarak arayın.
         </p>
       )}
 

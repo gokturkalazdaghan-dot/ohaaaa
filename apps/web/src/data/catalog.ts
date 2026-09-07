@@ -11,7 +11,7 @@
 
 import 'server-only';
 
-import { offerSellerName,
+import { normalizeScannedGtin, offerSellerName,
   type Currency,
 } from '@ohaaaa/shared';
 import type {
@@ -574,11 +574,30 @@ export async function findGroupByGtin(
 ): Promise<{ slug: string; title: string } | null> {
   const supabase = createAnonClient();
 
+  /*
+   * BARKOD KANONİK BİÇİMİNE ÇEVRİLİR, HAM HÂLİYLE ARANMAZ.
+   *
+   * Ölçüldü: katalogda EAN-13 `5012345678900` varken ham hâliyle aramak
+   * SIFIR satır buluyordu. Sebebi, 20260907300000'in bütün GTIN'leri 14
+   * haneye tamamlaması: satır `05012345678900` olarak duruyor. Yani
+   * kameradan okunan HER EAN-13, UPC-A ve EAN-8 için (ITF-14 dışında pratik
+   * olarak hepsi) kullanıcıya "bu barkodlu ürün henüz katalogda yok"
+   * deniyordu -- ürün katalogdayken.
+   *
+   * `normalizeScannedGtin` kontrol basamağını da doğrular (ve UPC-E'yi
+   * UPC-A'ya açar); yanlış okunmuş bir barkod veritabanına hiç gitmez.
+   * Normalleştirme BURADA yapılıyor, yalnızca çağıranda değil: bu işlev
+   * dışa açık ve ham değer geçiren bir sonraki çağıran aynı hatayı sessizce
+   * geri getirirdi.
+   */
+  const kanonik = normalizeScannedGtin(gtin);
+  if (!kanonik) return null;
+
   if (supabase) {
     const { data, error } = await supabase
       .from('product_groups')
       .select('slug, title')
-      .eq('gtin', gtin)
+      .eq('gtin_normalized', kanonik)
       .maybeSingle();
 
     if (error) throw new Error(`Barkod aranamadı: ${error.message}`);
