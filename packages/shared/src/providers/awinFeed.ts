@@ -22,7 +22,28 @@ const AWIN_FEED_HOST = 'productdata.awin.com';
  * konsaydı, bir sonraki `catch` bloğu onu çağırmayı unuturdu.
  */
 export function redactAwinKey(text: string): string {
-  return text.replace(/\/apikey\/[^/\s]+/gi, '/apikey/[REDACTED]');
+  return (
+    text
+      // 1) Create-a-Feed biçimi: .../apikey/<ANAHTAR>/...
+      .replace(/\/apikey\/[^/\s"]+/gi, '/apikey/[REDACTED]')
+      /*
+       * 2) Panel biçimi: .../publisher/<yayinciId>/<32 HANE HEX>/...
+       *
+       * ÖLÇÜLDÜ: Awin'in hata gövdesi istenen adresi AYNEN geri yazıyor --
+       *   {"message":"No route found for \"GET https://ui.awin.com/publisher/
+       *    3074081/<32 hane hex>/1/feed/111515.csv.gz\""}
+       * O hex bir kimlik bilgisidir. Bu mesaj `queueRepository.fail()` ile
+       * `ingest_runs`/`jobs` tablosuna YAZILIYOR: redaksiyon olmadan ağın
+       * hata cevabı sırrı VERİTABANINA taşırdı. Sızıntı yolu ağdan değil,
+       * KENDİ HATA KAYDIMIZDAN geçiyordu.
+       */
+      .replace(/\/publisher\/(\d+)\/[0-9a-f]{24,}/gi, '/publisher/$1/[REDACTED]')
+      // 3) Sorgu dizesi biçimi: ?apikey=... &token=... &key=...
+      .replace(/([?&](?:api_?key|token|key|secret)=)[^&\s"]+/gi, '$1[REDACTED]')
+      // 4) Adres içinde geçen uzun hex diziler. GTIN en fazla 14 HANEDIR ve
+      //    yalnızca rakamdır; 24+ karakterlik hex bir kimlik bilgisidir.
+      .replace(/(https?:\/\/[^\s"]*?)\b[0-9a-f]{24,}\b/gi, '$1[REDACTED]')
+  );
 }
 
 export class AwinFeedError extends Error {
@@ -142,3 +163,50 @@ export const AWIN_FEED_COLUMNS: readonly string[] = [
     'last_updated',
   ]),
 ];
+
+/**
+ * Feed yerine gelen API HATA GÖVDESİNİ tanır.
+ *
+ * NEDEN GEREKLİ
+ * Awin (ve her ağ) yetki/adres hatasında feed yerine küçük bir JSON döndürür
+ * ve bunu feed'in kendi adıyla ("111515.csv.gz") sunar. O gövde tablo değildir:
+ * CSV çözümleyici ondan SIFIR satır çıkarır ve hat bunu "feed boş döndü" diye
+ * raporlar.
+ *
+ * "Boş feed" ile "API bizi reddetti" AYNI ŞEY DEĞİLDİR ve çareleri de ayrıdır:
+ *   boş feed  -> geçici olabilir, bir sonraki turda düzelir
+ *   reddedildi -> anahtar/adres yanlış; tekrar denemek 404'e sonsuza dek
+ *                 vurmaktır
+ *
+ * Ölçüldü: 140 baytlık bir Awin 404 gövdesi, `.csv.gz` adıyla, hattan
+ * "0 satır, 0 hata" olarak geçiyordu -- yani gerçekten boş bir feed'den
+ * ayırt edilemiyordu.
+ *
+ * @returns Hata mesajı (REDAKTE EDİLMİŞ) ya da gövde tablo görünüyorsa null.
+ */
+export function detectFeedErrorEnvelope(body: string): string | null {
+  const kirpik = body.trim();
+  // Hata gövdeleri küçüktür; 64 KB'lık bir JSON muhtemelen gerçek bir
+  // JSON feed'idir ve onu hata sanmak alımı durdururdu.
+  if (kirpik.length === 0 || kirpik.length > 64 * 1024) return null;
+  if (!kirpik.startsWith('{')) return null;
+
+  let ayrisan: unknown;
+  try {
+    ayrisan = JSON.parse(kirpik);
+  } catch {
+    return null;
+  }
+  if (typeof ayrisan !== 'object' || ayrisan === null || Array.isArray(ayrisan)) return null;
+
+  const kayit = ayrisan as Record<string, unknown>;
+  // Ürün taşıyan bir JSON feed'i hata sanmamak için: hata gövdeleri bu
+  // alanlardan birini taşır ve ürün dizisi taşımaz.
+  for (const alan of ['message', 'error', 'error_description', 'detail', 'errors']) {
+    const deger = kayit[alan];
+    if (typeof deger === 'string' && deger.trim() !== '') {
+      return redactAwinKey(deger.trim()).slice(0, 500);
+    }
+  }
+  return null;
+}

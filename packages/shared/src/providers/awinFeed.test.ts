@@ -6,6 +6,7 @@ import {
   AWIN_FEED_MAPPING,
   AwinFeedError,
   buildAwinFeedUrl,
+  detectFeedErrorEnvelope,
   isAwinFeedId,
   redactAwinKey,
 } from './awinFeed.js';
@@ -95,4 +96,61 @@ test('eslemenin istedigi her sutun indirmede isteniyor', () => {
 test('bicimlenmis fiyat sutunu fiyat olarak kullanilmiyor', () => {
   assert.equal(AWIN_FEED_MAPPING.price, 'search_price');
   assert.ok(!(Object.values(AWIN_FEED_MAPPING) as string[]).includes('display_price'));
+});
+
+/*
+ * AGIN HATA GOVDESI SIRRI TASIYOR.
+ *
+ * OLCULDU: Awin, gecersiz bir feed adresine 140 baytlik bir JSON dondurdu ve
+ * bunu feed'in KENDI ADIYLA ("111515.csv.gz") sundu. Govde, istenen adresi
+ * AYNEN geri yaziyor -- ve o adres kimlik bilgisi tasiyor:
+ *
+ *   {"message":"No route found for \"GET https://ui.awin.com/publisher/
+ *    3074081/<32 hane hex>/1/feed/111515.csv.gz\""}
+ *
+ * Bu mesaj `queueRepository.fail()` ile veritabanina yaziliyor. Redaksiyon
+ * olmadan sir, AGDAN DEGIL KENDI HATA KAYDIMIZDAN sizardi.
+ *
+ * Asagidaki hex GERCEK DEGIL; bicimi temsil eden bir yer tutucu.
+ */
+const SAHTE_HEX = 'a'.repeat(32);
+
+test('panel bicimli adresteki kimlik bilgisi redakte ediliyor', () => {
+  const govde =
+    `{"message":"No route found for \\"GET https://ui.awin.com/publisher/3074081/` +
+    `${SAHTE_HEX}/1/feed/111515.csv.gz\\""}`;
+  const temiz = redactAwinKey(govde);
+  assert.ok(!temiz.includes(SAHTE_HEX), 'kimlik bilgisi redaksiyondan sonra kalmamali');
+  assert.ok(temiz.includes('/publisher/3074081/[REDACTED]'));
+  assert.ok(temiz.includes('111515'), 'feed kimligi sir degil, korunmali');
+});
+
+test('sorgu dizesindeki anahtar da redakte ediliyor', () => {
+  const temiz = redactAwinKey('GET https://x.example/f?apikey=GIZLI123&token=BASKA');
+  assert.ok(!temiz.includes('GIZLI123'));
+  assert.ok(!temiz.includes('BASKA'));
+});
+
+/*
+ * "BOS FEED" ILE "AG BIZI REDDETTI" AYNI SEY DEGIL.
+ *
+ * Hata govdesinden CSV cozumleyici SIFIR satir cikarir; ayirt edilmeseydi
+ * hat bunu "feed bosaldi" (gecici) diye raporlar ve 404'e sonsuza dek
+ * vururdu. Careleri ters: bos feed bir sonraki turda duzelir, reddedilme
+ * anahtar/adres duzeltilene kadar duzelmez.
+ */
+test('ag hata govdesi feed sanilmiyor', () => {
+  const govde = `{"message":"No route found for \\"GET https://ui.awin.com/publisher/3074081/${SAHTE_HEX}/1/feed/111515.csv.gz\\""}`;
+  const mesaj = detectFeedErrorEnvelope(govde);
+  assert.ok(mesaj !== null, 'hata govdesi taninmali');
+  assert.ok(!mesaj!.includes(SAHTE_HEX), 'donen mesaj redakte olmali');
+});
+
+/* Gercek bir JSON feed'i hata sanmak alimi durdururdu: urun dizisi tasiyan
+ * govde hata degildir. */
+test('urun tasiyan JSON feed hata sanilmiyor', () => {
+  assert.equal(detectFeedErrorEnvelope('[{"product_name":"x"}]'), null, 'dizi = feed');
+  assert.equal(detectFeedErrorEnvelope('{"products":[{"name":"x"}]}'), null);
+  assert.equal(detectFeedErrorEnvelope('product_name,price\nx,1'), null, 'CSV hata degil');
+  assert.equal(detectFeedErrorEnvelope(''), null);
 });

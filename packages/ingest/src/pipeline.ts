@@ -35,6 +35,8 @@ import type {
   SourceConfig,
 } from './types.js';
 
+import { detectFeedErrorEnvelope } from '@ohaaaa/shared/providers';
+
 import { parseCsv } from './adapters/csv.js';
 import { parseJson } from './adapters/json.js';
 import { parseXml } from './adapters/xml.js';
@@ -269,6 +271,33 @@ export async function runSource(
     // bozulduysa) bütün kataloğu stoksuz işaretlemek felakettir. Boş sonuç
     // başarı değil, hata olarak raporlanır ve bayatlatma ÇALIŞTIRILMAZ.
     if (records.length === 0) {
+      /*
+       * ÖNCE: GÖVDE BİR API HATASI MI?
+       *
+       * Ağlar yetki/adres hatasında feed yerine küçük bir JSON döndürür ve
+       * bunu feed'in KENDİ ADIYLA sunar ("111515.csv.gz"). O gövdeden CSV
+       * çözümleyici sıfır satır çıkarır ve aşağıdaki "boş feed" dalı devreye
+       * girerdi -- yani "ağ bizi reddetti" durumu "feed boşalmış" diye
+       * raporlanırdı.
+       *
+       * İkisi AYNI ŞEY DEĞİL ve çareleri ters: boş feed geçicidir, bir
+       * sonraki turda düzelir; reddedilme kalıcıdır ve tekrar denemek 404'e
+       * sonsuza dek vurmaktır.
+       *
+       * Mesaj REDAKTE EDİLEREK taşınıyor: ağın hata gövdesi istenen adresi
+       * aynen geri yazıyor ve o adres kimlik bilgisi taşıyor. Bu mesaj
+       * `queueRepository.fail()` ile veritabanına yazılır -- redaksiyon
+       * olmadan sır, ağdan değil KENDİ HATA KAYDIMIZDAN sızardı.
+       */
+      const agHatasi = detectFeedErrorEnvelope(body);
+      if (agHatasi !== null) {
+        throw new IngestError(
+          'AUTH_ERROR',
+          `Feed yerine ağ hata cevabı geldi: ${agHatasi}`,
+          true,
+        );
+      }
+
       /*
        * GEÇİCİ sayılıyor: sağlayıcının yarım yayınladığı ya da o an
        * boş dönen bir dosya yaygın bir durumdur ve bir sonraki turda

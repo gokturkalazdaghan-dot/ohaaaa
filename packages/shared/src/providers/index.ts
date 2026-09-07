@@ -52,6 +52,7 @@ export {
   AWIN_FEED_MAPPING,
   AwinFeedError,
   buildAwinFeedUrl,
+  detectFeedErrorEnvelope,
   isAwinFeedId,
   redactAwinKey,
 } from './awinFeed.js';
