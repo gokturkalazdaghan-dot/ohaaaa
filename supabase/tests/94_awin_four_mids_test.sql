@@ -6,7 +6,7 @@
 -- her alani uydurma degerle dolduran bir goc de gecerdi -- ve bu gocun tum
 -- meselesi tam olarak o alanlari DOLDURMAMAKTI.
 begin;
-select plan(14);
+select plan(15);
 
 -- --- 1-4: dordu de dogru MID ile var ------------------------------------
 select is(
@@ -62,13 +62,31 @@ select is(
  * bu dosyada izsiz kalirdi; Ravin'i disari almasaydik test gercek bir
  * ilerlemeyi hata sayardi.
  *
- * KANITI GELMEYEN UC: 25962, 61655, 17453.
+ * IKINCI KEZ DARALTILDI. 20260907390000 Back to the Office (61655) icin
+ * Awin advertiser dizinini (hesap sahibinin disa aktardigi CSV) getirdi:
+ * primaryRegion GB, displayUrl https://www.backtotheoffice.co.uk/. Yani o
+ * advertiser artik "kaniti gelmeyen" kumede DEGIL.
+ *
+ * Kural degismedi, kumenin uyeleri degisti. Iddia silinseydi "kanit yoksa
+ * yazma" kurali bu dosyada izsiz kalirdi; daraltilmasaydi gercek bir
+ * ilerlemeyi hata sayardi.
+ *
+ * KANITI GELMEYEN IKI: 25962, 17453.
  */
 select is(
   (select count(*)::int from public.merchants
-    where network_advertiser_id in ('25962','61655','17453')
+    where network_advertiser_id in ('25962','17453')
       and (homepage_url is not null or country_code is not null)),
-  0, '8) kaniti gelmeyen ucte ana sayfa ve ulke hala bos');
+  0, '8) kaniti gelmeyen ikide ana sayfa ve ulke hala bos');
+
+-- Ve kanit GELENDE deger gercekten yazildi: iddia "hicbir zaman yazma"ya
+-- donusmesin diye. Ikisi olmadan, her seyi bos birakan bozuk bir goc de
+-- 8. iddiayi gecerdi.
+select is(
+  (select country_code || ' ' || (homepage_url is not null)::text
+     from public.merchants where network_advertiser_id = '61655'),
+  'GB true',
+  '8b) kaniti gelen advertiser''da ulke ve ana sayfa dizinden yazildi');
 
 select is(
   (select count(*)::int from public.merchants

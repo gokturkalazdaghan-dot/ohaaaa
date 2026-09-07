@@ -48,6 +48,14 @@ export {
 } from './unverifiedNetworks.js';
 export type { UnverifiedNetworkSpec } from './unverifiedNetworks.js';
 export {
+  AWIN_FEED_COLUMNS,
+  AWIN_FEED_MAPPING,
+  AwinFeedError,
+  buildAwinFeedUrl,
+  isAwinFeedId,
+  redactAwinKey,
+} from './awinFeed.js';
+export {
   CapabilityEvidenceError,
   matrixFromEvidence,
   unverifiedEvidence,

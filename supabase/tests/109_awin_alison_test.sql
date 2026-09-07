@@ -15,7 +15,7 @@
 -- tiklamayi bos sayfaya yollar.
 -- ===========================================================================
 begin;
-select plan(12);
+select plan(13);
 
 -- --- 1-3: BILGI IKI TABLOYA BOLUNDU ---------------------------------------
 
@@ -84,14 +84,31 @@ select is(
   'US:US,CA',
   '9) merkez ulke US, kabul edilen ulkeler US+CA');
 
--- --- 10: PARA BIRIMI CIKARILMADI ------------------------------------------
--- US'in varsayilan para birimi USD ama komisyonun hangi para biriminde
--- odendigi BILDIRILMEDI. countries.default_currency'den turetmek cikarimdir.
+/*
+ * 10) PARA BIRIMI ARTIK DOLU -- CIKARIMLA DEGIL, OLCUMLE.
+ *
+ * Bu iddia once `currency IS NULL` diyordu ve o zaman DOGRUYDU: US'in
+ * varsayilan para birimi USD olmasi, Alison'in USD ile odedigini gostermez;
+ * countries.default_currency'den turetmek CIKARIMDIR.
+ *
+ * 20260907390000 degeri gercek feed dosyasindan olctu: 5.594 satirin
+ * tamaminda `currency` sutunu USD. Iddia zayiflamadi, KANITA KAVUSTU --
+ * ve asagidaki ikinci yari kuralin kendisini koruyor: para birimi ancak bir
+ * OLCUMLE BIRLIKTE yazilabilir.
+ */
 select is(
   (select currency from public.programs
     where network = 'awin' and network_program_id = '120101'),
+  'USD'::char(3),
+  '10) para birimi feed olcumunden geldi');
+
+-- Kural: dolu bir para birimi, yaninda olcum tarihi OLMADAN duramaz. Boylece
+-- ileride biri "US ise USD'dir" deyip elle doldurursa bu iddia duser.
+select isnt(
+  (select feed_checked_at from public.programs
+    where network = 'awin' and network_program_id = '120101'),
   null,
-  '10) bildirilmeyen para birimi cikarimla doldurulmadi');
+  '10b) para birimi bir OLCUME dayaniyor -- cikarimla doldurulamaz');
 
 -- --- 11: BAG PROGRAMA GERCEKTEN BAGLI -------------------------------------
 -- `programs.merchant_id` KULLANILAMAZDI: programs_merchant_only_after_approval
