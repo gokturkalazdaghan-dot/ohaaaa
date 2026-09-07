@@ -22,7 +22,7 @@
  */
 import { AWIN_FEED_COLUMNS, AWIN_FEED_MAPPING, buildAwinFeedUrl }
   from '../packages/shared/dist/providers/awinFeed.js';
-import { requireAwinDatafeedKey, safeAwinError }
+import { hasAwinOAuth2Credential, requireAwinDatafeedKey, safeAwinError }
   from '../packages/ingest/dist/awinFeedAccess.js';
 import { classifyPayload, decodeFeedPayload }
   from '../packages/ingest/dist/http/payload.js';
@@ -49,8 +49,21 @@ try {
   anahtar = requireAwinDatafeedKey();
 } catch (hata) {
   console.error(`✗ ${safeAwinError(hata)}`);
-  console.error('  Anahtar bu ortamın gizli değişkenlerine AWIN_DATAFEED_API_KEY');
-  console.error('  adıyla eklenmeli (NEXT_PUBLIC_ öneki OLMADAN).');
+  /*
+   * HANGI KIMLIK BILGISININ EKSIK OLDUGU AYIRT EDILIYOR.
+   *
+   * Hesabin `AWIN_OAUTH2` kimlik bilgisi var ama bu indirme yolu
+   * Create-a-Feed `apikey` yuzeyini kullaniyor ve ikisinin ayni credential
+   * olup olmadigi DOGRULANMADI (Awin dokuman hostlari egress listesinde
+   * degil). "Anahtar ekle" demek yerine durumu oldugu gibi soyluyoruz.
+   */
+  if (hasAwinOAuth2Credential()) {
+    console.error(`  ${'AWIN_OAUTH2'} tanımlı, ancak bu indirme yolu Create-a-Feed`);
+    console.error('  apikey yüzeyini kullanıyor. İkisinin aynı kimlik bilgisi olup');
+    console.error('  olmadığı Awin dokümanından DOĞRULANMADI — tahminle bağlanmadı.');
+  } else {
+    console.error('  Bu ortamda Awin kimlik bilgisi YOK (AWIN_OAUTH2 de tanımsız).');
+  }
   process.exit(3);
 }
 

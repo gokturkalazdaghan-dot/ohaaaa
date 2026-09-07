@@ -79,3 +79,53 @@ export function safeAwinError(error: unknown): string {
   // yakalıyor.
   return redactAwinKey(redactError(error));
 }
+
+// ---------------------------------------------------------------------------
+// AWIN_OAUTH2 -- HESABIN GERÇEKTEN SAHİP OLDUĞU KİMLİK BİLGİSİ
+// ---------------------------------------------------------------------------
+//
+// Hesap sahibi kimlik bilgisini Vercel'de `AWIN_OAUTH2` adıyla tutuyor.
+// Aşağıdaki erişimci onu SUNUCU TARAFINDA okur, maskeleme defterine yazar ve
+// yoksa fail-closed davranır.
+//
+// BU KİMLİK BİLGİSİ HİÇBİR İSTEĞE BAĞLANMADI. Sebep, eksiklik değil KARAR:
+//
+//   * Awin'in OAuth2 sözleşmesi (token ucu, grant type, alan adları, sürenin
+//     nasıl yenilendiği) bu ortamda DOĞRULANAMIYOR: developer/help/wiki/api/
+//     productdata.awin.com hostlarının beşi de egress izin listesinde değil
+//     (ölçüldü: http=000).
+//   * Ürün feed indirmenin `productdata.awin.com/.../apikey/<x>/...` biçimi
+//     AYRI bir kimlik yüzeyi. OAuth2 jetonunun o yüzeyde geçerli olup
+//     olmadığı da doğrulanamadı.
+//
+// Tahminle yazılmış bir akış -- "client_id mi clientId mi", "Bearer mı
+// X-Api-Key mi" -- ilk gerçek çağrıda sessizce 401 döner ve hatayı Awin'e
+// yıktırırdı. Doğrulanana kadar bu değer OKUNUR ama KULLANILMAZ.
+
+/** Kimlik bilgisinin okunacağı ortam değişkeni. DEĞER DEĞİL, AD. */
+export const AWIN_OAUTH2_ENV = 'AWIN_OAUTH2';
+
+/** Kimlik bilgisi tanımlı mı? Değeri DÖNDÜRMEZ. */
+export function hasAwinOAuth2Credential(env: NodeJS.ProcessEnv = process.env): boolean {
+  return typeof env[AWIN_OAUTH2_ENV] === 'string' && env[AWIN_OAUTH2_ENV]!.trim().length > 0;
+}
+
+/**
+ * Kimlik bilgisini okur ve maskeleme defterine yazar.
+ *
+ * BİÇİMİ HAKKINDA HİÇBİR ŞEY VARSAYMAZ: JSON mu, `id:secret` mi, düz jeton mu
+ * -- ayrıştırmaz. Ayrıştırmak, doğrulanmamış bir sözleşmeyi koda gömmek
+ * olurdu. Çağıran, biçimi Awin'in resmî dokümanından DOĞRULADIKTAN sonra
+ * yorumlar.
+ */
+export function requireAwinOAuth2Credential(env: NodeJS.ProcessEnv = process.env): string {
+  const deger = env[AWIN_OAUTH2_ENV]?.trim();
+  if (!deger) {
+    throw new AwinFeedError(
+      `${AWIN_OAUTH2_ENV} tanımlı değil; Awin kimlik doğrulaması yapılamaz.`,
+      'missing_api_key',
+    );
+  }
+  registerSecret(deger);
+  return deger;
+}
