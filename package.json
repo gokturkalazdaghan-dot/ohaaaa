@@ -27,7 +27,8 @@
     "verify:headers": "node scripts/verify-headers.mjs",
     "verify:secrets": "node scripts/verify-secrets.mjs",
     "verify:transitions": "node scripts/verify-transition-parity.mjs",
-    "verify:networks": "node scripts/verify-network-parity.mjs"
+    "verify:networks": "node scripts/verify-network-parity.mjs",
+    "verify:money": "node scripts/verify-money-currency.mjs"
   },
   "devDependencies": {
     "axe-core": "^4.10.0",

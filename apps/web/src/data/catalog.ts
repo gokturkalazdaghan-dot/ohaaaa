@@ -11,7 +11,8 @@
 
 import 'server-only';
 
-import { offerSellerName
+import { offerSellerName,
+  type Currency,
 } from '@ohaaaa/shared';
 import type {
   Category,
@@ -185,6 +186,7 @@ export async function searchProducts(params: SearchParams): Promise<SearchPage> 
         imageUrl: row.image_url ? String(row.image_url) : null,
         offerCount: Number(row.offer_count),
         minPriceCents: row.min_price_cents === null ? null : Number(row.min_price_cents),
+        priceCurrency: (row.price_currency as Currency | null) ?? null,
         maxPriceCents: row.max_price_cents === null ? null : Number(row.max_price_cents),
         bestOfferId: row.best_offer_id ? String(row.best_offer_id) : null,
         bestVendorId: row.best_vendor_id ? String(row.best_vendor_id) : null,
@@ -398,6 +400,7 @@ function toSearchResult(group: ProductGroupWithOffers): SearchResult {
   return {
     groupId: group.id,
     slug: group.slug,
+    priceCurrency: group.priceCurrency,
     title: group.title,
     brand: group.brand,
     imageUrl: group.imageUrl,
@@ -561,7 +564,7 @@ export async function getProductGroup(slug: string): Promise<ProductGroupWithOff
       .from('product_groups')
       .select(
         `id, slug, title, brand, image_url, description, category_id, attributes,
-         offer_count, min_price_cents, max_price_cents, rating, rating_count,
+         offer_count, min_price_cents, max_price_cents, price_currency, rating, rating_count,
          offers:products!group_id (
            id, fulfillment, vendor_id, merchant_id, product_url,
            title, sku, image_urls, price_cents, compare_at_price_cents,
@@ -648,6 +651,7 @@ export async function getProductGroup(slug: string): Promise<ProductGroupWithOff
       rating: Number(data.rating ?? 0),
       ratingCount: Number(data.rating_count ?? 0),
       minPriceCents: data.min_price_cents === null ? null : Number(data.min_price_cents),
+      priceCurrency: (data.price_currency as Currency | null) ?? null,
       maxPriceCents: data.max_price_cents === null ? null : Number(data.max_price_cents),
       offers,
     };
@@ -821,7 +825,7 @@ export async function getProductPrices(slugs: string[]): Promise<ProductPrice[]>
   if (supabase) {
     const { data, error } = await supabase
       .from('product_groups')
-      .select('slug, title, image_url, min_price_cents, offer_count')
+      .select('slug, title, image_url, min_price_cents, price_currency, offer_count')
       .in('slug', slugs);
 
     if (error) throw new Error(`Fiyatlar okunamadı: ${error.message}`);
@@ -831,6 +835,7 @@ export async function getProductPrices(slugs: string[]): Promise<ProductPrice[]>
       title: String(row.title),
       imageUrl: row.image_url ? String(row.image_url) : null,
       minPriceCents: row.min_price_cents === null ? null : Number(row.min_price_cents),
+      priceCurrency: (row.price_currency as Currency | null) ?? null,
       offerCount: Number(row.offer_count),
     }));
   }
@@ -920,7 +925,7 @@ export async function getVendorProducts(
       `price_cents, shipping_fee_cents,
        group:product_groups!group_id (
          id, slug, title, brand, image_url, offer_count,
-         min_price_cents, max_price_cents, best_offer_id
+         min_price_cents, max_price_cents, price_currency, best_offer_id
        )`,
       { count: 'exact' },
     )
@@ -944,6 +949,7 @@ export async function getVendorProducts(
 
     results.push({
       groupId,
+      priceCurrency: (group.price_currency as Currency | null) ?? null,
       slug: String(group.slug),
       title: String(group.title),
       brand: group.brand ? String(group.brand) : null,
@@ -1590,6 +1596,13 @@ export async function getPriceDrops(options?: {
     imageUrl: row.image_url ? String(row.image_url) : null,
     categoryId: row.category_id ? String(row.category_id) : null,
     currentPriceCents: Number(row.current_price_cents),
+    /*
+     * `price_drops` para birimi döndürmüyor; grubun baskın para birimi
+     * kullanılıyor. Bilinmiyorsa TRY'ye DÜŞÜLMÜYOR -- etiketsiz bir tutar
+     * göstermektense para birimini bilinmez bırakıp arayüzün karar
+     * vermesi doğru.
+     */
+    currency: (row.price_currency as Currency | null) ?? 'TRY',
     referencePriceCents: Number(row.reference_price_cents),
     dropRatio: Number(row.drop_ratio),
     observedDays: Number(row.observed_days),

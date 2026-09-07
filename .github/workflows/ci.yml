@@ -123,6 +123,14 @@ jobs:
       - name: Gecis tablosu paritesi
         run: npm run verify:transitions
 
+      # `formatMoney(cents)` para birimi verilmediginde TRY varsayar. Tek
+      # pazarli bir sitede dogru bir varsayimdi; kuresel katalogda 90 USD lik
+      # bir teklif kullaniciya "TRY 90,00" olarak gorunur ve kullanici o
+      # fiyata guvenip tiklar. Ne tip denetimi (parametre istege bagli) ne de
+      # birim testi (TRY li cikti "dogru" gorunur) bunu yakalar.
+      - name: Para birimi etiketi
+        run: npm run verify:money
+
       - name: Birim testleri
         run: npm test
 

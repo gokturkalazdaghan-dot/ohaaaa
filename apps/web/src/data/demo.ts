@@ -148,6 +148,7 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     attributes: { Renk: 'Siyah', Depolama: '128GB', Ekran: '6.1 inç' },
     offerCount: 5,
     minPriceCents: 5_349_900,
+    priceCurrency: 'TRY',
     maxPriceCents: 5_629_900,
     // Demo kumesinde yorum YOK ve uydurulmaz.
     rating: 0,
@@ -200,6 +201,7 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     attributes: { Renk: 'Siyah', Tip: 'Kulak üstü', 'Gürültü engelleme': 'Var' },
     offerCount: 3,
     minPriceCents: 1_149_900,
+    priceCurrency: 'TRY',
     maxPriceCents: 1_249_000,
     // Demo kumesinde yorum YOK ve uydurulmaz.
     rating: 0,
@@ -238,6 +240,7 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     attributes: { RAM: '16GB', Depolama: '512GB SSD', Ekran: '15.6 inç' },
     offerCount: 2,
     minPriceCents: 2_199_900,
+    priceCurrency: 'TRY',
     maxPriceCents: 2_249_000,
     // Demo kumesinde yorum YOK ve uydurulmaz.
     rating: 0,
@@ -268,6 +271,7 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     attributes: { Tip: 'Dikey', Pil: '60 dk' },
     offerCount: 2,
     minPriceCents: 2_899_900,
+    priceCurrency: 'TRY',
     maxPriceCents: 2_949_900,
     // Demo kumesinde yorum YOK ve uydurulmaz.
     rating: 0,
@@ -298,6 +302,7 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     attributes: { Cinsiyet: 'Unisex', Kullanım: 'Koşu' },
     offerCount: 1,
     minPriceCents: 449_900,
+    priceCurrency: 'TRY',
     maxPriceCents: 449_900,
     // Demo kumesinde yorum YOK ve uydurulmaz.
     rating: 0,
@@ -322,6 +327,7 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     attributes: { Kapasite: '7.3L', Güç: '2225W' },
     offerCount: 2,
     minPriceCents: 799_900,
+    priceCurrency: 'TRY',
     maxPriceCents: 824_900,
     // Demo kumesinde yorum YOK ve uydurulmaz.
     rating: 0,

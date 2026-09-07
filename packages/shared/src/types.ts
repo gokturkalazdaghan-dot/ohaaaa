@@ -199,6 +199,8 @@ export interface ProductGroup {
   attributes: Record<string, string>;
   offerCount: number;
   minPriceCents: number | null;
+  /** `minPriceCents`in para birimi. Etiketsiz tutar yanlış fiyattır. */
+  priceCurrency: Currency | null;
   maxPriceCents: number | null;
   /** Yayindaki degerlendirmelerin urun puani ortalamasi (0 = puan yok). */
   rating: number;
@@ -218,6 +220,8 @@ export interface SearchResult {
   imageUrl: string | null;
   offerCount: number;
   minPriceCents: number | null;
+  /** `minPriceCents`in para birimi. Etiketsiz tutar yanlış fiyattır. */
+  priceCurrency: Currency | null;
   maxPriceCents: number | null;
   bestOfferId: string | null;
   bestVendorId: string | null;
@@ -363,6 +367,14 @@ export interface PriceDrop {
   categoryId: string | null;
   currentPriceCents: number;
   referencePriceCents: number;
+  /**
+   * Tutarların para birimi. ISO-4217.
+   *
+   * Etiketsiz bir tutar, çok pazarlı bir katalogda kullanıcıya YANLIŞ
+   * fiyat göstermektir: `formatMoney` para birimi verilmediğinde TRY
+   * varsayar ve 90 USD "₺90,00" olarak görünür.
+   */
+  currency: Currency;
   /** 0-1 arası oran. 0.25 = %25 düşüş. */
   dropRatio: number;
   observedDays: number;

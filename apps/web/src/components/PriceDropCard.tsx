@@ -65,7 +65,7 @@ export function PriceDropCard({
 
         <div className="mt-auto pt-3">
           <p className="tabular text-lg font-extrabold leading-none text-fg">
-            {formatMoney(drop.currentPriceCents)}
+            {formatMoney(drop.currentPriceCents, drop.currency)}
           </p>
 
           {/*
@@ -76,9 +76,9 @@ export function PriceDropCard({
             Son {drop.observedDays > 0 ? `${drop.observedDays} günde` : 'ölçümlerimizde'}{' '}
             gördüğümüz en yüksek fiyat{' '}
             <span className="tabular font-semibold text-fg">
-              {formatMoney(drop.referencePriceCents)}
+              {formatMoney(drop.referencePriceCents, drop.currency)}
             </span>
-            {fark > 0 && <> — aradaki fark {formatMoney(fark)}.</>}
+            {fark > 0 && <> — aradaki fark {formatMoney(fark, drop.currency)}.</>}
           </p>
 
           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">

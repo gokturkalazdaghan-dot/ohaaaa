@@ -30,6 +30,13 @@ export function PriceHistory({
   const summary = summarizePriceHistory(points, currentCents);
   if (!summary.available) return null;
 
+  /*
+   * Seri TEK para birimindendir (`getPriceHistory` bir para birimi seçer).
+   * Buradan okumak, tutarları etiketsiz basmaktan iyidir: etiketsiz bir
+   * tutar `formatMoney` tarafından TRY sayılır ve 90 USD "₺90,00" görünür.
+   */
+  const currency = points.find((p) => p.currency)?.currency;
+
   const claim = assessDiscountClaim(compareAtCents, points);
 
   return (
@@ -50,7 +57,7 @@ export function PriceHistory({
         ) : (
           <>
             Gözlediğimiz en düşük fiyat{' '}
-            <strong className="tabular">{formatMoney(summary.lowestCents)}</strong> idi;
+            <strong className="tabular">{formatMoney(summary.lowestCents, currency)}</strong> idi;
             şu anki fiyat bunun <strong>%{summary.aboveLowestPercent}</strong> üstünde.
           </>
         )}
@@ -59,14 +66,19 @@ export function PriceHistory({
       {claim.kind === 'overstated' && (
         <p className="mt-2 rounded-lg bg-warning/[0.08] p-3 text-xs leading-relaxed text-fg">
           Satıcı eski fiyatı{' '}
-          <span className="tabular">{formatMoney(claim.referenceCents)}</span> gösteriyor,
+          <span className="tabular">{formatMoney(claim.referenceCents, currency)}</span> gösteriyor,
           ancak son 30 günde bu ürünü{' '}
-          <span className="tabular">{formatMoney(claim.lowest30Cents)}</span>&apos;e kadar
+          <span className="tabular">{formatMoney(claim.lowest30Cents, currency)}</span>&apos;e kadar
           gördük. İndirim, etikette yazandan küçük olabilir.
         </p>
       )}
 
-      <Sparkline points={points} lowest={summary.lowestCents} highest={summary.highestCents} />
+      <Sparkline
+        points={points}
+        lowest={summary.lowestCents}
+        highest={summary.highestCents}
+        currency={currency}
+      />
 
       <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
         {[
@@ -77,7 +89,7 @@ export function PriceHistory({
           <div key={label as string} className="rounded-lg bg-surface-2 px-2 py-2">
             <dt className="text-2xs text-muted">{label}</dt>
             <dd className="tabular mt-0.5 text-sm font-bold text-fg">
-              {formatMoney(value as number)}
+              {formatMoney(value as number, currency)}
             </dd>
           </div>
         ))}
@@ -102,10 +114,13 @@ function Sparkline({
   points,
   lowest,
   highest,
+  currency,
 }: {
   points: PricePoint[];
   lowest: number;
   highest: number;
+  /** Serinin para birimi. Verilmezse `formatMoney` TRY varsayar. */
+  currency?: string;
 }) {
   const W = 300;
   const H = 56;
@@ -126,7 +141,7 @@ function Sparkline({
       className="mt-4 h-14 w-full"
       preserveAspectRatio="none"
       role="img"
-      aria-label={`Fiyat eğrisi: en düşük ${formatMoney(lowest)}, en yüksek ${formatMoney(highest)}.`}
+      aria-label={`Fiyat eğrisi: en düşük ${formatMoney(lowest, currency)}, en yüksek ${formatMoney(highest, currency)}.`}
     >
       <path d={area} fill="var(--brand)" opacity="0.10" />
       <path d={line} fill="none" stroke="var(--brand)" strokeWidth="2"

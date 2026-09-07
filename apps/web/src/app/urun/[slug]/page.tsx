@@ -2,7 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import { formatMoney } from '@ohaaaa/shared';
+import { formatMoney,
+  rankOffersByCurrency,
+} from '@ohaaaa/shared';
 
 import { DataUnavailable } from '@/components/DataUnavailable';
 import { ShieldIcon, TruckIcon } from '@/components/Icons';
@@ -377,16 +379,32 @@ export default async function ProductPage({ params }: ProductPageProps) {
               Kargo dahil toplam maliyete göre sıralanmıştır — gerçekte ödeyeceğiniz tutar.
             </p>
 
-            <ul className="mt-5 space-y-3">
-              {group.offers.map((offer, index) => (
-                <OfferRow
-                  key={offer.id}
-                  offer={offer}
-                  groupSlug={group.slug}
-                  isBest={index === 0}
-                />
-              ))}
-            </ul>
+            {/*
+              TEKLİFLER PARA BİRİMİ BAŞINA GRUPLANIYOR.
+              Farklı para birimlerindeki tutarları tek listede sıralamak,
+              sayı büyüklüğünü fiyat sanmaktır: 1.200.000 HUF (~33 USD)
+              9.000 cent'ten (90 USD) "pahalı" görünür ve gerçekte üçte biri
+              fiyatındaki teklif listenin dibinde kalır.
+            */}
+            {rankOffersByCurrency(group.offers).map((grup) => (
+              <section key={grup.currency} className="mt-5">
+                {rankOffersByCurrency(group.offers).length > 1 && (
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+                    {grup.currency} fiyatları
+                  </h3>
+                )}
+                <ul className="space-y-3">
+                  {grup.offers.map((offer) => (
+                    <OfferRow
+                      key={offer.id}
+                      offer={offer}
+                      groupSlug={group.slug}
+                      badges={grup.badges.get(offer.id) ?? []}
+                    />
+                  ))}
+                </ul>
+              </section>
+            ))}
 
             {group.offers.length === 0 && (
               <p className="mt-4 rounded-xl border border-line bg-surface p-5 text-sm text-muted">

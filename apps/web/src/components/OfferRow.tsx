@@ -9,9 +9,23 @@ import {
   offerSellerName,
   offerSellerRating,
   type Offer,
+  type OfferBadge,
 } from '@ohaaaa/shared';
 
 import { ArrowRightIcon, CartIcon, CheckIcon, StarIcon, TruckIcon } from './Icons';
+
+/**
+ * Rozet metinleri.
+ *
+ * Üçü ayrı ayrı gösteriliyor çünkü kullanıcının sorusu her zaman "en ucuz
+ * hangisi" değil: bazen "en çabuk", bazen "makul sürede en ucuz". Üçünü tek
+ * etikete indirmek, ikisini gizlemek demek.
+ */
+const BADGE_ETIKET: Record<OfferBadge, string> = {
+  cheapest: 'En ucuz toplam',
+  fastest: 'En hızlı teslimat',
+  best_value: 'En iyi değer',
+};
 import { useCart } from '@/store/cart';
 
 /**
@@ -20,20 +34,31 @@ import { useCart } from '@/store/cart';
  * Sıralama ölçütü ÜRÜN FİYATI DEĞİL, kargo dahil TOPLAM MALİYETTİR.
  * Kullanıcının gerçekte ödeyeceği tutar budur; "en ucuz" etiketini ürün
  * fiyatına göre vermek yanıltıcı olurdu (kargoyla birlikte sıra değişebilir).
+ *
+ * PARA BİRİMİ HER TUTARDA AÇIKÇA VERİLİYOR. Verilmediğinde `formatMoney`
+ * TRY varsayıyordu: 90 USD'lik bir teklif "₺90,00" olarak görünüyordu --
+ * kullanıcıya yanlış fiyat göstermenin en doğrudan hâli.
  */
 export function OfferRow({
   offer,
   groupSlug,
-  isBest,
+  badges = [],
 }: {
   offer: Offer;
   groupSlug: string;
-  isBest: boolean;
+  /** cheapest / fastest / best_value. Boş dizi = rozetsiz. */
+  badges?: OfferBadge[];
 }) {
   const add = useCart((state) => state.add);
   const [added, setAdded] = useState(false);
 
   const percent = discountPercent(offer.priceCents, offer.compareAtPriceCents);
+  /*
+   * Vurgu YALNIZCA "en ucuz"a. En hızlı ve en iyi değer de rozet alıyor ama
+   * satırı yeşile boyamıyor: üç satırı birden vurgulamak, hiçbirini
+   * vurgulamamakla aynı şey.
+   */
+  const isCheapest = badges.includes('cheapest');
   const lowStock = offer.stock > 0 && offer.stock <= 5;
 
   const isAffiliate = offer.fulfillment === 'affiliate';
@@ -67,14 +92,25 @@ export function OfferRow({
   return (
     <li
       className={`relative flex flex-col gap-4 rounded-2xl border p-4 transition-colors sm:flex-row sm:items-center ${
-        isBest
+        isCheapest
           ? 'border-success/45 bg-success/[0.06]'
           : 'border-line bg-surface hover:border-brand/35'
       }`}
     >
-      {isBest && (
-        <span className="absolute -top-2.5 left-4 rounded-full bg-success px-2.5 py-0.5 text-3xs font-bold uppercase tracking-wide text-on-success">
-          En iyi toplam fiyat
+      {badges.length > 0 && (
+        <span className="absolute -top-2.5 left-4 flex flex-wrap gap-1.5">
+          {badges.map((badge) => (
+            <span
+              key={badge}
+              className={`rounded-full px-2.5 py-0.5 text-3xs font-bold uppercase tracking-wide ${
+                badge === 'cheapest'
+                  ? 'bg-success text-on-success'
+                  : 'bg-surface-2 text-fg ring-1 ring-line'
+              }`}
+            >
+              {BADGE_ETIKET[badge]}
+            </span>
+          ))}
         </span>
       )}
 
@@ -121,7 +157,7 @@ export function OfferRow({
           {offer.shippingFeeCents === 0 ? (
             <span className="text-success">Ücretsiz kargo</span>
           ) : (
-            <span>Kargo {formatMoney(offer.shippingFeeCents)}</span>
+            <span>Kargo {formatMoney(offer.shippingFeeCents, offer.currency)}</span>
           )}
         </span>
         <span>{offer.estimatedDeliveryDays} günde kargoda</span>
@@ -131,7 +167,9 @@ export function OfferRow({
       {/* Fiyat */}
       <div className="shrink-0 sm:w-44 sm:text-right">
         <div className="flex items-baseline gap-2 sm:justify-end">
-          <span className="tabular text-lg font-bold">{formatMoney(offer.priceCents)}</span>
+          <span className="tabular text-lg font-bold">
+            {formatMoney(offer.priceCents, offer.currency)}
+          </span>
           {percent !== null && (
             <span className="rounded bg-success/15 px-1.5 py-0.5 text-2xs font-bold text-success">
               %{percent}
@@ -141,12 +179,12 @@ export function OfferRow({
 
         {offer.compareAtPriceCents && (
           <p className="tabular text-xs text-subtle line-through">
-            {formatMoney(offer.compareAtPriceCents)}
+            {formatMoney(offer.compareAtPriceCents, offer.currency)}
           </p>
         )}
 
         <p className="tabular mt-0.5 text-2xs text-muted">
-          kargo dahil {formatMoney(offer.totalCostCents)}
+          kargo dahil {formatMoney(offer.totalCostCents, offer.currency)}
         </p>
         {isAffiliate && (
           <p className="mt-0.5 text-3xs text-subtle">satış {sellerName}’de tamamlanır</p>
@@ -172,7 +210,7 @@ export function OfferRow({
           className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors duration-150 ease-out ${
             offer.stock === 0
               ? 'pointer-events-none border border-line bg-surface-2 opacity-40'
-              : isBest
+              : isCheapest
                 ? 'press bg-brand-cta text-white'
                 : 'border border-line bg-surface-2 text-fg hover:border-brand/50'
           }`}
@@ -190,7 +228,7 @@ export function OfferRow({
           className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-40 ${
             added
               ? 'bg-success text-on-success'
-              : isBest
+              : isCheapest
                 ? 'press bg-brand-cta text-white'
                 : 'border border-line bg-surface-2 text-fg hover:border-brand/50'
           }`}
