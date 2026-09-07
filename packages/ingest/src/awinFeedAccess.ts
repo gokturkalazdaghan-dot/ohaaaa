@@ -19,6 +19,8 @@
 
 import { AwinFeedError, redactAwinKey } from '@ohaaaa/shared/providers';
 
+import { redactError, registerSecret } from './http/redact.js';
+
 /** Anahtarın okunacağı ortam değişkeni. DEĞER DEĞİL, AD. */
 export const AWIN_DATAFEED_API_KEY_ENV = 'AWIN_DATAFEED_API_KEY';
 
@@ -45,6 +47,22 @@ export function requireAwinDatafeedKey(env: NodeJS.ProcessEnv = process.env): st
       'missing_api_key',
     );
   }
+
+  /*
+   * ANAHTAR, DEPONUN KENDI MASKELEME DEFTERINE YAZILIYOR.
+   *
+   * `redactAwinKey` KALIP tabanlıdır: tanıdığı adres biçimlerini temizler.
+   * `registerSecret` ise DEĞER tabanlıdır -- anahtarın geçtiği HER metni,
+   * biçimi ne olursa olsun maskeler. İkisi birbirinin yedeği:
+   *
+   *   kalıp   -> anahtarı görmemiş bir metni de temizler (ör. başka bir
+   *              sürecin ürettiği log)
+   *   değer   -> hiç öngörmediğimiz bir biçimde sızsa da yakalar
+   *
+   * İkinci bir maskeleme sistemi kurulmadı: bu, `buildAuthHeaders`ın zaten
+   * kullandığı defterin ta kendisi.
+   */
+  registerSecret(key);
   return key;
 }
 
@@ -56,5 +74,8 @@ export function requireAwinDatafeedKey(env: NodeJS.ProcessEnv = process.env): st
  * ve log'lar veritabanından daha çok yere kopyalanır.
  */
 export function safeAwinError(error: unknown): string {
-  return redactAwinKey(error instanceof Error ? error.message : String(error));
+  // ÖNCE değer tabanlı defter, SONRA kalıp tabanlı temizlik. Sıra önemli
+  // değil ama ikisinin de uygulanması önemli: biri diğerinin kaçırdığını
+  // yakalıyor.
+  return redactAwinKey(redactError(error));
 }
