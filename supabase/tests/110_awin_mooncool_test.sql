@@ -11,7 +11,7 @@
 -- Yalanlayan tek sey `terms_verified_at`in NULL olmasi.
 -- ===========================================================================
 begin;
-select plan(11);
+select plan(12);
 
 -- --- 1-3: UC KAYIT DA "KOMISYONU BILMIYORUM" DIYOR ------------------------
 
@@ -37,11 +37,31 @@ select is(
 
 -- --- 4-6: "PRODUCT FEED: 5" -- VARLIK YAZILDI, SAYI YAZILMADI -------------
 
+/*
+ * BELIRSIZLIK COZULDU -- TAHMINLE DEGIL, KAYNAKTAN.
+ *
+ * Bu iddia once `product_count IS NULL` diyordu: 20260907350000 "Product
+ * Feed: 5" satirindaki 5'in birimini bilmiyordu (feed sayisi mi urun sayisi
+ * mi?) ve BILMEDIGI icin yazmamisti. Hesap sahibi ayni satiri sonra
+ * "Products: 5" olarak bildirdi; 20260907380000 sayiyi o kaynakla yazdi.
+ *
+ * Iddia zayiflamadi, KONUSU degisti: "birimini bilmedigin sayiyi yazma"
+ * kurali hâlâ gecerli ve 113_feed_onboarding_test.sql'de bildirilmeyen
+ * alanlar (feed adresi, son guncelleme tarihi) uzerinden sinaniyor.
+ */
 select is(
   (select product_count from public.programs
     where network = 'awin' and network_program_id = '66494'),
-  null,
-  '4) birimi belirsiz "5" urun sayisi olarak yazilmadi');
+  5,
+  '4) "5" URUN sayisi olarak cozuldu (hesap sahibi dogrulamasi)');
+
+-- Agin bildirdigi sayi, BIZIM katalogumuzun sayisi degil: ayri sutun.
+select is(
+  (select count(*)::int from public.products p
+     join public.merchants m on m.id = p.merchant_id
+    where m.slug = 'mooncool'),
+  0,
+  '4b) 5 sayisi AGIN; bizim katalogumuzda Mooncool urunu yok');
 
 select is(
   (select feed_available from public.programs
