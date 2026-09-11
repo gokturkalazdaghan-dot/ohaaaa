@@ -77,9 +77,20 @@ select is(
 -- Dizinde komisyon 0-0 idi: bu "sifir komisyon" degil "YAYINLANMAMIS"
 -- demektir. Sifir sayip dogrulanmis isaretlemek, yayin kapisini sessizce
 -- acardi.
+-- IDDIA TERSINE DONDU cunku EKSIK OLAN BILGI GELDI (07/09/2026).
+--
+-- Dizindeki 0-0 "sifir komisyon" degil "YAYINLANMAMIS" demekti: dizin,
+-- programa katilmamis bir yayinciya orani gostermez. Hesap sahibi panodan
+-- bildirdi: %10. Eski iddia "bilmedigimizi biliyormus gibi gosterme"
+-- diyordu; artik BILIYORUZ, ve dogru davranis orani YAZMAK.
+--
+-- Sifir yazilmadigini da ayrica sinamak gerekiyor: 0-0'i harfiyen alip
+-- 0.0000 yazan bir goc, eski iddiayi da gecerdi ve her donusum sifir
+-- komisyonla mutabakata girerdi.
 select is(
-  (select terms_verified_at from public.merchants where slug='back-to-the-office'),
-  null, '9) yayinlanmamis komisyon dogrulanmis sayilmadi');
+  (select default_commission_rate from public.merchants
+    where slug='back-to-the-office'),
+  0.1000::numeric, '9) bildirilen komisyon yazildi -- dizindeki 0-0 degil');
 
 -- --- 10-11: WANAYOU -------------------------------------------------------
 -- Sartlari biliniyor, feed'i bilinmiyor. Kimlik uydurmak, sonraki turda bos

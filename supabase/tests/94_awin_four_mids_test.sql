@@ -6,7 +6,7 @@
 -- her alani uydurma degerle dolduran bir goc de gecerdi -- ve bu gocun tum
 -- meselesi tam olarak o alanlari DOLDURMAMAKTI.
 begin;
-select plan(16);
+select plan(17);
 
 -- --- 1-4: dordu de dogru MID ile var ------------------------------------
 select is(
@@ -36,17 +36,30 @@ select is(
 -- Bu gocun en pahali iddiasi. Bir MID bilmek, o programa kabul edilmis
 -- olmak DEGILDIR; kaydi "approved" yapmak, olmayan bir geliri var saymak
 -- ve dogrulanmamis sartlarla trafik gondermek olurdu.
+-- FIXTURE DARALDI (07/09/2026): 61655 icin KATILIM VE SARTLAR GELDI.
+--
+-- Iddianin kurali aynen duruyor -- MID bilmek onay degildir -- ama 61655
+-- artik yalnizca "MID'ini bildigimiz" bir program degil: hesap sahibi
+-- programa katilmis (Awin feed listesinde "active"), komisyon oranini
+-- panodan bildirmis (%10) ve cerez penceresi dizinde yazili (30 gun).
+-- Kanit geldigi icin yayina alindi (20260907430000).
+--
+-- Kaniti gelmeyen UCU burada kaliyor; ikinci iddia da yayina alinanin
+-- sartlarinin GERCEKTEN dolu oldugunu sabitliyor. Ikisi olmadan "hepsini
+-- onayla" ve "hicbirini onaylama" bozukluklarinin ikisi de gecerdi.
 select is(
   (select count(*)::int from public.merchants
-    where network_advertiser_id in ('25962','61655','17453','115809')
-      and (status <> 'prospect' or application_status <> 'not_started')),
-  0, '6) hicbiri onayli/aktif degil -- basvuru onay degildir');
+    where network_advertiser_id in ('25962','17453','115809')
+      and (status <> 'prospect' or application_status <> 'not_started'
+           or approved_at is not null)),
+  0, '6) kaniti gelmeyen ucu hâlâ onayli/aktif degil');
 
 select is(
-  (select count(*)::int from public.merchants
-    where network_advertiser_id in ('25962','61655','17453','115809')
-      and approved_at is not null),
-  0, '7) hicbirinde onay tarihi yok');
+  (select status::text || '/' || application_status::text || '/'
+       || default_commission_rate::text || '/' || cookie_window_days::text
+     from public.merchants where network_advertiser_id = '61655'),
+  'active/approved/0.1000/30',
+  '7) kaniti gelen advertiser sartlariyla birlikte yayina alindi');
 
 -- --- 8-9: BILINMEYEN UYDURULMADI -----------------------------------------
 /*
@@ -120,11 +133,15 @@ select ok(
  * merchants_active_needs_verified_terms'in dayanagi ve doldurmak, yayina
  * alma kapisini kaldirmak demek. Bu yuzden Ravin bu iddianin ICINDE kaliyor.
  */
+-- FIXTURE DARALDI: 61655'in KOMISYONU artik biliniyor (%10, hesap sahibi
+-- bildirimi) ve cerezi de (30 gun, dizin). Iki yarim kanit degil, IKI TAM
+-- kanit -- bu yuzden dogrulama isareti kondu. Ravin hâlâ iddianin icinde:
+-- onun yalnizca cerezi var, komisyonu YOK.
 select is(
   (select count(*)::int from public.merchants
-    where network_advertiser_id in ('25962','61655','17453','115809')
+    where network_advertiser_id in ('25962','17453','115809')
       and terms_verified_at is not null),
-  0, '9b) dordunde de sart dogrulamasi bos -- cerez bilmek komisyon bilmek degildir');
+  0, '9b) komisyonu bilinmeyen ucte sart dogrulamasi hâlâ bos');
 
 -- --- 10: KAPI GERCEKTEN CALISIYOR ----------------------------------------
 -- 8 ve 9 yalnizca alanlarin bos oldugunu soyler. Asil soru: bu eksiklik
@@ -182,10 +199,19 @@ select is(
 -- tutup GECEBILIRDI.
 select is(
   (select count(*)::int from public.merchants
-    where network_advertiser_id in ('25962','61655','17453','115809')
+    where network_advertiser_id in ('25962','17453','115809')
       and terms_verified_at is not null),
   0,
-  '13) bu gocun dort MID''i dogrulama devralmadi');
+  '13) kaniti gelmeyen uc MID dogrulama devralmadi');
+
+-- 61655 dogrulamayi DEVRALMADI, KENDI KANITIYLA aldi. Fark sinanabilir:
+-- devralmis olsaydi komisyon orani sema varsayilaninda kalirdi. Bu iddia,
+-- yukaridaki daraltmanin bir bosluk acmadigini gosteriyor.
+select is(
+  (select (terms_verified_at is not null)::text || '/' || default_commission_rate::text
+     from public.merchants where network_advertiser_id = '61655'),
+  'true/0.1000',
+  '13b) 61655 dogrulamayi kendi komisyonuyla aldi, devralmadi');
 
 select * from finish();
 rollback;

@@ -126,10 +126,19 @@ select throws_ok(
 -- sokar ve BTO'nun komisyon orani Awin dizininde yayinlanmamis oldugu icin
 -- `terms_verified_at` NULL. Yani yapilandirma hazir, alim KAPALI -- ve bunu
 -- tutan sey bir yorum degil, `merchants_active_needs_verified_terms` kisiti.
+-- FEED DOGRULANDI + SARTLAR GELDI -> MAGAZA YAYINDA (20260907430000).
+--
+-- Onceki hâli "kaynak acildi ama yayina alinmadi" diyordu; eksik olan tek
+-- sey komisyon oraniydi ve o geldi. Simdi sinanan sey, yayinin iki kapisinin
+-- da GERCEKTEN saglanmis olmasi -- durumu elle 'active' yapip kapilari bos
+-- birakan bir goc burada duser.
 select is(
-  (select status::text from public.merchants where slug = 'back-to-the-office'),
-  'prospect',
-  '14) kaynak acildi ama magaza yayina ALINMADI (komisyon dogrulanmadi)');
+  (select status::text
+       || '/' || (terms_verified_at is not null)::text
+       || '/' || (deeplink_template is not null)::text
+     from public.merchants where slug = 'back-to-the-office'),
+  'active/true/true',
+  '14) magaza yayinda ve yayin kapilarinin ikisi de dolu');
 
 select * from finish();
 rollback;
