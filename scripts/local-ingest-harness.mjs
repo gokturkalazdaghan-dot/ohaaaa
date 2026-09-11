@@ -156,12 +156,12 @@ const repository = {
             shipping_fee_cents, status, last_seen_at, price_checked_at,
             stock_checked_at, offer_checked_at)
          values ('affiliate',$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$19,$19,$19)
-         -- KISMI TEKIL INDEKS: products_merchant_external_id_key
-         -- WHERE merchant_id IS NOT NULL yuklemiyle tanimli. Postgres
-         -- cikarim yapabilmek icin AYNI yuklemi burada da ister; yuklemsiz
-         -- bir ON CONFLICT "no unique or exclusion constraint matching"
-         -- hatasi verir.
-         on conflict (merchant_id, external_id) where merchant_id is not null
+         -- YUKLEMSIZ catisma hedefi -- gercek deponun kullandigi bicimin
+         -- TA KENDISI (onConflict: 'merchant_id,external_id'). Eskiden
+         -- burada yuklem tekrarlamak zorundaydik cunku indeks kismiydi;
+         -- 20260907440000 yuklemi kaldirdi. Harness artik production
+         -- yazma yoluyla ayni ifadeyi kuruyor.
+         on conflict (merchant_id, external_id)
          do update set
             price_cents = excluded.price_cents, stock = excluded.stock,
             status = excluded.status, fingerprint = excluded.fingerprint,
