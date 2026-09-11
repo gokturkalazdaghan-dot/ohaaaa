@@ -22,6 +22,12 @@ import { runScheduledIngest } from './runner.js';
 import { createSupabaseRepository, loadSources } from './supabaseRepository.js';
 import { createPoliteClient } from './http/politeClient.js';
 import { redact, redactError } from './http/redact.js';
+import {
+  SUPABASE_SERVICE_KEY_ENV_NAMES,
+  SUPABASE_URL_ENV_NAMES,
+  readEnvValue,
+  resolveEnvName,
+} from './envNames.js';
 import type { IngestSummary } from './types.js';
 
 const USER_AGENT =
@@ -74,12 +80,21 @@ function parseArgs(argv: string[]): CliOptions {
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
 
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  /*
+   * Adlar SIRAYLA aranıyor: aynı sır ortama farklı adlarla enjekte
+   * edilebiliyor (bkz. envNames.ts). Hata mesajı da hangi ADLARIN arandığını
+   * söylüyor -- değerleri değil.
+   */
+  const supabaseUrl = readEnvValue(SUPABASE_URL_ENV_NAMES);
+  const serviceKey = readEnvValue(SUPABASE_SERVICE_KEY_ENV_NAMES);
 
   if (!supabaseUrl || !serviceKey) {
     console.error(
-      'HATA: SUPABASE_URL ve SUPABASE_SERVICE_ROLE_KEY tanımlı olmalı.\n' +
+      'HATA: Supabase adresi ve servis rolü anahtarı tanımlı olmalı.\n' +
+        `  adres  : ${SUPABASE_URL_ENV_NAMES.join(' / ')}` +
+        ` -> ${resolveEnvName(SUPABASE_URL_ENV_NAMES) ?? 'BULUNAMADI'}\n` +
+        `  anahtar: ${SUPABASE_SERVICE_KEY_ENV_NAMES.join(' / ')}` +
+        ` -> ${resolveEnvName(SUPABASE_SERVICE_KEY_ENV_NAMES) ?? 'BULUNAMADI'}\n` +
         '.env.example dosyasına bakın.',
     );
     process.exit(2);
