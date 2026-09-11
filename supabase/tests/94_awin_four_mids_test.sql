@@ -6,7 +6,7 @@
 -- her alani uydurma degerle dolduran bir goc de gecerdi -- ve bu gocun tum
 -- meselesi tam olarak o alanlari DOLDURMAMAKTI.
 begin;
-select plan(15);
+select plan(16);
 
 -- --- 1-4: dordu de dogru MID ile var ------------------------------------
 select is(
@@ -88,11 +88,29 @@ select is(
   'GB true',
   '8b) kaniti gelen advertiser''da ulke ve ana sayfa dizinden yazildi');
 
+-- FIXTURE DARALDI (07/09/2026): 61655 ARTIK KANITLI.
+--
+-- Kural degismedi -- MID kaniti olmadan yonlendirme sablonu yazilmaz -- ama
+-- 61655 icin kanit GELDI: MID hesap sahibi tarafindan bildirildi, Awin
+-- advertiser dizini CSV'sinde dogrulandi ve In Stock feed'inin 35.952
+-- satirinin HEPSINDE `merchant_id` olarak goruldu. Sablonu o yuzden yazildi
+-- (20260907420000) ve YOKLUGU uc yeri birden kiriyordu: yonlendirme 404,
+-- alim hatti awin1.com adreslerini eliyor, yayin kapisi kapali.
+--
+-- Kaniti HÂLÂ gelmeyen ikisi burada kaliyor; asagidaki ikinci iddia da
+-- kanitlinin gercekten yazildigini sabitliyor. Ikisi birlikte olmadan,
+-- "hepsini bos birak" ya da "hepsini doldur" gibi bozuk bir goc gecerdi.
 select is(
   (select count(*)::int from public.merchants
-    where network_advertiser_id in ('25962','61655','17453')
+    where network_advertiser_id in ('25962','17453')
       and deeplink_template is not null),
-  0, '9a) kaniti gelmeyen ucte yonlendirme sablonu hala bos');
+  0, '9a) kaniti gelmeyen ikide yonlendirme sablonu hala bos');
+
+select ok(
+  (select deeplink_template from public.merchants
+    where network_advertiser_id = '61655')
+    like 'https://www.awin1.com/cread.php?awinmid=61655&%',
+  '9a2) kaniti gelen advertiser''da sablon KENDI MID''iyle yazildi');
 
 /*
  * 9b) SART DOGRULAMASI ISE DORDU ICIN DE BOS OLMAK ZORUNDA.
