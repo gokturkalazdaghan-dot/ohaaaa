@@ -46,11 +46,15 @@ select throws_ok(
 -- --- 6-7: KAYNAK VE URUN URETILMEDI ---------------------------------------
 -- Feed''den urun gecmiyorsa kaynak acmak, her turda 5.594 satir reddedip
 -- hata sayacini doldurmak demektir.
+-- FIXTURE DEGISTI: 61655'in feed'i dogrulandi ve kaynagi acildi. Kural ayni
+-- kaldi -- DOGRULANMAMIS feed'e kaynak yok -- ve hâlâ dogrulanmamis olan
+-- advertiser'lara tasindi (Alison hattan 0 urun geciriyor, WANAYOU'nun
+-- feed'i hic yok).
 select is(
   (select count(*)::int from public.sources s
      join public.merchants m on m.id = s.merchant_id
-    where m.network_advertiser_id in ('120101','66494','61655','127939')),
-  0, '6) dogrulanmamis feed icin kaynak acilmadi');
+    where m.network_advertiser_id in ('127939')),
+  0, '6) feed''i olmayan advertiser icin kaynak acilmadi');
 
 -- FIXTURE DEGISTI (07/09/2026): uc feed artik GERCEKTEN indirilebiliyor
 -- (http=200, application/gzip; 5 / 5.594 / 116.417 satir). Iddianin anlami

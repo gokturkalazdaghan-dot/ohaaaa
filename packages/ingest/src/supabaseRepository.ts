@@ -8,6 +8,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describeSignatureError } from '@ohaaaa/shared/product-sync';
+import { allowedHostsForMerchant } from '@ohaaaa/shared/affiliate';
 
 import type { IngestRepository } from './pipeline.js';
 import { canonicalSignature } from './pipeline.js';
@@ -435,13 +436,37 @@ export async function loadSources(
       | Record<string, unknown>
       | null;
 
+    /*
+     * IZINLI ALAN ADLARI: ANA SAYFA *VE* DEEPLINK SABLONUNUN ALAN ADI.
+     *
+     * Eskiden yalnizca ana sayfa alan adi izinliydi. Bu, ORTAKLIK AGI
+     * UZERINDEN GELEN HER FEED'I TAMAMEN REDDEDIYORDU: Awin'in
+     * `aw_deep_link` sutunu magazanin kendi adresini degil, agin tiklama
+     * adresini tasir --
+     *
+     *   https://www.awin1.com/pclick.php?p=...&a=3074081&m=61655
+     *
+     * ...ve `www.awin1.com` magazanin ana sayfasi degil. Olculdu: Back to
+     * the Office'in 35.952 satirlik feed'inde satirlarin TAMAMI bu yuzden
+     * "urun adresi gecersiz veya magazaya ait degil" diye elendi. Yani
+     * ortaklik gelirinin tek kaynagi olan link, alim hattinin kendisi
+     * tarafindan atiliyordu.
+     *
+     * KORUMA ZAYIFLATILMIYOR, AYNI KURAL PAYLASILIYOR. Yonlendirme katmani
+     * (`/git/[offerId]`) bu karari zaten `allowedHostsForMerchant` ile
+     * veriyor ve eklenen alan adi feed'den DEGIL, bizim dogruladigimiz
+     * `merchants.deeplink_template` sutunundan geliyor. Feed hâlâ rastgele
+     * bir alan adi enjekte edemez. Iki katmanin ayni islevi kullanmasi,
+     * "alimda gecerli ama yonlendirmede gecersiz" gibi sessiz bir ayrisma
+     * ihtimalini de ortadan kaldiriyor.
+     */
     const homepage = merchant?.homepage_url ? String(merchant.homepage_url) : '';
-    let host = '';
-    try {
-      host = new URL(homepage).hostname;
-    } catch {
-      host = '';
-    }
+    const izinliHostlar = allowedHostsForMerchant({
+      homepageUrl: homepage,
+      deeplinkTemplate: merchant?.deeplink_template
+        ? String(merchant.deeplink_template)
+        : null,
+    });
 
     return {
       id: String(row.id),
@@ -462,7 +487,7 @@ export async function loadSources(
        */
       marketCode: row.market_code ? String(row.market_code) : '',
       countryCode: row.country_code ? String(row.country_code) : null,
-      allowedHosts: host ? [host] : [],
+      allowedHosts: izinliHostlar,
       authType: isAuthType(row.auth_type) ? row.auth_type : 'query',
       authSecretRef: row.auth_secret_ref ? String(row.auth_secret_ref) : null,
     };

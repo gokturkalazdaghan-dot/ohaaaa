@@ -85,16 +85,24 @@ select throws_ok(
   '23505', null,
   '7) ayni feed kimligi iki programa baglanamiyor');
 
--- --- 8: ERISIM DOGRULANMADAN KAYNAK ACILMADI ------------------------------
--- Kaynak yok => alim turu yok => urun ve fiyat noktasi yok. Kural bir sozle
--- degil, YAPIYLA saglaniyor.
+-- --- 8: KAYNAK YALNIZCA DOGRULANMIS FEED ICIN ACILABILIR ------------------
+-- ESKI IDDIA "hic kaynak yok" diyordu. Artik BTO'nun In Stock feed'i (111663)
+-- GERCEKTEN dogrulandi (http=200, 35.952/35.952 satir hattan gecti) ve onun
+-- kaynagi acildi -- yani "hic kaynak yok" artik dogru DEGIL.
+--
+-- Korunmasi gereken kural bu degildi zaten: kural, DOGRULANMAMIS bir feed'e
+-- kaynak acilmamasiydi. Iddia o kurali dogrudan sinamaya cevrildi ve boylece
+-- ONCEKINDEN GUCLU: eskisi yalnizca uc MID'e bakiyordu, bu butun kaynaklari
+-- tariyor.
 select is(
   (select count(*)::int
      from public.sources s
      join public.merchants m on m.id = s.merchant_id
-    where m.network_advertiser_id in ('66494','120101','61655')),
+     join public.programs  p on p.network = m.network
+                            and p.network_program_id = m.network_advertiser_id
+    where p.feed_access is distinct from 'verified'),
   0,
-  '8) erisim dogrulanmadan kaynak acilmadi');
+  '8) dogrulanmamis feed icin kaynak acilmadi');
 
 -- --- 9: GERCEK FEED VERISI OLMADAN URUN URETILMEDI ------------------------
 select is(

@@ -120,14 +120,16 @@ select throws_ok(
   '23514', null,
   '13) adressiz feed ''verified'' isaretlenemiyor');
 
--- --- 14: FEED'LER CEKILEBILIR AMA HICBIR KAYNAK ACILMADI ------------------
--- 152.372 urunluk gercek katalog hazir; alinmasi AYRI ve acik bir karar.
+-- --- 14: KAYNAK ACMAK YAYINA ALMAK DEGILDIR -------------------------------
+-- BTO'nun kaynagi acildi (fid 111663 dogrulandi). Ama magaza YAYINDA DEGIL:
+-- `loadSources` yalnizca `merchants.status='active'` kaynaklari alim hattina
+-- sokar ve BTO'nun komisyon orani Awin dizininde yayinlanmamis oldugu icin
+-- `terms_verified_at` NULL. Yani yapilandirma hazir, alim KAPALI -- ve bunu
+-- tutan sey bir yorum degil, `merchants_active_needs_verified_terms` kisiti.
 select is(
-  (select count(*)::int from public.sources s
-     join public.merchants m on m.id = s.merchant_id
-    where m.network_advertiser_id in ('66494','120101','61655','127939')),
-  0,
-  '14) feed cekilebilir olsa da kaynak acilmadi');
+  (select status::text from public.merchants where slug = 'back-to-the-office'),
+  'prospect',
+  '14) kaynak acildi ama magaza yayina ALINMADI (komisyon dogrulanmadi)');
 
 select * from finish();
 rollback;

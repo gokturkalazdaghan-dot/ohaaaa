@@ -248,3 +248,45 @@ test('para birimi büyük harfe normalize edilir ve boşluk kırpılır', () => 
 
   assert.equal(offers[0]?.currency, 'GBP');
 });
+
+/*
+ * ORTAKLIK AGI TIKLAMA ADRESI, MAGAZANIN ANA SAYFASI DEGILDIR.
+ *
+ * Awin feed'lerinde `aw_deep_link` magazanin kendi adresini degil, agin
+ * tiklama adresini tasir:
+ *
+ *   https://www.awin1.com/pclick.php?p=...&a=3074081&m=61655
+ *
+ * Izinli alan adi listesi YALNIZCA magazanin ana sayfasindan turetildiginde
+ * bu adresler "magazaya ait degil" diye elenirdi. OLCULDU: Back to the
+ * Office'in 35.952 satirlik gercek feed'inde satirlarin TAMAMI bu yuzden
+ * dusuyordu -- yani ortaklik gelirini ureten tek link, alim hatti
+ * tarafindan atiliyordu.
+ *
+ * Bu iki iddia, duzeltmeyi ve ONUN SINIRINI birlikte sabitliyor: ag adresi
+ * izinli listeye KONDUGUNDA gecer, KONMADIGINDA hâlâ elenir. Ikincisi
+ * olmadan test, "her adresi kabul et" gibi bozuk bir uygulamayla da gecerdi.
+ */
+test('ag tiklama adresi izinli listeye konunca hattan geciyor', () => {
+  const awinLink = 'https://www.awin1.com/pclick.php?p=43121595711&a=3074081&m=61655';
+
+  const { offers, errors } = normalizeRecords([record({ link: awinLink })], MAPPING, {
+    defaultCurrency: 'GBP',
+    allowedHosts: ['www.backtotheoffice.co.uk', 'www.awin1.com'],
+  });
+
+  assert.equal(errors.length, 0, `beklenmeyen eleme: ${errors[0]?.reason ?? ''}`);
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0]!.productUrl, awinLink, 'tiklama adresi degistirilmemeli');
+});
+
+test('ag adresi izinli DEGILSE hâlâ eleniyor -- koruma kaldirilmadi', () => {
+  const { offers, errors } = normalizeRecords(
+    [record({ link: 'https://www.awin1.com/pclick.php?p=1&a=3074081&m=61655' })],
+    MAPPING,
+    { defaultCurrency: 'GBP', allowedHosts: ['www.backtotheoffice.co.uk'] },
+  );
+
+  assert.equal(offers.length, 0, 'izinsiz alan adi kabul edilmemeli');
+  assert.match(errors[0]!.reason, /mağazaya ait değil/);
+});
