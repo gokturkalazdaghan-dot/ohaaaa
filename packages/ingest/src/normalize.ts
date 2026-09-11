@@ -128,13 +128,33 @@ function normalizeOne(
     ? parseMoneyToCents(read(record, mapping.shipping_fee) ?? '') ?? 0
     : 0;
 
+  // --- SKU / MPN / durum ---------------------------------------------------
+  const sku = (mapping.sku ? read(record, mapping.sku) : null)?.trim() || null;
+  const mpn = (mapping.mpn ? read(record, mapping.mpn) : null)?.trim() || null;
+  const condition = normalizeCondition(mapping.condition ? read(record, mapping.condition) : null);
+
   return {
     externalId,
     title: title.slice(0, 300),
     productUrl,
     priceCents,
     compareAtPriceCents,
-    currency: (mapping.currency ? read(record, mapping.currency) : null)?.trim().toUpperCase()
+    /*
+     * PARA BIRIMI: BOS SUTUN "BOS PARA BIRIMI" DEGILDIR.
+     *
+     * Eskiden `?.trim().toUpperCase() ?? defaultCurrency` yaziyordu. `??`
+     * yalnizca null/undefined'i yakalar; sutun VARSA ama BOSSA sonuc `''`
+     * oluyordu ve teklif bos para birimiyle yaziliyordu. `products.currency`
+     * char(3) ve `currencies` tablosuna yabanci anahtarla bagli: butun yigin
+     * yazma aninda duserdi -- ya da daha kotusu, "" bir sekilde gecseydi
+     * fiyat para birimsiz kalirdi.
+     *
+     * Ayrica UC HARF olmayan her deger reddediliyor: bazi beslemeler bu
+     * sutuna "GB", "Pound" ya da sembol koyuyor. Taninmayan degerde kaynagin
+     * yapilandirilmis para birimine dusuluyor -- cikarim degil, operatorun
+     * verdigi deger.
+     */
+    currency: gecerliParaBirimi(mapping.currency ? read(record, mapping.currency) : null)
       ?? options.defaultCurrency,
     stock,
     gtin,
@@ -145,7 +165,35 @@ function normalizeOne(
     imageUrls,
     categorySlug: (mapping.category ? read(record, mapping.category) : null)?.trim() || null,
     shippingFeeCents: Math.max(0, shippingFeeCents),
+    sku: sku ? sku.slice(0, 120) : null,
+    mpn: mpn ? mpn.slice(0, 120) : null,
+    condition,
   };
+}
+
+/**
+ * Ürün durumunu ŞEMANIN TANIDIĞI üç değere indirger.
+ *
+ * Beslemeler bunu serbest metin gönderir: "New", "brand new", "Refurbished",
+ * "pre-owned", "A-stock"... Tanınmayan bir değeri olduğu gibi taşımak, yazma
+ * anında enum ihlaliyle BÜTÜN yığını düşürürdü -- tek bir satır yüzünden
+ * 35 000 ürün kaybedilirdi.
+ *
+ * TANINMAYAN DEĞER null DÖNER, 'new' DEĞİL. Bilmediğimizi "sıfır ürün" diye
+ * yazmak bir çıkarım olurdu; null, sütunun şema varsayılanına (new) bırakır
+ * ve bu kararı şema verir, biz değil.
+ */
+export function normalizeCondition(
+  raw: string | null | undefined,
+): 'new' | 'refurbished' | 'used' | null {
+  const v = raw?.trim().toLowerCase();
+  if (!v) return null;
+
+  if (/(^|\b)(new|neu|nuevo|nuovo|sifir|sıfır)(\b|$)/.test(v)) return 'new';
+  if (/refurb|yenilen|reacondicion|ricondizion/.test(v)) return 'refurbished';
+  if (/used|second[\s-]?hand|pre[\s-]?owned|gebraucht|ikinci\s?el/.test(v)) return 'used';
+
+  return null;
 }
 
 /**
@@ -160,6 +208,12 @@ function normalizeOne(
  * ürünleri yayınlar. Alan VARSA ve anlaşılmıyorsa 0 döner — belirsizlikte
  * ürünü göstermemek, olmayan ürünü satıyormuş gibi görünmekten iyidir.
  */
+/** Uc harfli ISO-4217 koduna indirger; degilse null (cagiran varsayilana duser). */
+function gecerliParaBirimi(raw: string | null | undefined): string | null {
+  const v = raw?.trim().toUpperCase();
+  return v && /^[A-Z]{3}$/.test(v) ? v : null;
+}
+
 export function parseStock(value: string | null | undefined): number {
   if (value === null || value === undefined) return 100;
 

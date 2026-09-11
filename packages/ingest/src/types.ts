@@ -40,6 +40,19 @@ export interface FieldMapping {
   category?: string;
   shipping_fee?: string;
   currency?: string;
+  /**
+   * Magazanin KENDI stok kodu. Daha once `AWIN_FEED_MAPPING` bunu
+   * gonderiyordu ama `FieldMapping` tasimiyordu: deger sessizce dusuyordu.
+   */
+  sku?: string;
+  /**
+   * Uretici parca numarasi. `canonical_product_key(gtin, brand, mpn, title)`
+   * bunu KULLANIYOR -- alinmadiginda ayni urun farkli magazalarda ayri
+   * kanonik kimlik aliyor ve karsilastirma boluniyor.
+   */
+  mpn?: string;
+  /** Urun durumu (new/refurbished/used). Beslemede yoksa bos kalir. */
+  condition?: string;
 }
 
 /**
@@ -60,6 +73,14 @@ export interface NormalizedOffer {
   imageUrls: string[];
   categorySlug: string | null;
   shippingFeeCents: number;
+  sku: string | null;
+  mpn: string | null;
+  /**
+   * Yalnizca semanin tanidigi uc degerden biri ya da null. Beslemeden gelen
+   * taninmayan bir degeri ('brand new', 'A-stock'...) oldugu gibi tasimak,
+   * yazma aninda enum ihlaliyle BUTUN yigini dusururdu.
+   */
+  condition: 'new' | 'refurbished' | 'used' | null;
 }
 
 export interface SourceConfig {

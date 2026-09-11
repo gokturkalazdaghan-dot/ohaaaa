@@ -205,6 +205,26 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
          * değer zaten üretilemezdi. Köprü döneminde o sütun donduruldu.
          */
         market_code: marketCode,
+        /*
+         * SKU / MPN / GTIN: ÜÇÜ DE YAZILIYOR.
+         *
+         * Daha önce hiçbiri yazılmıyordu. `sku` besleme eşlemesinde vardı ama
+         * `FieldMapping` taşımadığı için sessizce düşüyordu; `mpn` ve `gtin`
+         * ise hiç okunmuyordu. En pahalısı MPN'di:
+         * `canonical_product_key(gtin, brand, mpn, title)` onu kullanıyor --
+         * MPN'siz aynı ürün farklı mağazalarda AYRI kanonik kimlik alıyor ve
+         * karşılaştırma bölünüyor. Yani eksik alan yalnızca veri kaybı değil,
+         * ürün eşleştirmesinin kendisini zayıflatıyordu.
+         */
+        sku: row.sku,
+        mpn: row.mpn,
+        gtin: row.gtin,
+        /*
+         * Beslemeden tanınan bir durum gelmediyse alan GÖNDERİLMİYOR --
+         * `undefined` anahtarı yazmadan geçer ve sütun şema varsayılanında
+         * ('new') kalır. Açıkça null yazmak NOT NULL kısıtını ihlal ederdi.
+         */
+        ...(row.condition === null ? {} : { condition: row.condition }),
         // Bir sonraki turda "değişti mi" sorusunu yanıtlayacak olan özet.
         fingerprint: row.fingerprint,
         stock: row.stock,

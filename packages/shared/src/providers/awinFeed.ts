@@ -158,6 +158,19 @@ export const AWIN_FEED_MAPPING = {
   currency: 'currency',
   stock: 'in_stock',
   gtin: 'ean',
+  /*
+   * MPN: Awin'in KENDI urettigi indirme adreslerinde yer aliyor (feed
+   * listesi CSV'si, fid 102827 ve 111663 icin `...,ean,mpn,product_name,...`).
+   * Yani sutun adi tahmin degil, agin kendi ciktisindan.
+   *
+   * `condition` BILEREK ESLENMEDI: Awin indirme ucu, istenen HER sutun adini
+   * -- var olmayan bir adi bile -- basliga oldugu gibi yaziyor (olculdu:
+   * uydurma bir ad da aynen dondu). Bu yuzden sutunun gercekten var oldugu
+   * bu yolla dogrulanamiyor ve dogrulanmamis bir ad eslemeye konmuyor.
+   * `FieldMapping` alani destekliyor; kaynak yapilandirmasindan KOD
+   * DEGISIKLIGI OLMADAN verilebilir.
+   */
+  mpn: 'mpn',
   brand: 'brand_name',
   description: 'description',
   image: 'merchant_image_url',
