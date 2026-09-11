@@ -42,16 +42,35 @@
  */
 
 /** Puanlanan bileşenler. Ağırlıklar SABİT ve toplamı 100. */
+/*
+ * SÜRÜM 2 AĞIRLIKLARI (11 bileşen).
+ *
+ * İki bileşen EKLENDİ: `conversion` ve `voucher`. Ağırlıklar 100'de kalmak
+ * zorunda olduğu için diğerleri orantılı olarak kısıldı.
+ *
+ * BU, ESKİ SKORLARI YENİLERİYLE KARŞILAŞTIRILAMAZ YAPAR. Bilerek: bir
+ * programın "kaç puan" aldığı ancak aynı ağırlık setinde anlamlıdır.
+ * Skorlar yeniden hesaplanmadan eski değerlerle kıyaslanmamalı.
+ *
+ * NEDEN CONVERSION AYRI BİR BİLEŞEN
+ * EPC ile dönüşüm oranı AYNI ŞEY DEĞİLDİR ve biri diğerinin yerine geçemez.
+ * EPC = tıklama başına kazanç; dönüşüm = tıklamanın satışa dönme oranı.
+ * Yüksek EPC düşük dönüşümle de olur (az ama büyük sepet), tersi de
+ * mümkündür (çok ama küçük sepet). Awin dizininde ikisi ayrı sütunlardır ve
+ * burada da ayrı tutuluyorlar.
+ */
 export const SCORE_WEIGHTS = {
-  commission: 25,
-  epc: 20,
-  feed: 15,
-  cookie: 10,
-  marketFit: 10,
-  productCount: 7,
-  aov: 5,
-  capability: 5,
-  freshness: 3,
+  commission: 22,
+  epc: 18,
+  feed: 14,
+  conversion: 10,
+  marketFit: 9,
+  cookie: 8,
+  productCount: 6,
+  voucher: 4,
+  aov: 4,
+  capability: 3,
+  freshness: 2,
 } as const;
 
 export type ScoreComponent = keyof typeof SCORE_WEIGHTS;
@@ -84,6 +103,15 @@ export const SCORE_SCALES = {
   productCountFull: 100_000,
   /** 30 günden eski doğrulama sıfır tazelik. */
   freshnessDays: 30,
+  /**
+   * %10 ve üstü dönüşüm tam puan.
+   *
+   * Tavan ÖLÇÜMDEN geldi: Awin advertiser dizinindeki 66 programın dönüşüm
+   * oranları %0,16 ile %72,7 arasında, ortancası ~%4,4. %10 tavanı üst
+   * çeyreği tam puana taşır; %72'lik uç değerin bütün ölçeği ezmesini de
+   * engeller (birimAralik kırpıyor).
+   */
+  conversionFull: 0.1,
 } as const;
 
 export interface ScoreInput {
@@ -97,6 +125,14 @@ export interface ScoreInput {
   countryCode: string | null;
   deeplinkSupported: boolean | null;
   applicationSupported: boolean | null;
+  /**
+   * Dönüşüm oranı ORAN olarak (0,0212 = %2,12) -- yüzde olarak DEĞİL.
+   * `commissionRate` ile aynı birimde olması, ikisinin yanlışlıkla takas
+   * edilmesini zorlaştırıyor.
+   */
+  conversionRate: number | null;
+  /** Programda kupon/fırsat yayını var mı. Bilinmiyorsa null. */
+  voucherAvailable: boolean | null;
   /** ISO-8601. Tazelik bileşeni için. */
   lastVerifiedAt: string | null;
 }
@@ -192,6 +228,8 @@ export function scoreProgram(input: ScoreInput, options: ScoreOptions): ScoreRes
     aov: null,
     capability: null,
     freshness: null,
+    conversion: null,
+    voucher: null,
   };
 
   const ham: Record<ScoreComponent, number | boolean | string | null> = {
@@ -204,6 +242,8 @@ export function scoreProgram(input: ScoreInput, options: ScoreOptions): ScoreRes
     aov: input.aovCents,
     capability: null,
     freshness: input.lastVerifiedAt,
+    conversion: input.conversionRate,
+    voucher: input.voucherAvailable,
   };
 
   // --- komisyon: 0 GEÇERLİ bir değer, null değil -------------------------
@@ -229,6 +269,30 @@ export function scoreProgram(input: ScoreInput, options: ScoreOptions): ScoreRes
   if (cerez !== null) {
     if (cerez < 0) throw new ScoreError('cookieWindowDays negatif olamaz.', 'cookie');
     normalized.cookie = birimAralik(cerez / SCORE_SCALES.cookieDaysFull);
+  }
+
+  // --- dönüşüm oranı: EPC'DEN AYRI bir sinyal ---------------------------
+  const donusum = sonluOlmali(input.conversionRate, 'conversion', 'conversionRate');
+  if (donusum !== null) {
+    if (donusum < 0) throw new ScoreError('conversionRate negatif olamaz.', 'conversion');
+    /*
+     * ORAN BEKLENİYOR, YÜZDE DEĞİL. 1'den büyük bir değer neredeyse kesin
+     * olarak yüzde olarak verilmiştir (ör. 2.12 yerine 0.0212) ve sessizce
+     * tam puana kırpılırsa program hak etmediği sırayı alır. Sessiz kırpma
+     * yerine AÇIKÇA reddediliyor.
+     */
+    if (donusum > 1) {
+      throw new ScoreError(
+        `conversionRate ORAN olmali (0-1); yuzde verilmis gorunuyor: ${donusum}`,
+        'conversion',
+      );
+    }
+    normalized.conversion = birimAralik(donusum / SCORE_SCALES.conversionFull);
+  }
+
+  // --- kupon/fırsat: boolean -------------------------------------------
+  if (input.voucherAvailable !== null) {
+    normalized.voucher = input.voucherAvailable ? 1 : 0;
   }
 
   // --- feed: boolean, bilinmiyorsa null ---------------------------------

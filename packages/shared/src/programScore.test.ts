@@ -34,6 +34,8 @@ function bos(): ScoreInput {
     countryCode: null,
     deeplinkSupported: null,
     applicationSupported: null,
+    conversionRate: null,
+    voucherAvailable: null,
     lastVerifiedAt: null,
   };
 }
@@ -53,22 +55,24 @@ function gunOnce(n: number): string {
 test('1) tam dolu program: her bileşen hesaba katılır, skor tam olarak kilitli', () => {
   const r = puanla(
     {
-      commissionRate: 0.1, // 0.1/0.2  = 0.5  × 25 = 12.5
-      epcCents: 100, // 100/200  = 0.5  × 20 = 10
-      feedAvailable: true, //            1    × 15 = 15
-      cookieWindowDays: 30, // 30/60   = 0.5  × 10 = 5
-      marketCode: 'US', // hedefte    = 1    × 10 = 10
-      productCount: 9999, // log10 tabanlı  × 7  = 5.599995…
-      aovCents: 10_000, // 10000/20000 = 0.5 × 5 = 2.5
-      deeplinkSupported: true, // 0.6         × 5  = 3
+      commissionRate: 0.1, // 0.1/0.2   = 0.5 × 22 = 11
+      epcCents: 100, // 100/200   = 0.5 × 18 = 9
+      feedAvailable: true, //             1   × 14 = 14
+      conversionRate: 0.05, // 0.05/0.1  = 0.5 × 10 = 5
+      marketCode: 'US', // hedefte     = 1   ×  9 = 9
+      cookieWindowDays: 30, // 30/60     = 0.5 ×  8 = 4
+      productCount: 9999, // log10 tabanlı    ×  6 = 4.799995…
+      voucherAvailable: true, //             1   ×  4 = 4
+      aovCents: 10_000, // 10000/20000 = 0.5 ×  4 = 2
+      deeplinkSupported: true, // 0.6           ×  3 = 1.8
       applicationSupported: false,
-      lastVerifiedAt: gunOnce(15), // 1-15/30 = 0.5 × 3 = 1.5
+      lastVerifiedAt: gunOnce(15), // 1-15/30   = 0.5 ×  2 = 1
     },
     ['US'],
   );
 
   assert.equal(r.applicableWeight, 100, 'her bileşen bilindiğinde payda 100 olmalı');
-  assert.equal(r.score, 65.1);
+  assert.equal(r.score, 65.6);
   assert.ok(
     r.breakdown.every((b) => b.applicable),
     'tam dolu girdide hesap dışı bileşen kalmamalı',
@@ -149,6 +153,8 @@ test('8) minimum değerler: her bileşen bilinen en kötü hâlde → 0', () => 
       feedAvailable: false,
       productCount: 0,
       marketCode: 'TR',
+      conversionRate: 0,
+      voucherAvailable: false,
       deeplinkSupported: false,
       applicationSupported: false,
       lastVerifiedAt: gunOnce(365),
@@ -171,6 +177,8 @@ test('9) maksimum değerler: tavan ve üstü tam puan → 100', () => {
       feedAvailable: true,
       productCount: 5_000_000,
       marketCode: 'US',
+      conversionRate: 1,
+      voucherAvailable: true,
       deeplinkSupported: true,
       applicationSupported: true,
       lastVerifiedAt: SIMDI.toISOString(),
@@ -209,7 +217,16 @@ test('11) NULL ile 0 KESİNLİKLE farklı sonuç üretir', () => {
   assert.equal(sifirKomisyon.applicableWeight, SCORE_WEIGHTS.commission + SCORE_WEIGHTS.epc);
   assert.equal(bilinmeyenKomisyon.applicableWeight, SCORE_WEIGHTS.epc);
 
-  assert.equal(sifirKomisyon.score, 44.44, '0 komisyon puanı AŞAĞI çeker');
+  /*
+   * Beklenen deger AGIRLIKLARDAN TURETILIYOR, elle yazilmiyor: agirlik seti
+   * degistiginde (surum 2'de degisti) bu iddia kendiliginde dogru kalir ama
+   * ANLAMI -- 0 komisyonun puani asagi cekmesi -- korunur.
+   */
+  const beklenen =
+    Math.round(
+      (SCORE_WEIGHTS.epc / (SCORE_WEIGHTS.commission + SCORE_WEIGHTS.epc)) * 100 * 100,
+    ) / 100;
+  assert.equal(sifirKomisyon.score, beklenen, '0 komisyon puanı AŞAĞI çeker');
   assert.equal(bilinmeyenKomisyon.score, 100, 'bilinmeyen komisyon puanı ETKİLEMEZ');
 
   assert.notEqual(
@@ -454,8 +471,20 @@ test('21) puanlama merchant_id ya da başka bir kimliği taşımaz ve girdiyi DE
   const r = scoreProgram(girdi, { now: SIMDI });
 
   assert.deepEqual(girdi, kopya, 'girdi nesnesi değişmemeli');
-  // 25×0.5 + 15×1 = 27.5, payda 40 → 68.75. Donmuş girdi hesabı bozmuyor.
-  assert.equal(r.score, 68.75);
+  /*
+   * Beklenen deger AGIRLIKLARDAN turetiliyor: komisyon yarim puan (0.1/0.2),
+   * feed tam puan. Elle yazilmis bir sayi, agirlik seti degistiginde bu
+   * iddiayi ASIL amaci (donmus girdinin hesabi bozmamasi) disinda bir
+   * sebeple dusururdu.
+   */
+  const beklenen21 =
+    Math.round(
+      ((SCORE_WEIGHTS.commission * 0.5 + SCORE_WEIGHTS.feed) /
+        (SCORE_WEIGHTS.commission + SCORE_WEIGHTS.feed)) *
+        100 *
+        100,
+    ) / 100;
+  assert.equal(r.score, beklenen21, 'donmus girdi hesabi bozmuyor');
 
   for (const yasak of ['merchant_id', 'merchantId', 'id', 'network', 'network_program_id']) {
     assert.ok(!Object.keys(bos()).includes(yasak), `ScoreInput ${yasak} taşımamalı`);
@@ -544,4 +573,56 @@ test('pazar uyumu: hedef dışı 0, hedef içi 1, yalnız ülke bilinirse 0.5', 
   assert.equal(hedefDisi.score, 0);
   assert.equal(yalnizUlke.score, 50, 'ülke biliniyor ama pazar eşlemesi yok: kısmi bilgi');
   assert.equal(hedefYok.score, 100, 'hedef listesi verilmezse pazarın bilinmesi yeter');
+});
+
+/*
+ * DONUSUM ORANI ILE EPC AYNI SEY DEGILDIR.
+ *
+ * EPC = tiklama basina kazanc; donusum = tiklamanin satisa donme orani.
+ * Yuksek EPC dusuk donusumle de olusabilir (az ama buyuk sepet). Ikisini tek
+ * bilesene cokertmek, birini digerinin yerine saymak olurdu. Bu iddia ayri
+ * bilesen olduklarini SABITLIYOR: yalnizca donusum verilince yalnizca
+ * donusum bileseni hesaba katilir.
+ */
+test('donusum orani EPC den AYRI bir bilesen', () => {
+  const r = scoreProgram({ ...bos(), conversionRate: 0.05 }, { now: SIMDI });
+  const katilan = r.breakdown.filter((b) => b.applicable).map((b) => b.component);
+  assert.deepEqual(katilan, ['conversion']);
+  assert.equal(r.applicableWeight, SCORE_WEIGHTS.conversion);
+  // %5 donusum, %10 tavanin yarisi -> yarim puan
+  assert.equal(r.score, 50);
+});
+
+/*
+ * YUZDE/ORAN KARISIKLIGI SESSIZ KIRPILMAZ.
+ *
+ * Awin dizini donusumu YUZDE olarak verir (2.12465 = %2,12). Oldugu gibi
+ * gecirilirse 1'i asar ve `birimAralik` onu tam puana kirpardi: %2'lik bir
+ * program, %72'lik bir programla ayni puani alirdi. Sessiz kirpma yerine
+ * acikca reddediliyor.
+ */
+test('yuzde olarak verilen donusum REDDEDILIYOR', () => {
+  assert.throws(
+    () => scoreProgram({ ...bos(), conversionRate: 2.12465 }, { now: SIMDI }),
+    (e: unknown) => e instanceof Error && /ORAN olmali/.test(e.message),
+  );
+});
+
+/* Kupon/firsat bilesenі: bilinmiyorsa hesaba KATILMAZ, biliniyorsa 0/1. */
+test('kupon bileseni yalnizca bilindiginde sayiliyor', () => {
+  assert.equal(scoreProgram(bos(), { now: SIMDI }).score, null);
+
+  const yok = scoreProgram({ ...bos(), voucherAvailable: false }, { now: SIMDI });
+  assert.equal(yok.applicableWeight, SCORE_WEIGHTS.voucher);
+  assert.equal(yok.score, 0);
+
+  const var_ = scoreProgram({ ...bos(), voucherAvailable: true }, { now: SIMDI });
+  assert.equal(var_.score, 100);
+});
+
+/* Agirlik toplami 100 olmali; iki yeni bilesen eklendikten sonra da. */
+test('agirlik toplami 100', () => {
+  const toplam = Object.values(SCORE_WEIGHTS).reduce((a, b) => a + b, 0);
+  assert.equal(toplam, 100);
+  assert.ok(SCORE_WEIGHTS.conversion > 0 && SCORE_WEIGHTS.voucher > 0);
 });
