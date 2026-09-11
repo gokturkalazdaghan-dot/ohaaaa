@@ -52,9 +52,13 @@ select is(
     where m.network_advertiser_id in ('120101','66494','61655','127939')),
   0, '6) dogrulanmamis feed icin kaynak acilmadi');
 
+-- FIXTURE DEGISTI (07/09/2026): uc feed artik GERCEKTEN indirilebiliyor
+-- (http=200, application/gzip; 5 / 5.594 / 116.417 satir). Iddianin anlami
+-- ayni kaldi -- INDIRILEMEYEN feed 'verified' isaretlenmez -- ve hâlâ
+-- indirilemeyen tek advertiser'a tasindi: WANAYOU'nun feed'i yok.
 select is(
   (select count(*)::int from public.programs
-    where network='awin' and network_program_id in ('120101','66494','61655','127939')
+    where network='awin' and network_program_id = '127939'
       and feed_access='verified'),
   0, '7) indirilemeyen feed ''verified'' isaretlenmedi');
 
