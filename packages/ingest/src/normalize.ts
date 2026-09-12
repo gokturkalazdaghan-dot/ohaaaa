@@ -133,8 +133,22 @@ function normalizeOne(
     productUrl,
     priceCents,
     compareAtPriceCents,
+    /*
+     * BOŞ HÜCRE DE VARSAYILANA DÜŞER -- `??` DEĞİL `||`.
+     *
+     * Burada `??` vardı ve yalnızca null/undefined'ı yakalıyordu. Kolon
+     * VAR ama hücre BOŞ olduğunda (`''`) geri dönüş çalışmıyor, teklif
+     * `currency: ''` ile yazılıyordu. `offers.currency` ise
+     * `char(3) not null`: satır ya reddedilir ya da üç boşluk olarak
+     * girer ve para birimi sessizce kaybolur.
+     *
+     * Bu, ortaklık feed'lerinde YAYGIN bir durum -- çoğu feed para
+     * birimini satır başına tekrarlamaz, feed düzeyinde bildirir ve
+     * hücreyi boş bırakır. Komşu alanlar (brand, description, category)
+     * zaten `|| null` ile boşluğu ele alıyordu; bu satır tek istisnaydı.
+     */
     currency: (mapping.currency ? read(record, mapping.currency) : null)?.trim().toUpperCase()
-      ?? options.defaultCurrency,
+      || options.defaultCurrency,
     stock,
     gtin,
     brand: (mapping.brand ? read(record, mapping.brand) : null)?.trim().slice(0, 120) || null,
@@ -170,9 +184,21 @@ export function parseStock(value: string | null | undefined): number {
     return Math.max(0, Math.min(numeric, 1_000_000));
   }
 
-  const inStock = ['in stock', 'instock', 'available', 'true', 'yes', 'evet', 'var', 'stokta'];
+  /*
+   * ALT ÇİZGİLİ BİÇİMLER GOOGLE SHOPPING ŞEMASINDAN GELİR.
+   *
+   * 'in stock' ve 'instock' zaten vardı ama 'in_stock' YOKTU; Google
+   * Shopping biçimli feed'ler (Awin'in "retail" ürün verisi bu biçimde)
+   * tam olarak alt çizgili yazar. Eksikken hiçbir şey hata vermiyordu:
+   * bilinmeyen değer 0'a düşüyor ve STOKTAKİ HER ÜRÜN stoksuz yazılıyordu.
+   * Gerçek bir feed'de ölçüldü -- 636 üründen 476'sı sessizce kayboluyordu.
+   */
+  const inStock = [
+    'in stock', 'instock', 'in_stock', 'available', 'true', 'yes',
+    'evet', 'var', 'stokta',
+  ];
   const outOfStock = [
-    'out of stock', 'outofstock', 'unavailable', 'false', 'no',
+    'out of stock', 'outofstock', 'out_of_stock', 'unavailable', 'false', 'no',
     'hayir', 'hayır', 'yok', 'tukendi', 'tükendi', 'preorder', 'backorder',
   ];
 

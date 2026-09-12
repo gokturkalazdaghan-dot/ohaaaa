@@ -8,11 +8,23 @@ export * from './normalize.js';
 export * from './supabaseRepository.js';
 export * from './queueRepository.js';
 export * from './sourceSyncHandler.js';
+export * from './merchantIsolation.js';
 export * from './runner.js';
 export * from './refreshSignals.js';
 export { parseCsv } from './adapters/csv.js';
 export { parseXml } from './adapters/xml.js';
 export { parseJson } from './adapters/json.js';
+export { detectCompression, decompressToText } from './adapters/decompress.js';
+export {
+  AWIN_COLUMNS,
+  AWIN_DATAFEED_SECRET_REF,
+  AWIN_FIELD_MAPPING,
+  checkCommercialActivation,
+  verifyAwinMapping,
+  type CommercialGateInput,
+  type CommercialGateResult,
+  type MappingVerification,
+} from './providers/awinDatafeed.js';
 export { createPoliteClient, RobotsDisallowedError, PermanentHttpError } from './http/politeClient.js';
 export { parseRobotsTxt, isAllowed, crawlDelayFor } from './http/robots.js';
 export {

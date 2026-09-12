@@ -40,6 +40,14 @@ export interface FieldMapping {
   category?: string;
   shipping_fee?: string;
   currency?: string;
+  /**
+   * Satırın hangi REKLAMVERENE ait olduğunu taşıyan kolon (Awin: `merchant_id`).
+   *
+   * Ürün alanı DEĞİLDİR ve `NormalizedOffer`a girmez; yalnızca mağaza
+   * izolasyonunu doğrulamak için okunur. Birleşik (multi-feed) bir
+   * indirmenin tek mağazaya yazılmasını engelleyen tek sinyal budur.
+   */
+  merchant_id?: string;
 }
 
 /**
@@ -104,6 +112,24 @@ export interface SourceConfig {
    * Değeri burada tutmak, sırrı veritabanında düz metin saklamak olurdu.
    */
   authSecretRef?: string | null;
+  /**
+   * Ağın FEED kimliği (Awin Product Data'da sayısal, ör. '2281').
+   *
+   * MID DEĞİLDİR -- ayrı bir numaralandırma uzayıdır ve ikisini
+   * karıştırmak sessiz bir eşleştirme hatası olurdu. Burada yalnızca
+   * kayıt ve hata metni için tutulur; eşleştirmeyi
+   * `expectedAdvertiserId` yapar.
+   */
+  feedId?: string | null;
+  /**
+   * Bu kaynağın taşıdığını İDDİA ETTİĞİ reklamverenin ağ kimliği (MID).
+   *
+   * Doluysa `assertMerchantIsolation` her satırı bu kimliğe karşı
+   * doğrular ve tek bir yabancı satırda alımı durdurur. Boşsa denetim
+   * hiç çalışmaz -- mevcut kaynaklar davranış değiştirmeden çalışmaya
+   * devam eder (geriye dönük uyumluluk).
+   */
+  expectedAdvertiserId?: string | null;
 }
 
 export interface IngestSummary {

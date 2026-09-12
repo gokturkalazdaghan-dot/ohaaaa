@@ -17,6 +17,7 @@
  */
 
 import { crawlDelayFor, isAllowed, parseRobotsTxt, type RobotsTxt } from './robots.js';
+import { detectCompression } from '../adapters/decompress.js';
 import { maskUrl } from './redact.js';
 import { IngestError } from '../errors.js';
 import {
@@ -127,6 +128,20 @@ export interface FetchResult {
   status: number;
   body: string;
   contentType: string | null;
+  /**
+   * Gövdenin HAM BAYTLARI -- metne çevrilmeden önceki hâli.
+   *
+   * NEDEN GEREKLİ: sıkıştırılmış feed'ler (`.csv.gz`) bir GZIP DOSYASIDIR,
+   * metin değil. UTF-8'e çevrildiklerinde geçersiz bayt dizileri U+FFFD'ye
+   * düşer ve ham gövde BİR DAHA ELDE EDİLEMEZ -- yani açma işlemi metinden
+   * yapılamaz, bayttan yapılmak zorundadır.
+   *
+   * İSTEĞE BAĞLI ve bu kasıtlı: testlerdeki sahte getiriciler ve
+   * `Fetcher` arayüzünü uygulayan mevcut çağıranlar imzalarını
+   * değiştirmeden çalışmaya devam eder. Bayt yoksa hat `body` metnini
+   * olduğu gibi kullanır.
+   */
+  bytes?: Uint8Array;
 }
 
 export function createPoliteClient(options: PoliteClientOptions) {
@@ -251,9 +266,13 @@ export function createPoliteClient(options: PoliteClientOptions) {
         return false;
       }
 
-      const parsed = parseRobotsTxt(
-        await readBodyLimited(response, ROBOTS_MAX_BYTES, `${origin}/robots.txt`),
+      // robots.txt HER ZAMAN metindir; baytları burada işimize yaramaz.
+      const { text: robotsText } = await readBodyLimited(
+        response,
+        ROBOTS_MAX_BYTES,
+        `${origin}/robots.txt`,
       );
+      const parsed = parseRobotsTxt(robotsText);
       state.robots = parsed;
 
       const delaySeconds = crawlDelayFor(parsed, config.userAgent);
@@ -386,7 +405,7 @@ export function createPoliteClient(options: PoliteClientOptions) {
          * işçiyi düşürürdü ve bunun için saldırı bile gerekmezdi -- yanlış
          * yapılandırılmış tek bir feed yeterdi.
          */
-        const body = await withTimeout(
+        const govde = await withTimeout(
           readBodyLimited(response, config.maxBodyBytes, finalUrl),
           kalan(),
         );
@@ -396,8 +415,9 @@ export function createPoliteClient(options: PoliteClientOptions) {
         return {
           url: finalUrl,
           status: response.status,
-          body,
+          body: govde.text,
           contentType: response.headers.get('content-type'),
+          bytes: govde.bytes,
         };
       } catch (error) {
         /*
@@ -468,7 +488,7 @@ async function readBodyLimited(
   response: Response,
   maxBytes: number,
   url: string,
-): Promise<string> {
+): Promise<{ text: string; bytes: Uint8Array }> {
   const beyan = response.headers.get('content-length');
   if (beyan !== null) {
     const bildirilen = Number(beyan);
@@ -480,7 +500,7 @@ async function readBodyLimited(
   }
 
   const stream = response.body;
-  if (!stream) return '';
+  if (!stream) return { text: '', bytes: new Uint8Array(0) };
 
   const reader = stream.getReader();
   const parcalar: Uint8Array[] = [];
@@ -509,7 +529,23 @@ async function readBodyLimited(
     ofset += parca.byteLength;
   }
 
-  return new TextDecoder('utf-8').decode(birlesik);
+  /*
+   * SIKIŞTIRILMIŞ GÖVDE UTF-8'E ÇEVRİLMEZ.
+   *
+   * Çevirmenin hiçbir faydası yok: gzip baytları geçersiz UTF-8'dir ve
+   * sonuç U+FFFD dolu bir çöp dizgidir. Maliyeti ise gerçek -- 64 MB'lık
+   * bir gövde için ~128 MB'lık (UTF-16) kullanılmayan dizgi. Çağıran
+   * zaten baytı `decompressToText`e veriyor.
+   *
+   * Sıkıştırılmamış gövdede mevcut yol aynen korunur: metin üretilir,
+   * baytlar da ayrıca taşınır.
+   */
+  const sikistirilmis = detectCompression(birlesik) !== 'none';
+
+  return {
+    text: sikistirilmis ? '' : new TextDecoder('utf-8').decode(birlesik),
+    bytes: birlesik,
+  };
 }
 
 /** Üstel geri çekilme + jitter. Jitter, eşzamanlı denemelerin çakışmasını önler. */

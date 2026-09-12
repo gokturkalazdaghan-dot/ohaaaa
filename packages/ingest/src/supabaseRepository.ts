@@ -407,6 +407,7 @@ export async function loadSources(
     .select(
       `id, slug, merchant_id, kind, endpoint_url, field_mapping, currency,
        market_code, country_code, auth_type, auth_secret_ref,
+       feed_id, expected_advertiser_id,
        merchant:merchants!inner ( id, status, homepage_url, deeplink_template )`,
     )
     .eq('is_enabled', true)
@@ -454,6 +455,14 @@ export async function loadSources(
       allowedHosts: host ? [host] : [],
       authType: isAuthType(row.auth_type) ? row.auth_type : 'query',
       authSecretRef: row.auth_secret_ref ? String(row.auth_secret_ref) : null,
+      feedId: row.feed_id ? String(row.feed_id) : null,
+      /*
+       * Boşsa mağaza izolasyonu denetimi HİÇ çalışmaz -- mevcut kaynaklar
+       * davranış değiştirmez. Doluysa her satır bu kimliğe karşı doğrulanır.
+       */
+      expectedAdvertiserId: row.expected_advertiser_id
+        ? String(row.expected_advertiser_id)
+        : null,
     };
   });
 }
