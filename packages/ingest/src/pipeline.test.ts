@@ -1003,3 +1003,74 @@ test('tanımsız gizli değişken turu açık bir hatayla düşürür', async ()
   // Değişken ADI söylenir (güvenli); operatör neyi tanımlayacağını bilir.
   assert.ok(summary.error?.includes('OHAAAA_TANIMSIZ_JETON'), summary.error);
 });
+
+// ---------------------------------------------------------------------------
+// AYNI FEED ICINDE TEKRARLAYAN GTIN
+// ---------------------------------------------------------------------------
+// Uretimde iki ayri calismada birebir ayni sekilde olculdu: alim 35.767
+// urunun tamamini temiz ayristirdiktan sonra
+//   duplicate key value violates unique constraint "product_groups_gtin_key"
+// ile dustu ve 1000 yetim grup birakti. Sebep, tekillestirmenin yalnizca
+// IMZA ile yapilmasiydi: ayni GTIN'i tasiyan ama basligi farkli iki teklif
+// iki ayri aday uretiyor, `product_groups.gtin` tekil oldugu icin insert
+// patliyordu.
+
+/** Ayni barkod, FARKLI baslik -- yani farkli imza. */
+const CSV_TEKRARLAYAN_GTIN = [
+  'id,title,price,link,gtin,brand',
+  'SKU-1,Sony WH-1000XM5 Kulaklık,11899.00,https://magaza.example/p/1,4548736134546,Sony',
+  'SKU-2,Sony WH1000XM5 Siyah Kulaklık,12099.00,https://magaza.example/p/2,4548736134546,Sony',
+].join('\n');
+
+test('ayni GTIN iki kez gelirse TEK kanonik urun acilir', async () => {
+  const { repository, calls } = fakeRepository();
+
+  await runSource(SOURCE, {
+    fetcher: fakeFetcher(CSV_TEKRARLAYAN_GTIN),
+    repository,
+  });
+
+  // Bu iddia kisitin kendisidir: iki aday gonderilseydi uretimde
+  // product_groups_gtin_key ihlali olurdu.
+  assert.equal(
+    calls.createdGroups.length,
+    1,
+    'ayni GTIN icin iki aday gonderilmemeli',
+  );
+});
+
+test('tekrarlayan GTIN kardesleri AYNI gruba baglanir -- groupId null kalmaz', async () => {
+  const { repository, calls } = fakeRepository();
+
+  await runSource(SOURCE, {
+    fetcher: fakeFetcher(CSV_TEKRARLAYAN_GTIN),
+    repository,
+  });
+
+  const birinci = calls.upserted.find((o) => o.externalId === 'SKU-1');
+  const ikinci = calls.upserted.find((o) => o.externalId === 'SKU-2');
+
+  // Bu test sart: tekillestirmeyi GTIN'e cevirip yeni grubu GTIN haritasina
+  // YAZMAYAN bir uygulama kisit hatasindan kurtulur ama ikinci teklifi hicbir
+  // kanonik urune baglamaz -- hata sessiz veri kaybina donusur.
+  assert.ok(birinci?.groupId, 'ilk teklif gruba baglanmali');
+  assert.ok(ikinci?.groupId, 'ikinci teklif de gruba baglanmali');
+  assert.equal(birinci?.groupId, ikinci?.groupId, 'ikisi AYNI gruba baglanmali');
+});
+
+test('GTIN yoksa tekillestirme imzaya duser', async () => {
+  const { repository, calls } = fakeRepository();
+
+  const csv = [
+    'id,title,price,link,gtin,brand',
+    'SKU-1,Jenerik Kulaklık,199.00,https://magaza.example/p/1,,Marka',
+    'SKU-2,Jenerik Kulaklık,209.00,https://magaza.example/p/2,,Marka',
+    'SKU-3,Baska Kulaklık,309.00,https://magaza.example/p/3,,Marka',
+  ].join('\n');
+
+  await runSource(SOURCE, { fetcher: fakeFetcher(csv), repository });
+
+  // Barkodsuz kalemler icin davranis DEGISMEMELI: ayni imza tek grup,
+  // farkli imza ayri grup.
+  assert.equal(calls.createdGroups.length, 2);
+});

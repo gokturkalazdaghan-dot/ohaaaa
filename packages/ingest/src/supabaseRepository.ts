@@ -18,6 +18,85 @@ import { redact } from './http/redact.js';
 /** Tek sorguda gönderilecek en fazla satır. Daha büyüğü istek sınırını aşar. */
 const UPSERT_BATCH_SIZE = 500;
 
+/**
+ * GEÇİCİ SUPABASE HATALARINDA YENİDEN DENEME -- YALNIZCA OKUMALARDA.
+ *
+ * Ölçüldü (üretim, 35.767 ürünlük BTO feed'i): eşleştirme aşaması tek bir
+ * sorgu değil, YÜZLERCE ardışık sorgudur. `.in(...)` değerleri GET adresine
+ * girdiği için liste adres bütçesine göre parçalanır ve her parça ayrı bir
+ * HTTP isteği olur:
+ *
+ *   findGroupsByGtin      25.738 GTIN   -> ~194 istek
+ *   findGroupsBySignature ~35.000 imza  -> ~560 istek
+ *
+ * Yani ~750 istek. Bunlardan BİRİNİN geçici hata alması tüm alımı düşürüyordu:
+ *
+ *   hata: Kanonik ürün sorgusu başarısız: Gateway Timeout
+ *
+ * O çalışmada indirme ve ayrıştırma kusursuzdu (35.767 görüldü, 0 hatalı);
+ * kıran şey tek bir 504'tü. 750 isteğin hepsinin ilk denemede başarılı olmasını
+ * beklemek, alımı "bazen çalışan" bir işe çevirir.
+ *
+ * ADRES BÜTÇESİNİ BÜYÜTMEK ÇÖZÜM DEĞİL: istek sayısını azaltmak cazip görünüyor
+ * ama ölçüm bunu çürütüyor -- daha önceki bir çalışma 200 x 32 ~= 6,4 KB'lık bir
+ * `.in()` listesinde "fetch failed" ile düşmüştü. Pratik sınır 6 KB'ın altında;
+ * bütçeyi yükseltmek o taşmayı geri getirirdi. Doğru katman yeniden deneme.
+ *
+ * NEDEN SADECE OKUMA: 504 "işlem olmadı" demek DEĞİLDİR -- yanıt kaybolmuş ama
+ * yazma sunucuda gerçekleşmiş olabilir. Bir insert'i yeniden denemek mükerrer
+ * satır üretir; bu depoda tam olarak o yol 1000 yetim `product_groups` satırı
+ * yazmıştı. Okumalar tanımı gereği idempotenttir, yeniden denemesi güvenlidir.
+ * Yazmalar bilinçli olarak KAPSAM DIŞI.
+ */
+const GECICI_HATA_KALIPLARI = [
+  'gateway timeout',
+  'bad gateway',
+  'service unavailable',
+  'fetch failed',
+  'socket hang up',
+  'econnreset',
+  'etimedout',
+  'upstream connect error',
+];
+
+/** Hata mesajı geçici bir altyapı arızasına mı işaret ediyor? */
+export function geciciOkumaHatasiMi(mesaj: string): boolean {
+  const kucuk = mesaj.toLowerCase();
+  return GECICI_HATA_KALIPLARI.some((kalip) => kucuk.includes(kalip));
+}
+
+/** Üstel geri çekilme: 250ms, 500ms, 1s. */
+function geriCekilmeMs(deneme: number): number {
+  return 250 * 2 ** (deneme - 1);
+}
+
+const uyu = (ms: number): Promise<void> =>
+  new Promise((coz) => {
+    setTimeout(coz, ms);
+  });
+
+/**
+ * Okuma sorgusunu geçici hatalarda yeniden dener.
+ *
+ * Kalıcı hatalar (eksik sütun, yetki, sözdizimi) ANINDA döner -- onları
+ * yeniden denemek yalnızca arızayı geciktirir ve hatayı gizler.
+ */
+export async function okumayiYenidenDene<S extends { error: { message: string } | null }>(
+  islem: () => PromiseLike<S>,
+  toplamDeneme = 4,
+  bekle: (ms: number) => Promise<void> = uyu,
+): Promise<S> {
+  let sonuc = await islem();
+
+  for (let deneme = 1; deneme < toplamDeneme; deneme += 1) {
+    if (!sonuc.error || !geciciOkumaHatasiMi(sonuc.error.message)) return sonuc;
+    await bekle(geriCekilmeMs(deneme));
+    sonuc = await islem();
+  }
+
+  return sonuc;
+}
+
 export function createSupabaseRepository(supabase: SupabaseClient): IngestRepository {
   return {
     /**
@@ -37,11 +116,13 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
       if (slugs.length === 0) return result;
 
       for (const batch of chunkByUrlBudget(slugs)) {
-        const { data, error } = await supabase
-          .from('categories')
-          .select('id, slug')
-          .eq('is_active', true)
-          .in('slug', batch);
+        const { data, error } = await okumayiYenidenDene(() =>
+          supabase
+            .from('categories')
+            .select('id, slug')
+            .eq('is_active', true)
+            .in('slug', batch),
+        );
 
         if (error) throw new Error(`Kategoriler okunamadi: ${error.message}`);
 
@@ -80,10 +161,12 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
          * Göç ayrışması kapandığında (`gtin_normalized` depoya girdiğinde)
          * buranın o sütuna geçmesi doğru olur.
          */
-        const { data, error } = await supabase
-          .from('product_groups')
-          .select('id, gtin')
-          .in('gtin', batch);
+        const { data, error } = await okumayiYenidenDene(() =>
+          supabase
+            .from('product_groups')
+            .select('id, gtin')
+            .in('gtin', batch),
+        );
 
         if (error) throw new Error(`Kanonik ürün sorgusu başarısız: ${error.message}`);
 
@@ -113,10 +196,12 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
        * yeniden hesaplanır; bayat değer kalmaz.
        */
       for (const batch of chunkByUrlBudget(signatures)) {
-        const { data, error } = await supabase
-          .from('product_groups')
-          .select('id, match_signature')
-          .in('match_signature', batch);
+        const { data, error } = await okumayiYenidenDene(() =>
+          supabase
+            .from('product_groups')
+            .select('id, match_signature')
+            .in('match_signature', batch),
+        );
 
         if (error)
           throw new Error(`Kanonik ürün adayları alınamadı: ${describeSignatureError(error.message)}`);
@@ -173,11 +258,13 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
       const existing = new Set<string>();
 
       for (const batch of chunkByUrlBudget(rows.map((r) => r.externalId))) {
-        const { data, error } = await supabase
-          .from('products')
-          .select('external_id')
-          .eq('merchant_id', merchantId)
-          .in('external_id', batch);
+        const { data, error } = await okumayiYenidenDene(() =>
+          supabase
+            .from('products')
+            .select('external_id')
+            .eq('merchant_id', merchantId)
+            .in('external_id', batch),
+        );
 
         if (error) throw new Error(`Mevcut teklifler okunamadı: ${error.message}`);
         for (const row of data ?? []) existing.add(String(row.external_id));
@@ -260,12 +347,14 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
        * değişmemiş ürünleri NEW gibi gösterirdi.
        */
       for (let offset = 0; ; offset += SAYFA) {
-        const { data, error } = await supabase
-          .from('products')
-          .select('external_id, fingerprint')
-          .eq('source_id', sourceId)
-          .not('fingerprint', 'is', null)
-          .range(offset, offset + SAYFA - 1);
+        const { data, error } = await okumayiYenidenDene(() =>
+          supabase
+            .from('products')
+            .select('external_id, fingerprint')
+            .eq('source_id', sourceId)
+            .not('fingerprint', 'is', null)
+            .range(offset, offset + SAYFA - 1),
+        );
 
         if (error) throw new Error(`Parmak izleri okunamadı: ${error.message}`);
         if (!data || data.length === 0) break;
