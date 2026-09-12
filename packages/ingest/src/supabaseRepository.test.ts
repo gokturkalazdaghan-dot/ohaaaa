@@ -15,6 +15,7 @@ import {
   chunkByUrlBudget,
   geciciOkumaHatasiMi,
   okumayiYenidenDene,
+  idempotentYazmayiYenidenDene,
 } from './supabaseRepository.js';
 
 test('butce asilmadan once parcalamaz', () => {
@@ -160,4 +161,52 @@ test('ilk deneme basarili olursa hic beklenmez', async () => {
 
   assert.equal(cagri, 1);
   assert.equal(beklendi, false);
+});
+
+// ---------------------------------------------------------------------------
+// IDEMPOTENT YAZMA -- ama YALNIZCA idempotent olanlar
+// ---------------------------------------------------------------------------
+// Uretimde olculdu: alim 34.721 grubu actiktan sonra teklif yazma
+// asamasinda dustu -- "Teklifler yazilamadi: Gateway Timeout" -- ve
+// 35.759 kalemin yalnizca 5.001'i yazilabildi. Yazmalari bastan kapsam
+// disi birakmak `createGroups` (cakisma hedefi olmayan insert) icin
+// dogruydu, upsert icin fazla temkinliydi.
+
+test('idempotent yazma gecici hatada yeniden denenir', async () => {
+  let cagri = 0;
+
+  const sonuc = await idempotentYazmayiYenidenDene(
+    () => {
+      cagri += 1;
+      return Promise.resolve(
+        cagri < 2
+          ? { error: { message: 'Gateway Timeout' } }
+          : { error: null },
+      );
+    },
+    4,
+    () => Promise.resolve(),
+  );
+
+  assert.equal(cagri, 2);
+  assert.equal(sonuc.error, null);
+});
+
+test('idempotent yazma KALICI hatayi yeniden DENEMEZ', async () => {
+  let cagri = 0;
+
+  await idempotentYazmayiYenidenDene(
+    () => {
+      cagri += 1;
+      return Promise.resolve({
+        error: { message: 'duplicate key value violates unique constraint' },
+      });
+    },
+    4,
+    () => Promise.resolve(),
+  );
+
+  // Bu test sart ve konusu tam olarak kisit ihlali: mukerrer anahtar
+  // hatasini yeniden denemek ayni hatayi dort kez alip arizayi gizlemekti.
+  assert.equal(cagri, 1);
 });

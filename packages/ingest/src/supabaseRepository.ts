@@ -81,7 +81,7 @@ const uyu = (ms: number): Promise<void> =>
  * Kalıcı hatalar (eksik sütun, yetki, sözdizimi) ANINDA döner -- onları
  * yeniden denemek yalnızca arızayı geciktirir ve hatayı gizler.
  */
-export async function okumayiYenidenDene<S extends { error: { message: string } | null }>(
+async function geciciyeDayanikliCagri<S extends { error: { message: string } | null }>(
   islem: () => PromiseLike<S>,
   toplamDeneme = 4,
   bekle: (ms: number) => Promise<void> = uyu,
@@ -96,6 +96,43 @@ export async function okumayiYenidenDene<S extends { error: { message: string } 
 
   return sonuc;
 }
+
+/**
+ * OKUMA sorgusunu geçici hatalarda yeniden dener.
+ *
+ * Okumalar tanımı gereği idempotenttir: aynı sorguyu iki kez çalıştırmak
+ * hiçbir şeyi değiştirmez.
+ */
+export const okumayiYenidenDene = geciciyeDayanikliCagri;
+
+/**
+ * IDEMPOTENT YAZMAYI geçici hatalarda yeniden dener.
+ *
+ * NEDEN AYRI BİR AD: 504 "işlem olmadı" demek DEĞİLDİR -- yanıt kaybolmuş
+ * ama yazma sunucuda gerçekleşmiş olabilir. Bu yüzden her yazma yeniden
+ * denenemez; yalnızca TEKRARI ZARARSIZ olanlar denenebilir. Ayrı ad, çağrı
+ * yerinde bu kararın görünür olmasını sağlıyor.
+ *
+ * BU DEPODA HANGİSİ HANGİSİ (ölçüldü):
+ *
+ *   upsertOffers  .upsert({ onConflict: 'merchant_id,external_id' })  GÜVENLİ
+ *   touchSeen     .update(...).eq(...).in(...)                        GÜVENLİ
+ *   markStale     .update(...)                                        GÜVENLİ
+ *   planRefresh   .update(...).eq('id', ...)                          GÜVENLİ
+ *   createGroups  .insert(...)  -- çakışma hedefi YOK                 GÜVENSİZ
+ *
+ * `createGroups` bilinçli olarak SARILMADI. Çakışma hedefi olmayan bir
+ * insert'i yeniden denemek mükerrer satır üretir; bu depoda tam olarak o
+ * yol iki kez 1000 yetim `product_groups` satırı yazdı. Upsert'te aynı risk
+ * YOK: çakışma hedefi satırı tekilleştirir, ikinci deneme ya aynı değerleri
+ * yeniden yazar ya ilk kez yazar.
+ *
+ * Bu ayrımın gerekli olduğu üretimde ölçüldü: alım 34.721 grubu açtıktan
+ * sonra teklif yazma aşamasında düştü --
+ *   "Teklifler yazılamadı: Gateway Timeout"
+ * -- ve 35.759 kalemin yalnızca 5.001'i yazılabildi.
+ */
+export const idempotentYazmayiYenidenDene = geciciyeDayanikliCagri;
 
 export function createSupabaseRepository(supabase: SupabaseClient): IngestRepository {
   return {
@@ -317,9 +354,11 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
       }));
 
       for (const batch of chunk(payload, UPSERT_BATCH_SIZE)) {
-        const { error } = await supabase
-          .from('products')
-          .upsert(batch, { onConflict: 'merchant_id,external_id' });
+        const { error } = await idempotentYazmayiYenidenDene(() =>
+          supabase
+            .from('products')
+            .upsert(batch, { onConflict: 'merchant_id,external_id' }),
+        );
 
         if (error) throw new Error(`Teklifler yazılamadı: ${error.message}`);
       }
@@ -385,16 +424,18 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
       const damga = checkedAt.toISOString();
 
       for (const batch of chunkByUrlBudget(externalIds)) {
-        const { error } = await supabase
-          .from('products')
-          .update({
-            last_seen_at: damga,
-            price_checked_at: damga,
-            stock_checked_at: damga,
-            offer_checked_at: damga,
-          })
-          .eq('source_id', sourceId)
-          .in('external_id', batch);
+        const { error } = await idempotentYazmayiYenidenDene(() =>
+          supabase
+            .from('products')
+            .update({
+              last_seen_at: damga,
+              price_checked_at: damga,
+              stock_checked_at: damga,
+              offer_checked_at: damga,
+            })
+            .eq('source_id', sourceId)
+            .in('external_id', batch),
+        );
 
         if (error) throw new Error(`Görülme damgası yazılamadı: ${error.message}`);
       }
@@ -405,30 +446,34 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
        * Silme geri alınamaz; stoksuz işaretleme bir sonraki başarılı alımda
        * kendiliğinden düzelir.
        */
-      const { data, error } = await supabase
-        .from('products')
-        .update({ status: 'out_of_stock', stock: 0 })
-        .eq('source_id', sourceId)
-        .lt('last_seen_at', runStartedAt.toISOString())
-        .eq('status', 'active')
-        .select('id');
+      const { data, error } = await idempotentYazmayiYenidenDene(() =>
+        supabase
+          .from('products')
+          .update({ status: 'out_of_stock', stock: 0 })
+          .eq('source_id', sourceId)
+          .lt('last_seen_at', runStartedAt.toISOString())
+          .eq('status', 'active')
+          .select('id'),
+      );
 
       if (error) throw new Error(`Bayat teklifler işaretlenemedi: ${error.message}`);
       return data?.length ?? 0;
     },
 
     async saveRefreshPlan(sourceId, plan) {
-      const { error } = await supabase
-        .from('sources')
-        .update({
-          next_refresh_at: plan.nextRefreshAt.toISOString(),
-          refresh_class: plan.freshnessClass,
-          // Gerekçeler saklanıyor: sebebini taşımayan bir zamanlama
-          // kararı hata ayıklanamaz.
-          refresh_reasons: plan.reasons,
-          refresh_planned_at: new Date().toISOString(),
-        })
-        .eq('id', sourceId);
+      const { error } = await idempotentYazmayiYenidenDene(() =>
+        supabase
+          .from('sources')
+          .update({
+            next_refresh_at: plan.nextRefreshAt.toISOString(),
+            refresh_class: plan.freshnessClass,
+            // Gerekçeler saklanıyor: sebebini taşımayan bir zamanlama
+            // kararı hata ayıklanamaz.
+            refresh_reasons: plan.reasons,
+            refresh_planned_at: new Date().toISOString(),
+          })
+          .eq('id', sourceId),
+      );
 
       if (error) throw new Error(`Yenileme planı yazılamadı: ${error.message}`);
     },
