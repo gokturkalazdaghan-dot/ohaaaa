@@ -1224,7 +1224,40 @@ async function magazaUrunleri(
     )
     .eq(sutun, kimlik)
     .eq('status', 'active')
-    .order('updated_at', { ascending: false })
+    /*
+     * SIRALAMA `external_id` -- eskiden `updated_at desc` idi ve iki ayrı
+     * sorunu vardı.
+     *
+     * 1) SAYFALAMA BOZUKTU. Toplu besleme binlerce teklifi aynı anda
+     *    güncelliyor: 35.742 satır yalnızca 235 farklı `updated_at` değeri
+     *    paylaşıyor, ortalama eşitlik kümesi 152 satır (ölçüldü). Eşit
+     *    değerler arasında PostgreSQL'in garanti ettiği bir sıra YOKTUR;
+     *    sayfa başına 24 kayıtla tek bir küme 6-7 sayfaya yayılıyor ve
+     *    kullanıcı aynı ürünü iki sayfada görüp bir başkasını hiç
+     *    görmeyebiliyordu. Sessiz bir hata: kimse fark etmez.
+     *
+     * 2) HER İSTEKTE TABLO BAŞTAN SONA TARANIYORDU. `updated_at` için
+     *    (mağaza, zaman) bileşik dizini yok, dolayısıyla 24 satır almak
+     *    35.742 satırı tarayıp sıralamayı gerektiriyordu -- ölçüldü:
+     *    3.741 ms, ve soğuk istekte 8 sn'lik ifade zaman aşımına takılıp
+     *    sayfayı hata ekranına düşürüyordu (üretim log'uyla doğrulandı).
+     *
+     * `external_id` ikisini birden çözüyor çünkü her iki mağaza türü için
+     * de bileşik TEKİL dizin ZATEN VAR:
+     *
+     *     products_merchant_external_unique  (merchant_id, external_id)
+     *     products_vendor_external_id_key    (vendor_id,   external_id)
+     *
+     * Tekil olduğu için eşitlik yok -- sayfalama kararlı. Dizinin sıralaması
+     * sorgunun sıralamasıyla aynı olduğu için sıralama adımı tamamen düşüyor:
+     * aynı sorgu 10 ms (ölçüldü), yani 374 kat hızlı. Şema değişmedi.
+     *
+     * `external_id` mağazanın kendi ürün kimliği: ziyaretçi için anlamı yok
+     * ama vitrin sırası zaten anlamlı değildi (bütün ürünler aynı anda
+     * güncellenmiş). Anlamlı bir sıra istenirse -- fiyat, popülerlik --
+     * o ayrı bir karar ve kendi dizinini gerektirir.
+     */
+    .order('external_id')
     .range(options.offset, options.offset + options.limit - 1);
 
   if (error) throw new Error(`Mağaza ürünleri okunamadı: ${error.message}`);
