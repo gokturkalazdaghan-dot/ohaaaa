@@ -173,7 +173,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
        listeleniyordu ve o tablo üretimde boş: kataloğun tamamını sağlayan
        mağazanın vitrini haritada hiç yoktu. Teklifi olmayan mağaza yine
        dışarıda -- ürünsüz vitrin ince içeriktir. */
-    const merchants = await getActiveMerchants().catch(() => []);
+    /*
+     * Hata SESSİZCE yutulmuyor. İlk hâli `.catch(() => [])` idi ve ortak
+     * mağazalar haritadan düştüğünde hiçbir iz bırakmıyordu; sorunun canlıda
+     * fark edilmesi ancak XML'i saymakla oldu. Harita mağazasız da yayımlanır
+     * -- ürün adresleri çok daha değerli -- ama sebebi loglanır.
+     */
+    const merchants = await getActiveMerchants().catch((error: unknown) => {
+      console.warn(
+        JSON.stringify({
+          level: 'warn',
+          msg: 'Site haritasi icin ortak magazalar okunamadi',
+          hata: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      return [] as Array<{ slug: string }>;
+    });
 
     const vendorPages: MetadataRoute.Sitemap = [
       ...vendors.filter((vendor) => vendor.activeProductCount > 0).map((vendor) => vendor.slug),
