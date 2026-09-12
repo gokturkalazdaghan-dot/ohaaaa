@@ -538,45 +538,23 @@ export async function runSource(
  * ürünü yanlışlıkla birleştirmek, hiç birleştirmemekten çok daha zararlıdır —
  * kullanıcı yanlış ürünü satın alır.
  */
-/**
- * Feed'in kategori metnini katalog slug bicimine indirger.
+/*
+ * `categorySlugKey` ARTIK `categorize.ts` ICINDE.
  *
- * "Ev & Yaşam" -> "ev-yasam", "Elektronik" -> "elektronik".
- * `categories.slug` citext oldugu icin buyuk/kucuk harf zaten onemsiz;
- * burada aksan ve noktalama da normalize edilir.
+ * Tasinma sebebi: kategori siniflandirmasi (categorize.ts) ayni
+ * normallestirmeye ihtiyac duyuyor ve orada IKINCI bir kopya yazilmisti.
+ * Iki kopya hemen ayristi -- kopya `Ev & Yasam` degerini `ev-yasam`'a
+ * cevirmiyordu ve mevcut test bunu yakaladi. Tek kaynak, tek davranis.
  *
- * BULANIK (fuzzy) ESLESME YOK. Yalnizca tam eslesme kabul edilir:
- * "telefon-aksesuar" degeri "telefon" kategorisine DUSMEZ. Bir urunu
- * yanlis kategoriye koymak, hic koymamaktan zararlidir -- kullanici yanlis
- * vitrinde yanlis urunu gorur ve karsilastirma vaadimiz coker.
+ * Genel API korunuyor: buradan yeniden ihrac ediliyor, yani mevcut
+ * ice aktarmalar degismeden calisiyor.
  */
-export function categorySlugKey(value: string | null | undefined): string | null {
-  if (!value) return null;
+export { categorySlugKey } from './categorize.js';
 
-  /*
-   * TURKCE 'I' TUZAGI.
-   *
-   * JavaScript'te 'İ'.toLowerCase() 'i' + U+0307 (birlesen nokta) uretir --
-   * tek karakter degil IKI karakter. Basit bir [ğüşıöç] haritasi bunu
-   * yakalamaz ve 'ELEKTRONİK' degeri 'elektroni-k' olarak slug'lanip
-   * katalogdaki 'elektronik' ile ESLESMEZ. Bu testle yakalandi; gercek bir
-   * feed'de sessizce butun bir kategorinin siniflandirilamamasi demekti.
-   *
-   * Cozum: noktali/noktasiz I acikca ele alinir, kalan aksanlar NFD ile
-   * ayristirilip birlesen isaretler atilir (ğ->g, ü->u, ş->s, ö->o, ç->c).
-   */
-  const slug = value
-    .trim()
-    .replace(/İ/g, 'i')
-    .replace(/ı/g, 'i')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+// Yeniden ihrac adi YEREL kapsama getirmez; asagidaki cagrilar icin ayrica
+// ice aktariliyor.
+import { categorySlugKey } from './categorize.js';
 
-  return slug || null;
-}
 
 /**
  * Feed'de gecen kategori degerlerini MEVCUT katalog kategorilerine cozer.

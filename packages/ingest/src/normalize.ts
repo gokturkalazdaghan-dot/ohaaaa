@@ -10,6 +10,7 @@
 import { parseMoneyToCents } from '@ohaaaa/shared';
 
 import type { FieldMapping, NormalizedOffer, RawRecord } from './types.js';
+import { kategoriSlugBul } from './categorize.js';
 
 export interface NormalizeResult {
   offers: NormalizedOffer[];
@@ -142,7 +143,22 @@ function normalizeOne(
       (mapping.description ? read(record, mapping.description) : null)?.trim().slice(0, 20_000)
       || null,
     imageUrls,
-    categorySlug: (mapping.category ? read(record, mapping.category) : null)?.trim() || null,
+    /*
+     * KATEGORI SINIFLANDIRMASI BURADA YAPILIR.
+     *
+     * Ham feed degeri dogrudan slug olarak kullanilamaz: BTO feed'i 35.767
+     * urunun TAMAMI icin `computers` gonderiyor ve katalog slug'lari Turkce.
+     * Esleme olmadigi icin butun katalog `/kategori/*` sayfalarinda
+     * gorunmuyordu (olculdu: items_unclassified 35767/35767).
+     *
+     * `kategoriSlugBul` pazaryerlerinin kullandigi siralamayi uygular:
+     * urun adi -> feed kategorisi eslemesi -> null. Ayrintili gerekce
+     * `categorize.ts` icinde.
+     */
+    categorySlug: kategoriSlugBul(
+      mapping.category ? read(record, mapping.category) : null,
+      title,
+    ),
     shippingFeeCents: Math.max(0, shippingFeeCents),
   };
 }
