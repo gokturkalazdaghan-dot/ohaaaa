@@ -13,11 +13,11 @@ import { TrustSignals } from '@/components/TrustSignals';
 import {
   getCategories,
   getFlashDeals,
-  getGalleryProducts,
+  getShowcaseTiers,
   getVendors,
   searchProducts,
 } from '@/data/catalog';
-import { ProductBentoGallery } from '@/components/ProductBentoGallery';
+import { ShowcaseTiers } from '@/components/ShowcaseTiers';
 
 /*
  * Ana sayfanın kendi meta verisi yoktu.
@@ -78,16 +78,16 @@ export default async function HomePage() {
    * hâlükârda çiziliyor: arama `/arama` sayfasına gider ve o sayfa zaten
    * kesintiye dayanıklı.
    */
-  const [dealsRes, categoriesRes, vendorsRes, trendingRes, galeriRes] = await Promise.all([
+  const [dealsRes, categoriesRes, vendorsRes, trendingRes, vitrinRes] = await Promise.all([
     fetched('kampanyalar', getFlashDeals(3)),
     fetched('kategoriler', getCategories()),
     fetched('magazalar', getVendors()),
     fetched('one-cikanlar', searchProducts({ sort: 'offers', limit: 8 })),
-    fetched('galeri', getGalleryProducts(7)),
+    fetched('vitrin', getShowcaseTiers({ tiers: 3, perTier: 5 })),
   ]);
 
   const deals = dealsRes.ok ? dealsRes.value : [];
-  const galeri = galeriRes.ok ? galeriRes.value : [];
+  const vitrin = vitrinRes.ok ? vitrinRes.value : [];
   const categories = categoriesRes.ok ? categoriesRes.value : [];
   const vendors = vendorsRes.ok ? vendorsRes.value : [];
   const trending = trendingRes.ok ? trendingRes.value.results : [];
@@ -204,20 +204,19 @@ export default async function HomePage() {
       </div>
 
       {/*
-        --- Galeri ----------------------------------------------------------
-        Bento galerisi "Cok karsilastirilanlar" izgarasinin ONUNE konuldu:
-        ikisi de ayni kumeyi (en cok magazada bulunan urunler) gosteriyor,
-        biri gorsel kesif biri yapisal liste. Galeri once gelir cunku
-        gorsel tarama daha hizli; liste altinda fiyat/magaza sayisi ile
-        ayrintiyi verir. Ayni veriyi iki kez gostermek tekrar DEGIL, iki
-        farkli tarama bicimi.
+        --- Vitrin -----------------------------------------------------------
+        Vitrin "Cok karsilastirilanlar" izgarasinin ONUNE konuldu: ikisi ayni
+        kataloga bakar ama farkli soruyu cevaplar. Vitrin "hangi magaza, hangi
+        bes urun" der (satici bazli basamaklar); asagidaki izgara "hangi urun
+        en cok karsilastiriliyor" der (magazadan bagimsiz). Once vitrin gelir
+        cunku kare gorseller goz tarafindan daha hizli taranir.
 
-        Bos listede bilesen kendini hic cizmiyor -- bos bir galeri karesi
+        Bos listede bilesen kendini hic cizmiyor -- bos bir vitrin karesi
         vitrine zarar verir.
       */}
-      {galeri.length > 0 && (
+      {vitrin.length > 0 && (
         <section className="mt-12">
-          <ProductBentoGallery products={galeri} />
+          <ShowcaseTiers tiers={vitrin} />
         </section>
       )}
 
