@@ -177,37 +177,39 @@ export async function searchProducts(params: SearchParams): Promise<SearchPage> 
     const totalCount = Number(rows[0]?.total_count ?? rows.length);
 
     /*
-     * PARA BIRIMI: RPC DONDURMUYOR, BU YUZDEN AYRICA OKUNUR.
+     * PARA BIRIMI: RPC DONDURMUYOR, EN IYI TEKLIFTEN OKUNUR.
      *
-     * `search_products` fonksiyonunun donus tipinde para birimi YOK --
-     * `p_currency` yalnizca GIRDI filtresi olarak var. Veri ise mevcut:
-     * `product_groups.price_currency`.
+     * `search_products` donus tipinde para birimi YOK (`p_currency` yalnizca
+     * GIRDI filtresi). Kaynak olarak `products.currency` kullaniliyor --
+     * `product_groups.price_currency` DEGIL.
      *
-     * NEDEN GOC YAZILMADI: RPC'yi degistirmek yeni bir migration demekti ve
-     * bu depoda uretim (96) ile depo (63) goc gecmisi AYRISMIS durumda; o
-     * ayrisma cozulmeden fonksiyon imzasina dokunmak ayri ve riskli bir is.
-     * Ek sorgu, sayfa basina TEK istek ve dogru degeri BUGUN getiriyor.
+     * NEDEN `products.currency`: iki gerekce var.
      *
-     * ILERI UYUMLU: RPC bir gun `price_currency` dondururse satirdaki deger
-     * kullanilir ve ek sorgu bos listeyle atlanir -- kod degismeden.
-     * Depodaki `searchSignature` kalibiyla ayni yaklasim.
+     *   1) DOGRULUK. Gosterilen tutar `min_price_cents`, yani EN IYI teklifin
+     *      fiyati. O tutarin para birimi de o teklifin para birimidir.
+     *      Gruptaki ozet sutun degil, teklifin kendisi kaynaktir.
+     *
+     *   2) GOC AYRISMASI. `product_groups.price_currency` URETIMDE var ama
+     *      depo goclerinde YOK; `verify-supabase-queries` bunu hakli olarak
+     *      reddetti (ayni sey `gtin_normalized` ile de yasandi). Depoda
+     *      tanimli olmayan bir sutuna bagimlilik yazmak, ayrismayi kodun
+     *      icine tasimak olurdu. `products.currency` depoda TANIMLI.
      */
-    const eksikler = rows
-      .filter((row) => !row.price_currency)
-      .map((row) => String(row.group_id));
+    const teklifKimlikleri = rows
+      .map((row) => (row.best_offer_id ? String(row.best_offer_id) : null))
+      .filter((id): id is string => id !== null);
 
-    const birimler = new Map<string, string>();
-    if (eksikler.length > 0) {
+    const teklifParalari = new Map<string, string>();
+    if (teklifKimlikleri.length > 0) {
       const { data: paraSatirlari, error: paraHatasi } = await supabase
-        .from('product_groups')
-        .select('id, price_currency')
-        .in('id', eksikler);
+        .from('products')
+        .select('id, currency')
+        .in('id', teklifKimlikleri);
 
       /*
-       * Bu sorgu ARAMAYI KIRMAZ. Kirilirsa sonuclar yine gosterilir ama
-       * para birimi bilinmez; asagidaki esik o durumda TRY'ye dusmez --
-       * bilinmeyen birim ham kod olarak yazilir, cunku yanlis simge
-       * eksik simgeden pahalidir.
+       * Bu sorgu ARAMAYI KIRMAZ: kirilirsa sonuclar yine gosterilir.
+       * Asagidaki esik o durumda `null` verir ve `formatMoney` ham kodu
+       * yazar -- yanlis simge basmaktansa kod yazmak dogrudur.
        */
       if (paraHatasi) {
         console.warn(
@@ -220,8 +222,8 @@ export async function searchProducts(params: SearchParams): Promise<SearchPage> 
       }
 
       for (const satir of paraSatirlari ?? []) {
-        if (satir.price_currency) {
-          birimler.set(String(satir.id), String(satir.price_currency).trim());
+        if (satir.currency) {
+          teklifParalari.set(String(satir.id), String(satir.currency).trim());
         }
       }
     }
@@ -237,9 +239,7 @@ export async function searchProducts(params: SearchParams): Promise<SearchPage> 
         minPriceCents: row.min_price_cents === null ? null : Number(row.min_price_cents),
         maxPriceCents: row.max_price_cents === null ? null : Number(row.max_price_cents),
         currency:
-          (row.price_currency ? String(row.price_currency).trim() : null)
-          ?? birimler.get(String(row.group_id))
-          ?? 'TRY',
+          teklifParalari.get(String(row.best_offer_id ?? '')) ?? 'TRY',
         bestOfferId: row.best_offer_id ? String(row.best_offer_id) : null,
         bestVendorId: row.best_vendor_id ? String(row.best_vendor_id) : null,
         bestVendorName: row.best_vendor_name ? String(row.best_vendor_name) : null,
@@ -617,8 +617,7 @@ export async function getProductGroup(slug: string): Promise<ProductGroupWithOff
       .from('product_groups')
       .select(
         `id, slug, title, brand, image_url, description, category_id, attributes,
-         offer_count, min_price_cents, max_price_cents, price_currency,
-         rating, rating_count,
+         offer_count, min_price_cents, max_price_cents, rating, rating_count,
          offers:products!group_id (
            id, fulfillment, vendor_id, merchant_id, product_url,
            title, sku, image_urls, price_cents, compare_at_price_cents,
@@ -707,14 +706,18 @@ export async function getProductGroup(slug: string): Promise<ProductGroupWithOff
       minPriceCents: data.min_price_cents === null ? null : Number(data.min_price_cents),
       maxPriceCents: data.max_price_cents === null ? null : Number(data.max_price_cents),
       /*
-       * GERCEK para birimi. Onceki hal bunu HIC tasimiyordu, dolayisiyla
-       * gosterim katmani `formatMoney`'nin TRY varsayilanina dusuyordu:
-       * GBP fiyatlar `₺` ile basiliyor ve fiyat ~44 kat dusuk gorunuyordu.
+       * GERCEK para birimi -- grubun TEKLIFLERINDEN turetilir.
        *
-       * `?? 'TRY'` yalnizca sutun bos gelirse devreye girer; uretimde
-       * `price_currency` dolu (olculdu: 34.721 grubun tamami GBP).
+       * Onceki hal bunu HIC tasimiyordu, dolayisiyla gosterim katmani
+       * `formatMoney`'nin TRY varsayilanina dusuyordu: GBP fiyatlar `₺` ile
+       * basiliyor ve fiyat ~44 kat dusuk gorunuyordu.
+       *
+       * `product_groups.price_currency` kullanilmadi: uretimde var ama depo
+       * goclerinde yok (bkz. searchProducts'taki ayrintili gerekce).
+       * `products.currency` hem depoda tanimli hem daha dogru -- gosterilen
+       * tutarin kaynagi teklifin kendisi.
        */
-      currency: data.price_currency ? String(data.price_currency).trim() : 'TRY',
+      currency: offers[0]?.currency ?? 'TRY',
       offers,
     };
   }
@@ -985,10 +988,10 @@ export async function getVendorProducts(
   const { data, error, count } = await supabase
     .from('products')
     .select(
-      `price_cents, shipping_fee_cents,
+      `price_cents, shipping_fee_cents, currency,
        group:product_groups!group_id (
          id, slug, title, brand, image_url, offer_count,
-         min_price_cents, max_price_cents, best_offer_id, price_currency
+         min_price_cents, max_price_cents, best_offer_id
        )`,
       { count: 'exact' },
     )
@@ -1014,7 +1017,10 @@ export async function getVendorProducts(
       groupId,
       slug: String(group.slug),
       title: String(group.title),
-      currency: group.price_currency ? String(group.price_currency).trim() : 'TRY',
+      // Satici sayfasinda teklif satiri zaten elde: onun para birimi.
+      currency: (row as Record<string, unknown>).currency
+        ? String((row as Record<string, unknown>).currency).trim()
+        : 'TRY',
       brand: group.brand ? String(group.brand) : null,
       imageUrl: group.image_url ? String(group.image_url) : null,
       offerCount: Number(group.offer_count),
@@ -1624,20 +1630,20 @@ export async function getPriceDrops(options?: {
   const satirlar = (data ?? []) as Record<string, unknown>[];
 
   /*
-   * PARA BIRIMI: `price_drops` RPC'si de DONDURMUYOR (donus tipi olculdu).
-   * `searchProducts` ile ayni cozum: eksik olanlar icin tek ek sorgu.
-   * RPC bir gun dondurursa satirdaki deger kullanilir, ek sorgu atlanir.
+   * PARA BIRIMI: `price_drops` RPC'si de dondurmuyor (donus tipi olculdu).
+   * `searchProducts` ile ayni kaynak: `products.currency`. Grup basina bir
+   * aktif teklifin para birimi yeterli -- bir grubun teklifleri ayni para
+   * biriminde olur (market izolasyonu kisiti bunu zorunlu kiliyor).
    */
-  const eksikler = satirlar
-    .filter((row) => !row.price_currency)
-    .map((row) => String(row.group_id));
+  const grupKimlikleri = satirlar.map((row) => String(row.group_id));
 
-  const birimler = new Map<string, string>();
-  if (eksikler.length > 0) {
+  const grupParalari = new Map<string, string>();
+  if (grupKimlikleri.length > 0) {
     const { data: paraSatirlari, error: paraHatasi } = await supabase
-      .from('product_groups')
-      .select('id, price_currency')
-      .in('id', eksikler);
+      .from('products')
+      .select('group_id, currency')
+      .in('group_id', grupKimlikleri)
+      .eq('status', 'active');
 
     if (paraHatasi) {
       console.warn(
@@ -1650,8 +1656,9 @@ export async function getPriceDrops(options?: {
     }
 
     for (const satir of paraSatirlari ?? []) {
-      if (satir.price_currency) {
-        birimler.set(String(satir.id), String(satir.price_currency).trim());
+      const grup = String(satir.group_id);
+      if (satir.currency && !grupParalari.has(grup)) {
+        grupParalari.set(grup, String(satir.currency).trim());
       }
     }
   }
@@ -1664,10 +1671,7 @@ export async function getPriceDrops(options?: {
     categoryId: row.category_id ? String(row.category_id) : null,
     currentPriceCents: Number(row.current_price_cents),
     referencePriceCents: Number(row.reference_price_cents),
-    currency:
-      (row.price_currency ? String(row.price_currency).trim() : null)
-      ?? birimler.get(String(row.group_id))
-      ?? 'TRY',
+    currency: grupParalari.get(String(row.group_id)) ?? 'TRY',
     dropRatio: Number(row.drop_ratio),
     observedDays: Number(row.observed_days),
     offerCount: Number(row.offer_count),
