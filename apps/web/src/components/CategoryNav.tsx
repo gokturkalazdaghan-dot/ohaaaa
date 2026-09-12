@@ -1,6 +1,7 @@
 import Link from 'next/link';
+import { Fragment } from 'react';
 
-import { getCategories } from '@/data/catalog';
+import { getCategoryTree } from '@/data/catalog';
 
 /**
  * Üst çubuktaki kategori şeridi.
@@ -8,10 +9,19 @@ import { getCategories } from '@/data/catalog';
  * Sunucu bileşeni: kategoriler nadiren değişir ve istemciye bir tur
  * attırmanın anlamı yok. Veri alınamazsa şerit HİÇ ÇİZİLMEZ — üst çubukta
  * boş bir çizgi bırakmak, "kategori yok" gibi görünür.
+ *
+ * ŞERİT ARTIK AĞAÇTAN BESLENİYOR. İki şey değişti:
+ *
+ *   1) ALT KATEGORİLER GÖRÜNÜR. Kataloğun neredeyse tamamı alt
+ *      kategorilerde (bilgisayar 32.894, telefon 814, kulaklık 541 grup --
+ *      ölçüldü) ve hiçbiri menüde yoktu.
+ *
+ *   2) BOŞ KATEGORİLER DÜŞTÜ. Altı üst kategorinin dördü tamamen boştu;
+ *      şeritte durmaları kullanıcıyı ürünsüz bir sayfaya göndermekti.
  */
 export async function CategoryNav() {
-  const categories = await getCategories().catch(() => []);
-  if (categories.length === 0) return null;
+  const tree = await getCategoryTree().catch(() => []);
+  if (tree.length === 0) return null;
 
   return (
     /*
@@ -43,15 +53,34 @@ export async function CategoryNav() {
             Fırsatlar
           </Link>
         </li>
-        {categories.map((category) => (
-          <li key={category.id} className="shrink-0">
-            <Link
-              href={`/kategori/${category.slug}`}
-              className="block rounded-lg px-3 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg"
-            >
-              {category.name}
-            </Link>
-          </li>
+        {tree.map((node) => (
+          <Fragment key={node.category.id}>
+            <li className="shrink-0">
+              <Link
+                href={`/kategori/${node.category.slug}`}
+                className="block rounded-lg px-3 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg"
+              >
+                {node.category.name}
+              </Link>
+            </li>
+            {/*
+              Alt kategoriler üstünün HEMEN ARDINDAN ve daha soluk geliyor:
+              şerit tek satır olduğu için girinti verilemiyor, hiyerarşiyi
+              renk taşıyor. Ayrı bir açılır menü kurmak şeridi tıklamayla
+              çalışan bir bileşene çevirirdi; tek satırlık bir menü için
+              fazla ağır.
+            */}
+            {node.children.map((child) => (
+              <li key={child.category.id} className="shrink-0">
+                <Link
+                  href={`/kategori/${child.category.slug}`}
+                  className="block rounded-lg px-2.5 py-1.5 text-sm text-subtle transition-colors hover:bg-surface-2 hover:text-fg"
+                >
+                  {child.category.name}
+                </Link>
+              </li>
+            ))}
+          </Fragment>
         ))}
       </ul>
     </nav>

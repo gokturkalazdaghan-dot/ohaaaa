@@ -11,7 +11,7 @@ import { ProductCard } from '@/components/ProductCard';
 import { RecentlyViewed } from '@/components/RecentlyViewed';
 import { TrustSignals } from '@/components/TrustSignals';
 import {
-  getCategories,
+  getCategoryTree,
   getFlashDeals,
   getShowcaseTiers,
   getVendors,
@@ -80,7 +80,7 @@ export default async function HomePage() {
    */
   const [dealsRes, categoriesRes, vendorsRes, trendingRes, vitrinRes] = await Promise.all([
     fetched('kampanyalar', getFlashDeals(3)),
-    fetched('kategoriler', getCategories()),
+    fetched('kategoriler', getCategoryTree()),
     fetched('magazalar', getVendors()),
     /*
      * 16 isteniyor ama 8 gosteriliyor: asagida vitrindeki urunler bu
@@ -191,17 +191,38 @@ export default async function HomePage() {
         {categories.length > 0 && (
           <nav aria-label="Kategoriler" className="mt-6">
             <ul className="flex flex-wrap gap-2">
-              {categories.map((category) => {
-                const Icon = categoryIcon(category);
-                return (
-                  <li key={category.id}>
-                    <Link href={`/kategori/${category.slug}`} className="chip">
-                      {Icon && <Icon className="h-4 w-4 text-brand" aria-hidden="true" />}
-                      {category.name}
+              {/*
+                Üst kategori ve alt kategorileri BİRLİKTE. Kataloğun
+                neredeyse tamamı alt kategorilerde duruyor (bilgisayar
+                32.894 grup -- ölçüldü); yalnızca üstleri göstermek en çok
+                ürünü olan yolları gizlemekti. Ürün sayısı çipte yazılıyor
+                çünkü ölçülmüş bir değer ve kullanıcı hangi kategorinin
+                dolu olduğunu böyle görür.
+              */}
+              {categories.flatMap((node) => [
+                <li key={node.category.id}>
+                  <Link href={`/kategori/${node.category.slug}`} className="chip">
+                    {(() => {
+                      const Icon = categoryIcon(node.category);
+                      return Icon ? <Icon className="h-4 w-4 text-brand" aria-hidden="true" /> : null;
+                    })()}
+                    {node.category.name}
+                    <span className="tabular text-2xs text-subtle">
+                      {node.groupCount.toLocaleString('tr-TR')}
+                    </span>
+                  </Link>
+                </li>,
+                ...node.children.map((child) => (
+                  <li key={child.category.id}>
+                    <Link href={`/kategori/${child.category.slug}`} className="chip">
+                      {child.category.name}
+                      <span className="tabular text-2xs text-subtle">
+                        {child.groupCount.toLocaleString('tr-TR')}
+                      </span>
                     </Link>
                   </li>
-                );
-              })}
+                )),
+              ])}
             </ul>
           </nav>
         )}

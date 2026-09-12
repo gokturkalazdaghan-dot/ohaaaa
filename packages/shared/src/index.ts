@@ -14,3 +14,4 @@ export * from './aiProvider.js';
 export * from './orchestrator/index.js';
 export * from './dataengine/index.js';
 export * from './showcase.js';
+export * from './categoryTree.js';

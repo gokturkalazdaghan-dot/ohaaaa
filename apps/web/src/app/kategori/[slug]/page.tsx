@@ -8,7 +8,14 @@ import { formatMoney } from '@ohaaaa/shared';
 import { DataUnavailable } from '@/components/DataUnavailable';
 import { JsonLd } from '@/components/JsonLd';
 import { Pagination } from '@/components/Pagination';
-import { getCategories, searchProducts, type SortOption } from '@/data/catalog';
+import { siblingsOf } from '@ohaaaa/shared';
+
+import {
+  categoryHasProducts,
+  getCategories,
+  searchProducts,
+  type SortOption,
+} from '@/data/catalog';
 import { siteUrl } from '@/lib/env';
 
 /** Sayfa basina urun. SQL tarafi 100'de sinirlar. */
@@ -68,8 +75,23 @@ export async function generateMetadata({
   const canonical =
     page > 1 ? `/kategori/${category.slug}?sayfa=${page}` : `/kategori/${category.slug}`;
 
+  /*
+   * BOŞ KATEGORİ DİZİNE GİRMEZ.
+   *
+   * Kategori taksonomisi ürün gelmeden önce de var; sayfayı 404 yapmak
+   * yanlış olurdu (kategori silinmedi, henüz dolmadı). Ama içinde tek ürün
+   * olmayan bir sayfayı dizine vermek ince (thin) içerik üretmektir.
+   * `noindex, follow`: arama motoru sayfayı dizine almaz ama içindeki
+   * bağlantıları izlemeye devam eder.
+   *
+   * Sayım ürün aramasıyla AYNI kapsamı kullanır (kendi + alt kategoriler),
+   * yoksa sayfada ürün görünürken meta "boş" diyebilirdi.
+   */
+  const doluMu = await categoryHasProducts(category.id).catch(() => true);
+
   return {
     title: page > 1 ? `${category.name} Fiyatları — sayfa ${page}` : `${category.name} Fiyatları`,
+    ...(doluMu ? {} : { robots: { index: false, follow: true } }),
     description:
       `${category.name} kategorisindeki ürünleri onlarca mağazada karşılaştırın. ` +
       `Kargo dahil en iyi toplam fiyatı görün, en ucuz satıcıyı tek bakışta bulun.`,
@@ -124,6 +146,18 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     return <DataUnavailable />;
   }
 
+  /*
+   * Hiyerarşi bağlamı. `categories` artık alt kategorileri de içeriyor
+   * (eskiden yalnızca üst seviye geliyordu ve bu yüzden alt kategori
+   * sayfaları 404 dönüyordu), dolayısıyla üst ve kardeşler buradan
+   * çıkarılabiliyor -- ek bir sorgu gerekmeden.
+   */
+  const parent = category.parentId
+    ? categories.find((candidate) => candidate.id === category.parentId)
+    : undefined;
+  const siblings = siblingsOf(categories, category);
+  const children = categories.filter((candidate) => candidate.parentId === category.id);
+
   const cheapest = results.results
     .map((result) => result.minPriceCents)
     .filter((price): price is number => price !== null)
@@ -159,11 +193,25 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
         data={{
           '@context': 'https://schema.org',
           '@type': 'BreadcrumbList',
+          /*
+            ÜST KATEGORİ ARAYA GİRİYOR. Önceden yol "Ana sayfa / Bilgisayar"
+            idi; oysa Bilgisayar, Elektronik'in altında. Kırıntı yolu
+            hiyerarşiyi bildirmek içindir, düzleştirilince bildirdiği şey
+            yanlış olur.
+          */
           itemListElement: [
             { '@type': 'ListItem', position: 1, name: 'Ana sayfa', item: siteUrl },
+            ...(parent
+              ? [{
+                  '@type': 'ListItem',
+                  position: 2,
+                  name: parent.name,
+                  item: `${siteUrl}/kategori/${parent.slug}`,
+                }]
+              : []),
             {
               '@type': 'ListItem',
-              position: 2,
+              position: parent ? 3 : 2,
               name: category.name,
               item: `${siteUrl}/kategori/${category.slug}`,
             },
@@ -176,6 +224,14 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
           Ana sayfa
         </Link>
         <span aria-hidden="true">/</span>
+        {parent && (
+          <>
+            <Link href={`/kategori/${parent.slug}`} className="transition-colors hover:text-fg">
+              {parent.name}
+            </Link>
+            <span aria-hidden="true">/</span>
+          </>
+        )}
         <span className="text-fg">{category.name}</span>
       </nav>
 
@@ -184,6 +240,23 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
         <h1 className="text-3xl font-bold tracking-tight text-fg">
           {category.name} Fiyatları
         </h1>
+
+        {/*
+          ALT KATEGORİ ŞERİDİ.
+          Üst kategori sayfası alt kategorilerinin ürünlerini de listeliyor
+          (arama işlevi `parent_id` ile kapsıyor), ama kullanıcıya daralt-
+          ma yolu göstermiyordu. Elektronik'te 34.249 grup var; oradan
+          Bilgisayar'a inebilmek sayfanın en çok işe yarayan bağlantısı.
+        */}
+        {children.length > 0 && (
+          <nav aria-label="Alt kategoriler" className="mt-4 flex flex-wrap gap-2">
+            {children.map((child) => (
+              <Link key={child.id} href={`/kategori/${child.slug}`} className="chip">
+                {child.name}
+              </Link>
+            ))}
+          </nav>
+        )}
 
         <p className="mt-3 max-w-2xl leading-relaxed text-muted">
           {results.results.length > 0 ? (
@@ -243,13 +316,20 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
         </>
       )}
 
-      {/* İç linkleme (madde 12): kategoriler birbirine bağlanır. */}
-      <nav aria-label="Diğer kategoriler" className="mt-16 border-t border-line pt-8">
-        <h2 className="text-sm font-semibold">Diğer kategoriler</h2>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {categories
-            .filter((candidate) => candidate.id !== category.id)
-            .map((candidate) => (
+      {/*
+        İÇ LİNKLEME ARTIK KARDEŞLERE.
+        Önceden bütün kategoriler düz bir liste olarak basılıyordu:
+        bilgisayar sayfasından kozmetiğe bağlanmak kullanıcı için de arama
+        motoru için de anlamsız bir komşuluk kuruyordu. Kardeşler (aynı üst
+        kategoriyi paylaşanlar) gerçek alternatiflerdir.
+      */}
+      {siblings.length > 0 && (
+        <nav aria-label="Diğer kategoriler" className="mt-16 border-t border-line pt-8">
+          <h2 className="text-sm font-semibold">
+            {parent ? `${parent.name} altındaki diğer kategoriler` : 'Diğer kategoriler'}
+          </h2>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {siblings.map((candidate) => (
               <Link
                 key={candidate.id}
                 href={`/kategori/${candidate.slug}`}
@@ -258,8 +338,9 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
                 {candidate.name}
               </Link>
             ))}
-        </div>
-      </nav>
+          </div>
+        </nav>
+      )}
     </div>
   );
 }
