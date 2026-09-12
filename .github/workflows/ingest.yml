@@ -108,11 +108,28 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           OHAAAA_USER_AGENT: 'OhaaaaBot/1.0 (+https://ohaaaa.com/bot; iletisim@ohaaaa.com)'
-          # Ortaklık feed'i jetonu. `sources.endpoint_url` sütununda yalnızca
-          # ${OHAAAA_FEED_TOKEN} yer tutucusu durur; gerçek değer buradan gelir
-          # ve veritabanına hiç yazılmaz. Depo sırrı tanımlı değilse boş gelir
-          # ve yer tutucu kullanan kaynak açık bir hatayla durur -- sessizce
+          # Ortaklık feed'i jetonları. `sources.endpoint_url` sütununda yalnızca
+          # ${DEGISKEN_ADI} yer tutucusu durur; gerçek değer buradan gelir ve
+          # veritabanına hiç yazılmaz. Depo sırrı tanımlı değilse boş gelir ve
+          # yer tutucu kullanan kaynak açık bir hatayla durur -- sessizce
           # kimliksiz istek atıp 401'i "ağ arızası" sanmaz.
+          #
+          # ADLAR KODDA DEĞİL VERİDE. `expandSecretPlaceholders` generic'tir:
+          # adresteki ${AD} kalıbını yakalar ve ortamdan okur. Yani hangi
+          # değişkenin gerekli olduğunu `sources.endpoint_url` ile
+          # `sources.auth_secret_ref` söyler, kod değil. Buraya eklenen her
+          # satır o veriyle EŞLEŞMEK zorundadır.
+          #
+          # AWIN_DATAFEED_API_KEY: `bto-instock` kaynağının talep ettiği ad.
+          # Ölçüldü (üretim): endpoint yer tutucusu ${AWIN_DATAFEED_API_KEY},
+          # auth_secret_ref = 'AWIN_DATAFEED_API_KEY'. Bu satır yokken alım
+          # CONFIG_ERROR ile duruyordu:
+          #   "Kaynak adresindeki gizli değişken(ler) ortamda tanımlı değil:
+          #    AWIN_DATAFEED_API_KEY"
+          AWIN_DATAFEED_API_KEY: ${{ secrets.AWIN_DATAFEED_API_KEY }}
+          # OHAAAA_FEED_TOKEN: jenerik ad; şu anda hiçbir kaynak bunu talep
+          # etmiyor. Bilerek KORUNUYOR -- ileride bu adı kullanan bir kaynak
+          # eklenirse hazır dursun ve silinmesi ayrı bir karar olsun.
           OHAAAA_FEED_TOKEN: ${{ secrets.OHAAAA_FEED_TOKEN }}
           # KULLANICI GIRDISI KABUKA DEGIL ORTAMA GIRER.
           #
