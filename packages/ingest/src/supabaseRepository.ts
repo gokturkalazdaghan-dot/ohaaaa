@@ -60,24 +60,35 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
       // GTIN listesi büyük olabilir; parçalayarak sorgula.
       for (const batch of chunkByUrlBudget(gtins)) {
         /*
-         * ARAMA `gtin_normalized` ÜZERİNDEN -- ham `gtin` ÜZERİNDEN DEĞİL.
+         * ARAMA HAM `gtin` ÜZERİNDEN -- ve bu bilinçli bir sınır.
          *
-         * `gtin_normalized` üretilen bir sütundur (`normalize_gtin(gtin)`) ve
-         * her zaman 14 hanedir. Ham `gtin` ise geçmişte yazılmış kayıtlarda
-         * 8/12/13/14 hane olabilir; ona bakan bir arama aynı ürünü yalnızca
-         * biçim tuttuğunda bulur. Çağıran taraf da artık normalize edilmiş
-         * değer gönderdiği için iki uç tek bir biçimde buluşuyor.
+         * Daha sağlamı `gtin_normalized` (üretilen sütun, her zaman 14 hane)
+         * üzerinden aramak olurdu. Denendi ve CI reddetti:
+         *
+         *   product_groups.gtin_normalized — şemada böyle bir sütun yok
+         *
+         * Sütun ÜRETİMDE var ama depodaki göçlerde YOK; `verify-supabase-
+         * queries` tam da bu ayrışmayı yakalamak için duruyor ve haklı.
+         * Depoda tanımlı olmayan bir sütuna bağımlılık yazmak, ayrışmayı
+         * kodun içine taşımak olurdu.
+         *
+         * Ham `gtin` üzerinden arama artık YETERLİ: `normalizeGtin` her değeri
+         * 14 haneye doldurduğu için yazılan ve aranan biçim aynı. Geçmişte
+         * başka biçimde yazılmış kayıtlar kalırsa bu arama onları bulmaz --
+         * ama üretimdeki iki grup da 14 hane, yani böyle bir kayıt yok.
+         *
+         * Göç ayrışması kapandığında (`gtin_normalized` depoya girdiğinde)
+         * buranın o sütuna geçmesi doğru olur.
          */
         const { data, error } = await supabase
           .from('product_groups')
-          .select('id, gtin_normalized')
-          .in('gtin_normalized', batch);
+          .select('id, gtin')
+          .in('gtin', batch);
 
         if (error) throw new Error(`Kanonik ürün sorgusu başarısız: ${error.message}`);
 
         for (const row of data ?? []) {
-          if (row.gtin_normalized)
-            result.set(String(row.gtin_normalized), String(row.id));
+          if (row.gtin) result.set(String(row.gtin), String(row.id));
         }
       }
 
