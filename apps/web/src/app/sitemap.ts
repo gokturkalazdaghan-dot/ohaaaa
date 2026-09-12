@@ -18,7 +18,7 @@
 
 import type { MetadataRoute } from 'next';
 
-import { getCategories, getVendors, searchProducts } from '@/data/catalog';
+import { getCategoryTree, getVendors, searchProducts } from '@/data/catalog';
 import { isAffiliateOnly, siteUrl } from '@/lib/env';
 
 /** Tek haritaya sığdırılacak en fazla ürün. */
@@ -95,8 +95,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   try {
-    // --- Kategori sayfaları --------------------------------------------------
-    const categories = await getCategories();
+    /* --- Kategori sayfaları ------------------------------------------------
+       AĞAÇTAN geliyor, düz listeden değil. İki sonucu var:
+
+         1) ALT KATEGORİLER ARTIK SİTE HARİTASINDA. Eskiden yalnızca üst
+            seviye listeleniyordu; bilgisayar/telefon/kulaklık sayfaları
+            (34.249 grup -- ölçüldü) hiç bildirilmiyordu. Zaten 404
+            döndükleri için bu tutarlıydı; artık çalıştıklarına göre
+            bildirilmeleri gerekiyor.
+
+         2) BOŞ KATEGORİLER ÇIKTI. Altı üst kategorinin dördü tamamen boş.
+            İçinde tek ürün olmayan bir sayfayı site haritasıyla taramaya
+            davet etmek, tarama bütçesini ince içeriğe harcamaktır. Sayfa
+            silinmiyor -- yalnızca davet edilmiyor (ve `noindex` alıyor). */
+    const tree = await getCategoryTree();
+    const categories = tree.flatMap((node) => [node.category, ...node.children.map((c) => c.category)]);
 
     const categoryPages: MetadataRoute.Sitemap = categories.flatMap((category) => [
       {

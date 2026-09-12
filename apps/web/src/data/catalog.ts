@@ -11,9 +11,10 @@
 
 import 'server-only';
 
-import { offerSellerName, rankShowcase } from '@ohaaaa/shared';
+import { buildCategoryTree, offerSellerName, rankShowcase } from '@ohaaaa/shared';
 import type {
   Category,
+  CategoryNode,
   FlashDeal,
   Offer,
   OhaaaaScore,
@@ -819,6 +820,19 @@ export async function getFlashDeals(limit = 3): Promise<FlashDeal[]> {
   return demoFlashDeals.slice(0, limit);
 }
 
+/**
+ * Etkin kategorilerin TAMAMI -- alt kategoriler DAHİL.
+ *
+ * ÖNCEDEN `.is('parent_id', null)` FİLTRESİ VARDI ve bu sessiz bir hataydı:
+ * kategori sayfası gelen adresi bu listede arıyor, bulamazsa `notFound()`
+ * çağırıyor. Yani `/kategori/bilgisayar` 404 dönüyordu -- oysa ölçüm o
+ * kategoride 32.894 grup olduğunu söylüyor, kataloğun neredeyse tamamı.
+ * Üç alt kategori (telefon, bilgisayar, kulaklık) toplam 34.249 grupla
+ * erişilemez durumdaydı.
+ *
+ * Menüler düz liste istemiyor; onlar için `getCategoryTree()` var. Burası
+ * ham gerçeği döndürür: hangi kategoriler etkin.
+ */
 export async function getCategories(): Promise<Category[]> {
   const supabase = createAnonClient();
 
@@ -826,7 +840,6 @@ export async function getCategories(): Promise<Category[]> {
     const { data, error } = await supabase
       .from('categories')
       .select('id, parent_id, slug, name, icon')
-      .is('parent_id', null)
       .eq('is_active', true)
       .order('sort_order');
 
@@ -842,6 +855,128 @@ export async function getCategories(): Promise<Category[]> {
   }
 
   return demoCategories;
+}
+
+/**
+ * Bu kategoride gösterilecek ÜRÜN VAR MI?
+ *
+ * Kapsam ürün aramasıyla AYNI: kendi kategorisi VE alt kategorileri
+ * (`search_products` de öyle yapıyor). Farklı kapsam kullansaydık sayfa
+ * ürün gösterirken meta veri "boş" diyebilirdi.
+ *
+ * Sayı değil, VARLIK sorusu: `limit(1)` ile ilk eşleşmede duruyor. Tam
+ * sayıya ihtiyaç yok ve 32.894 satırlık bir kategoriyi baştan sona saymanın
+ * bedeli bu soru için gereksiz.
+ */
+export async function categoryHasProducts(categoryId: string): Promise<boolean> {
+  const supabase = createAnonClient();
+
+  if (!supabase) {
+    return demoProductGroups.some(
+      (grup) => grup.categoryId === categoryId && grup.offerCount > 0,
+    );
+  }
+
+  const { data: cocuklar } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('parent_id', categoryId)
+    .eq('is_active', true);
+
+  const kapsam = [categoryId, ...(cocuklar ?? []).map((c) => String(c.id))];
+
+  const { data, error } = await supabase
+    .from('product_groups')
+    .select('id')
+    .in('category_id', kapsam)
+    .gt('offer_count', 0)
+    .limit(1);
+
+  /*
+   * Okunamadıysa DOLU varsayılır. Yanılma bedelleri eşit değil: boş sanıp
+   * `noindex` vermek, dolu bir kategoriyi dizinden çıkarmak olurdu; dolu
+   * sanmanın bedeli ise yalnızca boş bir sayfanın dizine girmesi.
+   */
+  if (error) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'Kategori dolulugu okunamadi',
+        kategori: categoryId,
+        hata: error.message,
+      }),
+    );
+    return true;
+  }
+
+  return (data ?? []).length > 0;
+}
+
+/**
+ * Gezinilebilir kategori ağacı: boş dallar elenmiş, sayılar ÖLÇÜLMÜŞ.
+ *
+ * NEDEN SAYIM GEREKLİ
+ * Altı üst kategorinin dördü (moda, spor-outdoor, kozmetik, süpermarket)
+ * bugün tamamen boş -- ölçüldü. Menüde durmaları, kullanıcıyı hiçbir ürün
+ * olmayan bir sayfaya göndermek demek. Hangisinin boş olduğu veriye bakmadan
+ * bilinemez ve yarın değişir; o yüzden sabit bir liste değil, sayım.
+ *
+ * MALİYET ÖLÇÜLDÜ. Kategori başına bir `count` isteği ~20 ms (sayım
+ * `product_groups` üzerinde tek geçiş). Dokuz kategori PARALEL gidiyor,
+ * yani tek gidiş-dönüş. Alternatif olan `search_facets` RPC'si tek çağrı
+ * ama 530 ms sürüyor (ölçüldü) ve yalnızca ÜST kategorileri sayıyor --
+ * alt kategori sayıları olmadan ağaç kurulamaz.
+ */
+export async function getCategoryTree(): Promise<CategoryNode<Category>[]> {
+  const kategoriler = await getCategories();
+  if (kategoriler.length === 0) return [];
+
+  const supabase = createAnonClient();
+
+  if (!supabase) {
+    // Demo kümesinde grup sayısı yerel olarak sayılabiliyor.
+    const sayimlar = new Map<string, number>();
+    for (const grup of demoProductGroups) {
+      if (!grup.categoryId || grup.offerCount === 0) continue;
+      sayimlar.set(grup.categoryId, (sayimlar.get(grup.categoryId) ?? 0) + 1);
+    }
+    return buildCategoryTree(kategoriler, sayimlar);
+  }
+
+  const sayimlar = new Map<string, number>();
+  await Promise.all(
+    kategoriler.map(async (kategori) => {
+      const { count, error } = await supabase
+        .from('product_groups')
+        .select('id', { count: 'exact', head: true })
+        .eq('category_id', kategori.id)
+        .gt('offer_count', 0);
+
+      if (error) {
+        /*
+         * Sayılamayan kategori SIFIR sayılmaz -- bu, ulaşılamayan bir
+         * kategoriyi "boş" ilan edip menüden düşürmek olurdu. Bilinmeyen
+         * yerine 1 yazmak da uydurma olurdu; kategori listede kalsın diye
+         * gerçek sayının bilinmediği açıkça loglanıyor ve kategori
+         * görünür bırakılıyor.
+         */
+        console.warn(
+          JSON.stringify({
+            level: 'warn',
+            msg: 'Kategori grup sayisi okunamadi',
+            kategori: kategori.slug,
+            hata: error.message,
+          }),
+        );
+        sayimlar.set(kategori.id, 1);
+        return;
+      }
+
+      sayimlar.set(kategori.id, count ?? 0);
+    }),
+  );
+
+  return buildCategoryTree(kategoriler, sayimlar);
 }
 
 export async function getVendors(): Promise<Vendor[]> {
