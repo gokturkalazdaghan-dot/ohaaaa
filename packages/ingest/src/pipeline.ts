@@ -647,9 +647,33 @@ export async function matchCanonicalGroups(
 
     const signature = canonicalSignature(offer.title, offer.brand);
     if (bySignature.has(signature)) continue;
-    if (toCreate.has(signature)) continue;
 
-    toCreate.set(signature, {
+    /*
+     * TEKILLESTIRME ANAHTARI: GTIN VARSA GTIN, YOKSA IMZA.
+     *
+     * Onceki hal yalnizca IMZA ile anahtarliyordu ve bu, ayni feed icinde
+     * AYNI GTIN'i tasiyan ama basligi farkli iki teklifi iki AYRI kanonik
+     * urun adayi yapiyordu. `product_groups.gtin` tekil oldugu icin ikisi
+     * ayni insert grubunda bulustugunda:
+     *
+     *   duplicate key value violates unique constraint "product_groups_gtin_key"
+     *
+     * Uretimde olculdu: alim 35.767 urunun tamamini temiz ayristirdiktan
+     * sonra bu kisitta duserek 1000 yetim grup birakiyordu (iki ayri
+     * calismada birebir ayni sekilde).
+     *
+     * GTIN'I 14 HANEYE NORMALIZE ETMEK BUNU COZMEZ -- o duzeltme feed'den
+     * gelen degeri VERITABANINDAKI mevcut satirlarla eslestirir; buradaki
+     * sorun ise AYNI FEED ICINDEKI tekrardir. Iki duzeltme farkli katmanlarda
+     * ve ikisi de gerekli.
+     *
+     * Ayni kalip `productSync.ts` icinde de kullaniliyor (`item.gtin ??
+     * itemSignature`); burada ondan sapmak tutarsizlikti.
+     */
+    const dedupeKey = offer.gtin ?? signature;
+    if (toCreate.has(dedupeKey)) continue;
+
+    toCreate.set(dedupeKey, {
       title: offer.title,
       brand: offer.brand,
       gtin: offer.gtin,
@@ -662,9 +686,24 @@ export async function matchCanonicalGroups(
   }
 
   if (toCreate.size > 0) {
-    const created = await repository.createGroups([...toCreate.values()]);
+    const adaylar = [...toCreate.values()];
+    const created = await repository.createGroups(adaylar);
     for (const [signature, groupId] of created) {
       bySignature.set(signature, groupId);
+    }
+
+    /*
+     * YENI GRUPLAR GTIN UZERINDEN DE KAYDEDILIR.
+     *
+     * Tekillestirme artik GTIN ile yapildigi icin, ayni GTIN'i tasiyan
+     * kardes teklifler icin TEK grup acilir. O kardeslerin imzasi farkli
+     * oldugundan `bySignature` onlari bulamaz; GTIN haritasina yazilmazsa
+     * groupId null kalir ve teklif kanonik urune hic baglanmaz -- yani
+     * kisit hatasi sessiz bir veri kaybina donusurdu.
+     */
+    for (const aday of adaylar) {
+      const groupId = created.get(aday.signature);
+      if (aday.gtin && groupId) byGtin.set(aday.gtin, groupId);
     }
   }
 

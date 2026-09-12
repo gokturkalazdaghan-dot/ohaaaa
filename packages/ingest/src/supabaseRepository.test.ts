@@ -11,7 +11,11 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 
-import { chunkByUrlBudget } from './supabaseRepository.js';
+import {
+  chunkByUrlBudget,
+  geciciOkumaHatasiMi,
+  okumayiYenidenDene,
+} from './supabaseRepository.js';
 
 test('butce asilmadan once parcalamaz', () => {
   const parcalar = chunkByUrlBudget(['a', 'b', 'c'], 100);
@@ -53,4 +57,107 @@ test('yuzde kodlamasi maliyete dahil edilir', () => {
   // Bosluk %20 olur: 3 karakter. Ham uzunluga bakan bir uygulama bunu kacirir.
   const parcalar = chunkByUrlBudget(['a b c d e', 'a b c d e'], 12);
   assert.equal(parcalar.length, 2, 'kodlanmis maliyet hesaba katilmadi');
+});
+
+// ---------------------------------------------------------------------------
+// GECICI OKUMA HATALARINDA YENIDEN DENEME
+// ---------------------------------------------------------------------------
+// Uretimde olculdu: esleştirme asamasi ~750 ardisik sorgu atiyor ve bunlardan
+// BIRININ 504 almasi tum alimi dusuruyordu ("Kanonik urun sorgusu basarisiz:
+// Gateway Timeout"). Asagidaki testler o davranisin geri gelmemesini kilitler.
+
+test('gecici hata taninir, kalici hata taninmaz', () => {
+  assert.equal(geciciOkumaHatasiMi('Gateway Timeout'), true);
+  assert.equal(geciciOkumaHatasiMi('TypeError: fetch failed'), true);
+  assert.equal(geciciOkumaHatasiMi('socket hang up'), true);
+
+  // Kalici hatalar yeniden DENENMEMELI -- yoksa ariza gizlenir ve gecikir.
+  assert.equal(
+    geciciOkumaHatasiMi('column product_groups.gtin_normalized does not exist'),
+    false,
+  );
+  assert.equal(geciciOkumaHatasiMi('permission denied for table products'), false);
+});
+
+test('gecici hatada yeniden denenir ve sonunda basarili olur', async () => {
+  let cagri = 0;
+  const beklemeler: number[] = [];
+
+  const sonuc = await okumayiYenidenDene(
+    () => {
+      cagri += 1;
+      return Promise.resolve(
+        cagri < 3
+          ? { data: null, error: { message: 'Gateway Timeout' } }
+          : { data: [{ id: '1' }], error: null },
+      );
+    },
+    4,
+    (ms) => {
+      beklemeler.push(ms);
+      return Promise.resolve();
+    },
+  );
+
+  assert.equal(cagri, 3);
+  assert.equal(sonuc.error, null);
+  // Ustel geri cekilme: sabit aralik degil.
+  assert.deepEqual(beklemeler, [250, 500]);
+});
+
+test('KALICI hata ANINDA doner -- yeniden denenmez', async () => {
+  let cagri = 0;
+
+  const sonuc = await okumayiYenidenDene(
+    () => {
+      cagri += 1;
+      return Promise.resolve({
+        data: null,
+        error: { message: 'column "yok" does not exist' },
+      });
+    },
+    4,
+    () => Promise.resolve(),
+  );
+
+  // Bu test sart: kalici hatayi da yeniden deneyen bir uygulama, eksik sutun
+  // gibi ariza durumlarinda alimi dort kat yavaslatir ve hatayi gizler.
+  assert.equal(cagri, 1);
+  assert.equal(sonuc.error?.message, 'column "yok" does not exist');
+});
+
+test('deneme hakki tukenirse son hata dondurulur -- sessizce yutulmaz', async () => {
+  let cagri = 0;
+
+  const sonuc = await okumayiYenidenDene(
+    () => {
+      cagri += 1;
+      return Promise.resolve({ data: null, error: { message: 'Gateway Timeout' } });
+    },
+    3,
+    () => Promise.resolve(),
+  );
+
+  assert.equal(cagri, 3);
+  assert.equal(sonuc.error?.message, 'Gateway Timeout');
+});
+
+test('ilk deneme basarili olursa hic beklenmez', async () => {
+  let cagri = 0;
+  let beklendi = false;
+
+  await okumayiYenidenDene(
+    () => {
+      cagri += 1;
+      return Promise.resolve({ data: [], error: null });
+    },
+    4,
+    () => {
+      beklendi = true;
+      return Promise.resolve();
+    },
+  );
+
+  assert.equal(cagri, 1);
+  assert.equal(beklendi, false);
 });
