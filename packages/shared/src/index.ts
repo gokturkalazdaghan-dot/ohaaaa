@@ -16,3 +16,4 @@ export * from './dataengine/index.js';
 export * from './showcase.js';
 export * from './categoryTree.js';
 export * from './keyset.js';
+export * from './gtin.js';

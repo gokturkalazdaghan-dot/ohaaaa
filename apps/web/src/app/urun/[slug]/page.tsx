@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import { formatMoney } from '@ohaaaa/shared';
+import { formatMoney, gtinDisplayForm } from '@ohaaaa/shared';
 
 import { DataUnavailable } from '@/components/DataUnavailable';
 import { ShieldIcon, TruckIcon } from '@/components/Icons';
@@ -148,6 +148,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
     .toISOString()
     .slice(0, 10);
 
+  const gtin = gtinDisplayForm(group.gtin);
+
   const productJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -155,6 +157,26 @@ export default async function ProductPage({ params }: ProductPageProps) {
     name: group.title,
     description: group.description ?? undefined,
     ...(group.brand ? { brand: { '@type': 'Brand', name: group.brand } } : {}),
+    /*
+     * GTIN -- urun kimliginin en guclu anahtari.
+     *
+     * NEDEN EKLENDI: alan veritabaninda doluydu (34.721 grubun 25.484'unde)
+     * ama yapilandirilmis veriye hic cikmiyordu. GTIN, Google'in ayni urunu
+     * farkli saticilarda eslestirmesini saglayan ana alandir; eksikligi
+     * dogrudan zengin sonuc ve alisveris yuzeyi kaybi demektir.
+     *
+     * GOSTERIM BICIMINE CEVRILIR. Veritabanindaki hal 14 haneye dolgulanmis
+     * kanonik bicim (besleme oyle saklıyor); urunun uzerinde yazan ve
+     * perakendecilerin indekledigi kod ise kendi asil uzunlugudur.
+     * `gtinDisplayForm` dolguyu YALNIZCA gecerli GTIN uzunluklarina
+     * (8/12/13/14) ve yalnizca kirpilan kisim tamamen sifirsa geri alir --
+     * korlemesine kirpmak anlamli bir bastaki sifiri silip gecersiz kod
+     * uretirdi.
+     *
+     * Alan yoksa HIC yazilmaz; bos bir `gtin` gecersiz yapilandirilmis
+     * veridir.
+     */
+    ...(gtin ? { gtin } : {}),
     /*
      * AggregateRating YALNIZCA gercek degerlendirme varsa eklenir.
      * Puani olmayan urune 0 yildiz bildirmek hem yaniltici hem de Google'in
