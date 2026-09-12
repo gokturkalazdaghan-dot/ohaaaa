@@ -22,8 +22,10 @@ import { gzipSync } from 'node:zlib';
 
 import { runSource, type IngestRepository } from '../pipeline.js';
 import type { IngestSummary, NormalizedOffer, SourceConfig } from '../types.js';
+import { parseStock } from '../normalize.js';
 import {
   AWIN_COLUMNS,
+  AWIN_RETAIL_FIELD_MAPPING,
   AWIN_DATAFEED_SECRET_REF,
   AWIN_FIELD_MAPPING,
   checkCommercialActivation,
@@ -492,4 +494,35 @@ test('kimlik bilgisi eksikse hata DEĞİŞKEN ADINI söyler, değerini değil', 
   // asla bir DEĞER.
   assert.equal(AWIN_DATAFEED_SECRET_REF, 'AWIN_DATAFEED_API_KEY');
   assert.ok(!/[=:]/.test(AWIN_DATAFEED_SECRET_REF));
+});
+
+// --- Google Shopping biçimli Awin "retail" feed'i ---------------------------
+// Bu bloktaki kolon adları GERÇEK bir feed dosyasına karşı doğrulandı
+// (advertiser 99013, 636 satır, 62 kolon) -- klasik şemanın aksine tahmin değil.
+
+test('retail eşlemesi gerçek feed başlığını eksiksiz karşılar', () => {
+  const gercekBaslik = [
+    'advertiser_id', 'advertiser_name', 'id', 'title', 'description', 'link',
+    'image_link', 'additional_image_link', 'mobile_link', 'aw_deep_link',
+    'google_product_category', 'product_type', 'gtin', 'mpn', 'brand',
+    'availability', 'price', 'sale_price', 'condition', 'item_group_id', 'shipping',
+  ];
+  const sonuc = verifyAwinMapping(gercekBaslik, AWIN_RETAIL_FIELD_MAPPING);
+  assert.equal(sonuc.ok, true);
+  assert.deepEqual(sonuc.missingRequired, []);
+  assert.deepEqual(sonuc.missingOptional, []);
+});
+
+test('retail eşlemesi izolasyonu advertiser_id ile yapar', () => {
+  // Klasik şemada `merchant_id`, Google Shopping şemasında `advertiser_id`.
+  assert.equal(AWIN_RETAIL_FIELD_MAPPING.merchant_id, 'advertiser_id');
+  // Katalogda mağaza adresi durur, Awin sarmalayıcısı değil.
+  assert.equal(AWIN_RETAIL_FIELD_MAPPING.url, 'link');
+  assert.notEqual(AWIN_RETAIL_FIELD_MAPPING.url, 'aw_deep_link');
+});
+
+test('availability alt çizgili biçimde okunur', () => {
+  // 'in_stock' eksikken STOKTAKİ HER ÜRÜN stoksuz yazılıyordu (636'da 476).
+  assert.ok(parseStock('in_stock') > 0);
+  assert.equal(parseStock('out_of_stock'), 0);
 });

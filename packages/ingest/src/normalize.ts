@@ -184,9 +184,21 @@ export function parseStock(value: string | null | undefined): number {
     return Math.max(0, Math.min(numeric, 1_000_000));
   }
 
-  const inStock = ['in stock', 'instock', 'available', 'true', 'yes', 'evet', 'var', 'stokta'];
+  /*
+   * ALT ÇİZGİLİ BİÇİMLER GOOGLE SHOPPING ŞEMASINDAN GELİR.
+   *
+   * 'in stock' ve 'instock' zaten vardı ama 'in_stock' YOKTU; Google
+   * Shopping biçimli feed'ler (Awin'in "retail" ürün verisi bu biçimde)
+   * tam olarak alt çizgili yazar. Eksikken hiçbir şey hata vermiyordu:
+   * bilinmeyen değer 0'a düşüyor ve STOKTAKİ HER ÜRÜN stoksuz yazılıyordu.
+   * Gerçek bir feed'de ölçüldü -- 636 üründen 476'sı sessizce kayboluyordu.
+   */
+  const inStock = [
+    'in stock', 'instock', 'in_stock', 'available', 'true', 'yes',
+    'evet', 'var', 'stokta',
+  ];
   const outOfStock = [
-    'out of stock', 'outofstock', 'unavailable', 'false', 'no',
+    'out of stock', 'outofstock', 'out_of_stock', 'unavailable', 'false', 'no',
     'hayir', 'hayır', 'yok', 'tukendi', 'tükendi', 'preorder', 'backorder',
   ];
 

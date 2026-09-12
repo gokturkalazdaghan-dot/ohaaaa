@@ -617,7 +617,7 @@
     {
       "merchant": "Simple Project",
       "slug": "simple-project",
-      "mid": "158122",
+      "mid": "99013",
       "application_status": "approved",
       "record_status": "prospect",
       "program_status_awin": "Link status Online (pano 06/09/2026)",
@@ -626,19 +626,20 @@
       "country": "US",
       "deeplink_template": "https://www.awin1.com/cread.php?awinmid=158122...",
       "product_feed_flag": "Yes (Feed Last Updated 15/05/2026)",
-      "feed_address": null,
+      "feed_address": "Awin Product Data, Google Shopping semasi (retail/en_US)",
       "feed_id": "2281",
       "commercial_data": {
-        "product_count": null,
+        "product_count": 636,
         "epc": null,
         "conversion_rate": null,
         "vouchers_deals": null,
-        "currency": null
+        "currency": "USD"
       },
       "partner_rank": null,
       "technical_readiness": "PARTIAL",
-      "blocker": "Feed bağı kuruldu (kaynak: simple-project-awin-f2281, feed 2281 <-> MID 158122). KAYNAK ETKİN DEĞİL. Eksik: merchants.homepage_url (izinli alan adı bundan türetilir; boşken normalize.ts her ürün adresini reddeder) ve terms_verified_at (merchants_active_needs_verified_terms kısıtı aktifliği engelliyor).",
-      "feed_id_source": "Operatör bildirimi (Awin panosu): F2281 / numeric 2281, program \"simpleprojectus\", bölge US, ~659 ürün, advertiser feed sayısı 2."
+      "blocker": "Feed DOGRULANDI: 636 urun, esleme eksiksiz, idempotent, izolasyon gecti. KAYNAK ETKIN DEGIL: merchants.terms_verified_at yok; merchants_active_needs_verified_terms kisiti aktifligi engelliyor. Tek kalan engel budur.",
+      "feed_id_source": "Operatör bildirimi (Awin panosu): F2281 / numeric 2281, program \"simpleprojectus\", bölge US, ~659 ürün, advertiser feed sayısı 2.",
+      "mid_correction": "158122 -> 99013 (12/09/2026). Kanit: gercek feed dosyasinda advertiser_id=99013 ve Awin in urettigi aw_deep_link icinde awinmid=99013, 636/636 satir; awinaffid=3074081."
     }
   ]
 }

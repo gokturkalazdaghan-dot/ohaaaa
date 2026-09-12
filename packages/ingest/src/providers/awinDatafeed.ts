@@ -275,3 +275,74 @@ export function checkCommercialActivation(
 
   return { activatable: blockers.length === 0, blockers };
 }
+
+/**
+ * ---------------------------------------------------------------------------
+ * AWIN "RETAIL" ÜRÜN VERİSİ — GOOGLE SHOPPING ŞEMASI
+ * ---------------------------------------------------------------------------
+ * Yukarıdaki `AWIN_COLUMNS` Awin'in KLASİK datafeed şemasıdır ve hâlâ
+ * doğrulanmamıştır. Awin ayrıca ürün verisini GOOGLE SHOPPING biçiminde
+ * yayınlıyor ve Simple Project'in feed'i bu biçimde geldi.
+ *
+ * BU BLOK GERÇEK BİR FEED DOSYASINA KARŞI DOĞRULANDI
+ * (advertiser 99013, 636 satır, 62 kolon): kolon adları aşağıdaki
+ * sabitlerle birebir eşleşti.
+ *
+ * Google Shopping alanları (`id`, `title`, `link`, `price`, `gtin`, `mpn`,
+ * `availability`…) + Awin uzantıları (`advertiser_id`, `advertiser_name`,
+ * `aw_deep_link`, `aw_mobile_link`).
+ */
+export const AWIN_RETAIL_COLUMNS = {
+  advertiserId: 'advertiser_id',
+  advertiserName: 'advertiser_name',
+  id: 'id',
+  title: 'title',
+  description: 'description',
+  link: 'link',
+  imageLink: 'image_link',
+  /** Awin'in sardığı ortaklık adresi -- katalogda SAKLANMAZ (aşağıdaki nota bakın). */
+  awDeepLink: 'aw_deep_link',
+  googleProductCategory: 'google_product_category',
+  productType: 'product_type',
+  gtin: 'gtin',
+  mpn: 'mpn',
+  brand: 'brand',
+  availability: 'availability',
+  /** Biçim: "659.00 USD" -- para birimi değerin İÇİNDE. */
+  price: 'price',
+  salePrice: 'sale_price',
+  condition: 'condition',
+  itemGroupId: 'item_group_id',
+  shipping: 'shipping',
+} as const;
+
+/**
+ * Google Shopping biçimli Awin feed'i için DOĞRULANMIŞ eşleme.
+ *
+ * `url` yine `link` (mağazanın kendi adresi), `aw_deep_link` DEĞİL --
+ * gerekçe `AWIN_FIELD_MAPPING` üzerindeki notta; çift sarmalama tıklamayı
+ * bizim clickref'imizle atfedilemez hâle getirir.
+ *
+ * EŞLENMEYENLER ve sebepleri (uydurulmadı, ölçüldü):
+ *   • currency  -> ayrı kolon YOK; para birimi "659.00 USD" gibi değerin
+ *     içinde geliyor ve `parseMoneyToCents` sayıyı doğru çıkarıyor.
+ *     Kanonik para birimi kaynağın `currency` alanından gelir.
+ *   • compare_at_price -> `sale_price` ölçülen dosyada 636 satırın
+ *     TAMAMINDA boştu; eşlemek her satırda boş bir alan okumak olurdu.
+ *   • shipping_fee -> `shipping` Google'ın bileşik biçiminde
+ *     (ülke:bölge:servis:tutar); tek sayıya indirgemek tahmin olurdu.
+ */
+export const AWIN_RETAIL_FIELD_MAPPING: FieldMapping = {
+  external_id: AWIN_RETAIL_COLUMNS.id,
+  title: AWIN_RETAIL_COLUMNS.title,
+  price: AWIN_RETAIL_COLUMNS.price,
+  url: AWIN_RETAIL_COLUMNS.link,
+  gtin: AWIN_RETAIL_COLUMNS.gtin,
+  brand: AWIN_RETAIL_COLUMNS.brand,
+  image: AWIN_RETAIL_COLUMNS.imageLink,
+  description: AWIN_RETAIL_COLUMNS.description,
+  stock: AWIN_RETAIL_COLUMNS.availability,
+  category: AWIN_RETAIL_COLUMNS.googleProductCategory,
+  /** Mağaza izolasyonunun sinyali -- klasik şemada `merchant_id`, burada `advertiser_id`. */
+  merchant_id: AWIN_RETAIL_COLUMNS.advertiserId,
+};
