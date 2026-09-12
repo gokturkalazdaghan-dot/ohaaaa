@@ -18,10 +18,20 @@
 
 import type { MetadataRoute } from 'next';
 
-import { getCategoryTree, getVendors, searchProducts } from '@/data/catalog';
+import { getCategoryTree, getSitemapProducts, getVendors } from '@/data/catalog';
 import { isAffiliateOnly, siteUrl } from '@/lib/env';
 
-/** Tek haritaya sığdırılacak en fazla ürün. */
+/**
+ * Tek haritaya sığdırılacak en fazla ürün.
+ *
+ * Google tek bir site haritası dosyasında 50.000 adrese kadar kabul eder.
+ * 45.000 o tavanın altında bilinçli bir paydır: katalog bugün 34.510 ürün
+ * grubu içeriyor (ölçüldü) ve payı aşana kadar bölmeye gerek yok.
+ *
+ * Katalog 45.000'i geçtiğinde bu sabiti büyütmek YETMEZ -- sitemap index
+ * mimarisine geçilmeli (sitemap-products-1.xml, -2.xml ...). O ayrı bir iş;
+ * burada kapsamın kendisi düzeltiliyor.
+ */
 const MAX_PRODUCTS = 45_000;
 
 export const revalidate = 3600;
@@ -129,8 +139,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       },
     ]);
 
-    // --- Ürün sayfaları ------------------------------------------------------
-    const { results: products } = await searchProducts({ limit: MAX_PRODUCTS, sort: 'offers' });
+    /* --- Ürün sayfaları ------------------------------------------------------
+       `searchProducts` KULLANILMIYOR ve bu bilinçli: o yol `search_products`
+       işlevine gidiyor, işlev de limiti `least(p_limit, 100)` ile kesiyor.
+       Yani burada 45.000 istenip 100 alınıyordu -- canlı site haritasında
+       34.510 üründen 100'ü vardı, kapsam %0,29 (ölçüldü). `MAX_PRODUCTS`
+       sabiti bir niyet beyanıydı, etkisi yoktu.
+
+       `getSitemapProducts` grupları doğrudan ve keyset sayfalamayla okuyor;
+       sayfa maliyeti konumdan bağımsız (~38 ms). */
+    const products = await getSitemapProducts(MAX_PRODUCTS);
 
     const productPages: MetadataRoute.Sitemap = products.map((product) => ({
       url: `${siteUrl}/urun/${product.slug}`,
