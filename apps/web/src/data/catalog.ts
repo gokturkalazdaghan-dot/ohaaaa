@@ -34,7 +34,13 @@ import type {
 import { isSupabaseConfigured } from '@/lib/env';
 import { createAnonClient } from '@/lib/supabase/anon';
 
-import { demoCategories, demoFlashDeals, demoProductGroups, demoVendors } from './demo';
+import {
+  demoCategories,
+  demoFlashDeals,
+  demoMerchants,
+  demoProductGroups,
+  demoVendors,
+} from './demo';
 
 export type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'offers';
 
@@ -1164,11 +1170,40 @@ export async function getVendorProducts(
   vendorId: string,
   options: { limit: number; offset: number },
 ): Promise<SearchPage> {
+  return magazaUrunleri('vendor_id', vendorId, options, (offer) => offer.vendorId === vendorId);
+}
+
+/**
+ * Bir ORTAK MAĞAZANIN vitrinindeki ürünler.
+ *
+ * Taşeron sürümüyle tek farkı süzülen sütun: `merchant_id`. Gövdeyi
+ * kopyalamak yerine ortak yardımcıya veriliyor -- iki kopya, para birimi
+ * ya da sayfalama düzeltmesi birine uygulanıp diğerine unutulduğunda
+ * sessizce ayrışırdı.
+ */
+export async function getMerchantProducts(
+  merchantId: string,
+  options: { limit: number; offset: number },
+): Promise<SearchPage> {
+  return magazaUrunleri(
+    'merchant_id',
+    merchantId,
+    options,
+    (offer) => offer.merchantId === merchantId,
+  );
+}
+
+async function magazaUrunleri(
+  sutun: 'vendor_id' | 'merchant_id',
+  kimlik: string,
+  options: { limit: number; offset: number },
+  demoEslesme: (offer: Offer) => boolean,
+): Promise<SearchPage> {
   const supabase = createAnonClient();
 
   if (!supabase) {
     const results = demoProductGroups
-      .filter((group) => group.offers.some((offer) => offer.vendorId === vendorId))
+      .filter((group) => group.offers.some(demoEslesme))
       .map(toSearchResult);
 
     return {
@@ -1187,7 +1222,7 @@ export async function getVendorProducts(
        )`,
       { count: 'exact' },
     )
-    .eq('vendor_id', vendorId)
+    .eq(sutun, kimlik)
     .eq('status', 'active')
     .order('updated_at', { ascending: false })
     .range(options.offset, options.offset + options.limit - 1);
@@ -1227,6 +1262,151 @@ export async function getVendorProducts(
   }
 
   return { results, totalCount: count ?? results.length };
+}
+
+/**
+ * Bir mağaza vitrini -- taşeron da olabilir, ortak mağaza da.
+ *
+ * NEDEN ORTAK BİR TİP
+ * `/magaza/[slug]` rotası yalnızca `vendors` tablosunu okuyordu. O tablo
+ * üretimde BOŞ (0 satır, ölçüldü); kataloğun tamamını sağlayan ortak
+ * mağazanın (Back to the Office, 35.742 aktif teklif) hiç sayfası yoktu ve
+ * `/magaza/back-to-the-office` 404 dönüyordu. İki tablo aynı sayfayı
+ * besleyebilir ama alanları farklı; ortak tip farkı TİPTE tutuyor,
+ * sayfanın içine `if (merchant)` serpiştirmek yerine.
+ */
+export interface StoreProfile {
+  /** Hangi tablodan geldiği. Sayfa bunu göstermez, sorgular kullanır. */
+  kind: 'vendor' | 'merchant';
+  id: string;
+  slug: string;
+  displayName: string;
+  description: string | null;
+  logoUrl: string | null;
+  /**
+   * Puan ve oy sayısı. Ortak mağazalarda HER ZAMAN 0/0 olur: onların
+   * puanını biz toplamıyoruz ve ağdan gelen bir puan da yok. Sayfa zaten
+   * `ratingCount > 0` değilse puanı hiç çizmiyor, dolayısıyla sıfır burada
+   * "puan yok" demek -- "kötü mağaza" değil.
+   */
+  rating: number;
+  ratingCount: number;
+}
+
+/**
+ * Adrese göre mağaza: önce taşeron, sonra ortak mağaza.
+ *
+ * SIRA ÖNEMLİ VE SABİT. İki tabloda aynı adres bulunabilir; taşeronu önce
+ * denemek kararı belirli kılıyor. Rastgele ya da "hangisi önce dönerse"
+ * davranışı, aynı adresin bazen bir mağazayı bazen diğerini göstermesi
+ * demek olurdu.
+ */
+export async function getStoreBySlug(slug: string): Promise<StoreProfile | null> {
+  const tasoron = await getVendorBySlug(slug);
+  if (tasoron) {
+    return {
+      kind: 'vendor',
+      id: tasoron.id,
+      slug: tasoron.slug,
+      displayName: tasoron.displayName,
+      description: tasoron.description,
+      logoUrl: tasoron.logoUrl,
+      rating: tasoron.rating,
+      ratingCount: tasoron.ratingCount,
+    };
+  }
+
+  const supabase = createAnonClient();
+
+  if (!supabase) {
+    const magaza = demoMerchants.find((m) => m.slug === slug);
+    if (!magaza) return null;
+    return {
+      kind: 'merchant',
+      id: magaza.id,
+      slug: magaza.slug,
+      displayName: magaza.displayName,
+      description: null,
+      logoUrl: magaza.logoUrl,
+      rating: 0,
+      ratingCount: 0,
+    };
+  }
+
+  /*
+   * `description` SEÇİLMİYOR: anon rolüne o sütunun okuma izni verilmemiş
+   * (ölçüldü -- izin verilen sütunlar id, slug, display_name, homepage_url,
+   * logo_url, country_code, network, status, created_at, updated_at).
+   * İstemek sorgunun tamamını düşürürdü.
+   *
+   * `status = 'active'` filtresi satır güvenliğinin zaten zorladığı şeyi
+   * açıkça yazıyor: başvurusu süren mağazanın vitrini olmaz.
+   */
+  const { data, error } = await supabase
+    .from('merchants')
+    .select('id, slug, display_name, logo_url')
+    .eq('slug', slug)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (error) throw new Error(`Magaza okunamadi: ${error.message}`);
+  if (!data) return null;
+
+  return {
+    kind: 'merchant',
+    id: String(data.id),
+    slug: String(data.slug),
+    displayName: String(data.display_name),
+    description: null,
+    logoUrl: data.logo_url ? String(data.logo_url) : null,
+    rating: 0,
+    ratingCount: 0,
+  };
+}
+
+/** Bir mağazanın vitrinindeki ürünler -- taşeron ya da ortak mağaza. */
+export async function getStoreProducts(
+  store: StoreProfile,
+  options: { limit: number; offset: number },
+): Promise<SearchPage> {
+  if (store.kind === 'vendor') return getVendorProducts(store.id, options);
+  return getMerchantProducts(store.id, options);
+}
+
+/**
+ * Site haritasına girecek ortak mağazalar.
+ *
+ * Teklifi olmayan mağaza listelenmez: ürünsüz bir vitrin ince içeriktir ve
+ * tarama bütçesini boşa harcar. Aktif mağaza sayısı bugün 1, dolayısıyla
+ * mağaza başına bir sayım isteği kabul edilebilir.
+ */
+export async function getActiveMerchants(): Promise<Array<{ slug: string }>> {
+  const supabase = createAnonClient();
+  if (!supabase) return demoMerchants.map((m) => ({ slug: m.slug }));
+
+  const { data, error } = await supabase
+    .from('merchants')
+    .select('id, slug')
+    .eq('status', 'active')
+    .limit(50);
+
+  if (error) throw new Error(`Ortak magazalar okunamadi: ${error.message}`);
+
+  const magazalar = data ?? [];
+  if (magazalar.length === 0) return [];
+
+  const sonuc = await Promise.all(
+    magazalar.map(async (magaza) => {
+      const { count } = await supabase
+        .from('products')
+        .select('id', { count: 'exact', head: true })
+        .eq('merchant_id', String(magaza.id))
+        .eq('status', 'active');
+      return { slug: String(magaza.slug), adet: count ?? 0 };
+    }),
+  );
+
+  return sonuc.filter((m) => m.adet > 0).map((m) => ({ slug: m.slug }));
 }
 
 /** Ürün sayfasındaki "Bunlara da bakın" bloğu. */

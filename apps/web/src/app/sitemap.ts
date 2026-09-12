@@ -18,7 +18,12 @@
 
 import type { MetadataRoute } from 'next';
 
-import { getCategoryTree, getSitemapProducts, getVendors } from '@/data/catalog';
+import {
+  getActiveMerchants,
+  getCategoryTree,
+  getSitemapProducts,
+  getVendors,
+} from '@/data/catalog';
 import { isAffiliateOnly, siteUrl } from '@/lib/env';
 
 /**
@@ -164,14 +169,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // gerçek aramalara denk gelirler.
     const vendors = await getVendors().catch(() => []);
 
-    const vendorPages: MetadataRoute.Sitemap = vendors
-      .filter((vendor) => vendor.activeProductCount > 0)
-      .map((vendor) => ({
-        url: `${siteUrl}/magaza/${vendor.slug}`,
-        lastModified: now,
-        changeFrequency: 'daily' as const,
-        priority: 0.6,
-      }));
+    /* Ortak mağazalar da aynı rotayı kullanıyor. Eskiden yalnızca taşeronlar
+       listeleniyordu ve o tablo üretimde boş: kataloğun tamamını sağlayan
+       mağazanın vitrini haritada hiç yoktu. Teklifi olmayan mağaza yine
+       dışarıda -- ürünsüz vitrin ince içeriktir. */
+    const merchants = await getActiveMerchants().catch(() => []);
+
+    const vendorPages: MetadataRoute.Sitemap = [
+      ...vendors.filter((vendor) => vendor.activeProductCount > 0).map((vendor) => vendor.slug),
+      ...merchants.map((merchant) => merchant.slug),
+    ].map((slug) => ({
+      url: `${siteUrl}/magaza/${slug}`,
+      lastModified: now,
+      changeFrequency: 'daily' as const,
+      priority: 0.6,
+    }));
 
     return [...staticPages, ...marketplacePages, ...categoryPages, ...vendorPages, ...productPages];
   } catch (error) {
