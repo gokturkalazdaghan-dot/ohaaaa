@@ -63,7 +63,7 @@ jobs:
         ports: ['5432:5432']
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # checkout varsayilan olarak GITHUB_TOKEN'i `.git/config`'e yazar
           # ve sonraki her adim onu okuyabilir -- `npm ci` sirasinda calisan
