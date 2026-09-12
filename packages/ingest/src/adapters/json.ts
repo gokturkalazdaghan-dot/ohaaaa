@@ -9,26 +9,41 @@
 
 import type { AdapterResult, RawRecord } from '../types.js';
 
-export function parseJson(content: string): AdapterResult {
-  const warnings: string[] = [];
+/**
+ * JSON beslemesini PARÇA PARÇA teslim eder.
+ *
+ * DÜRÜST SINIR: `JSON.parse` doğası gereği belgenin TAMAMINI bellekte kurar;
+ * bunu değiştirmek artımlı bir JSON çözümleyicisi yazmak demektir ve bu turun
+ * kapsamı dışında. Burada sınırlanan şey, çözümlenmiş diziden ÜRETİLEN
+ * `RawRecord` nesneleri: düzleştirme parça parça yapılıyor ve çağıran her
+ * parçayı bıraktıkça serbest kalıyor.
+ *
+ * Yani CSV ve XML için tavan parçadır; JSON'da ayrıca çözümlenmiş belge
+ * kadar bellek gerekir. Gerçek Awin beslemeleri CSV olduğu için bu sınır
+ * bugün üretimde bir yol üzerinde değil.
+ */
+export function* streamJsonBatches(
+  content: string,
+  options: { batchSize?: number } = {},
+): Generator<AdapterResult> {
+  const batchSize = Math.max(1, options.batchSize ?? 2_000);
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(content);
   } catch (error) {
-    return {
-      records: [],
-      warnings: [`JSON ayrıştırılamadı: ${(error as Error).message}`],
-    };
+    yield { records: [], warnings: [`JSON ayrıştırılamadı: ${(error as Error).message}`] };
+    return;
   }
 
   const array = findLargestObjectArray(parsed);
-
   if (!array) {
-    return { records: [], warnings: ['JSON içinde ürün dizisi bulunamadı.'] };
+    yield { records: [], warnings: ['JSON içinde ürün dizisi bulunamadı.'] };
+    return;
   }
 
-  const records: RawRecord[] = [];
+  let records: RawRecord[] = [];
+  let warnings: string[] = [];
 
   for (const [index, item] of array.entries()) {
     if (typeof item !== 'object' || item === null || Array.isArray(item)) {
@@ -37,6 +52,26 @@ export function parseJson(content: string): AdapterResult {
     }
 
     records.push(flatten(item as Record<string, unknown>));
+
+    if (records.length >= batchSize) {
+      yield { records, warnings };
+      records = [];
+      warnings = [];
+    }
+  }
+
+  if (records.length > 0 || warnings.length > 0) {
+    yield { records, warnings };
+  }
+}
+
+export function parseJson(content: string): AdapterResult {
+  const records: RawRecord[] = [];
+  const warnings: string[] = [];
+
+  for (const batch of streamJsonBatches(content)) {
+    for (const r of batch.records) records.push(r);
+    for (const w of batch.warnings) warnings.push(w);
   }
 
   return { records, warnings };

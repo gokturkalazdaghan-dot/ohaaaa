@@ -37,9 +37,9 @@ import type {
 
 import { detectFeedErrorEnvelope } from '@ohaaaa/shared/providers';
 
-import { parseCsv } from './adapters/csv.js';
-import { parseJson } from './adapters/json.js';
-import { parseXml } from './adapters/xml.js';
+import { parseCsv, streamCsvBatches } from './adapters/csv.js';
+import { parseJson, streamJsonBatches } from './adapters/json.js';
+import { parseXml, streamXmlBatches } from './adapters/xml.js';
 import { normalizeRecords } from './normalize.js';
 import { planNextRefresh } from './refreshSignals.js';
 import { buildAuthHeaders } from './auth.js';
@@ -153,6 +153,21 @@ const ADAPTERS = {
   feed_json: parseJson,
 } as const;
 
+/**
+ * Parça parça çözümleyiciler.
+ *
+ * `ADAPTERS` (toplu) KORUNUYOR: küçük beslemeler, `--dry-run` ve testler onu
+ * kullanıyor ve ikisi aynı çözümleyicinin üstünde duruyor.
+ */
+const STREAM_ADAPTERS = {
+  feed_csv: streamCsvBatches,
+  feed_xml: streamXmlBatches,
+  feed_json: streamJsonBatches,
+} as const;
+
+/** Bir turda bellekte yaşayacak ham kayıt sayısı. */
+const PARSE_BATCH_SIZE = 2_000;
+
 /** Bir çalışmada en fazla kaç kalem işlenir. Bellek ve süre koruması. */
 const MAX_ITEMS_PER_RUN = 50_000;
 /** ingest_runs.sample_errors alanında saklanan örnek hata sayısı. */
@@ -235,37 +250,78 @@ export async function runSource(
     const basliklar = buildAuthHeaders(source);
     const { body } = await deps.fetcher.get(adres, { headers: basliklar });
 
-    // --- 2) Ayrıştır ---------------------------------------------------------
-    const parsed = adapter(body);
-    let records: RawRecord[] = parsed.records;
-
+    // --- 2) Ayrıştır (PARÇA PARÇA) -------------------------------------------
     /*
-     * KIRPMA, ANLIK GÖRÜNTÜYÜ EKSİK YAPAR.
+     * HAM KAYITLAR ARTIK TOPLUCA TUTULMUYOR.
      *
-     * Önce bu bayrak yoktu ve `markStale` kırpılmış bir turdan sonra da
-     * çalışıyordu: 60.000 kalemlik bir feed'de sınırın ötesindeki 10.000
-     * teklif HER TURDA "bu beslemede görülmedi" sayılıp stoksuz
-     * işaretleniyordu -- kısmi bir anlık görüntüden toplu
-     * geçersizleştirme. Sıralama değişirse de her turda başka 10.000'i
-     * gidip geliyordu.
+     * Eskiden `adapter(body)` beslemenin tamamını `RawRecord[]` olarak
+     * kuruyor, hemen ardından `normalizeRecords` bir de `NormalizedOffer[]`
+     * üretiyordu: iki tam kopya AYNI ANDA bellekte yaşıyordu. ÖLÇÜLDÜ:
+     * 116 417 satırlık gerçek bir Awin beslemesinde yalnızca ayrıştırma
+     * çıktısı 586 MB tutuyordu (30 MB metin için ~19x).
+     *
+     * Artık her parça çözümlenir çözümlenmez normalleştiriliyor ve ham
+     * kayıtlar serbest bırakılıyor; bellekte kalan şey NORMALLEŞTİRİLMİŞ
+     * tekliflerdir. Onlar hâlâ tümüyle tutuluyor çünkü 5. adımdaki delta ve
+     * "anlık görüntü tam mı" kararı BÜTÜN kümeyi görmek zorunda -- onu
+     * değiştirmek alım hattının sözleşmesini değiştirmek olurdu.
      */
+    const streamAdapter = STREAM_ADAPTERS[source.kind as keyof typeof STREAM_ADAPTERS];
+
+    const offersAll: NormalizedOffer[] = [];
+    const errorsAll: Array<{ externalId: string | null; reason: string }> = [];
+    const parseWarnings: string[] = [];
+    let hamSayac = 0;
     let kirpildi = false;
-    if (records.length > MAX_ITEMS_PER_RUN) {
-      kirpildi = true;
+
+    for (const batch of streamAdapter(body, { batchSize: PARSE_BATCH_SIZE })) {
+      for (const w of batch.warnings) {
+        if (parseWarnings.length < MAX_SAMPLE_ERRORS) parseWarnings.push(w);
+      }
+
+      let kayitlar = batch.records;
+
+      /*
+       * KIRPMA, ANLIK GÖRÜNTÜYÜ EKSİK YAPAR.
+       *
+       * `markStale` kırpılmış bir turdan sonra çalışırsa, sınırın ötesindeki
+       * teklifler HER TURDA "bu beslemede görülmedi" sayılıp stoksuz
+       * işaretlenir -- kısmi bir anlık görüntüden toplu geçersizleştirme.
+       */
+      if (hamSayac + kayitlar.length > MAX_ITEMS_PER_RUN) {
+        kayitlar = kayitlar.slice(0, Math.max(0, MAX_ITEMS_PER_RUN - hamSayac));
+        kirpildi = true;
+      }
+
+      if (kayitlar.length > 0) {
+        hamSayac += kayitlar.length;
+        const bolum = normalizeRecords(kayitlar, source.fieldMapping, {
+          defaultCurrency: source.currency,
+          allowedHosts: source.allowedHosts,
+        });
+        for (const o of bolum.offers) offersAll.push(o);
+        for (const e of bolum.errors) errorsAll.push(e);
+      }
+
+      if (kirpildi) break;
+    }
+
+    if (kirpildi) {
       summary.sampleErrors.push({
         externalId: null,
-        reason: `Feed ${records.length} kalem içeriyor; ilk ${MAX_ITEMS_PER_RUN} işlendi. `
+        reason: `Feed ${MAX_ITEMS_PER_RUN}+ kalem içeriyor; ilk ${MAX_ITEMS_PER_RUN} işlendi. `
           + 'Anlık görüntü eksik sayıldı; bu turda bayatlatma yapılmayacak.',
       });
-      records = records.slice(0, MAX_ITEMS_PER_RUN);
     }
+
+    const records = { length: hamSayac };
 
     summary.itemsSeen = records.length;
 
-    for (const warning of parsed.warnings.slice(0, MAX_SAMPLE_ERRORS)) {
+    for (const warning of parseWarnings) {
       summary.sampleErrors.push({ externalId: null, reason: warning });
     }
-    summary.itemsSkipped += parsed.warnings.length;
+    summary.itemsSkipped += parseWarnings.length;
 
     // BOŞ FEED KORUMASI: bir feed sessizce boşalırsa (ağ tarafında bir şey
     // bozulduysa) bütün kataloğu stoksuz işaretlemek felakettir. Boş sonuç
@@ -311,11 +367,9 @@ export async function runSource(
       );
     }
 
-    // --- 3) Normalleştir -----------------------------------------------------
-    const { offers, errors } = normalizeRecords(records, source.fieldMapping, {
-      defaultCurrency: source.currency,
-      allowedHosts: source.allowedHosts,
-    });
+    // --- 3) Normalleştirme 2. adımda PARÇA PARÇA yapıldı ---------------------
+    const offers = offersAll;
+    const errors = errorsAll;
 
     summary.itemsFailed = errors.length;
     summary.sampleErrors.push(...errors.slice(0, MAX_SAMPLE_ERRORS));
@@ -494,7 +548,7 @@ export async function runSource(
     }
 
     summary.status =
-      summary.itemsFailed > 0 || parsed.warnings.length > 0 || !summary.snapshotComplete
+      summary.itemsFailed > 0 || summary.itemsSkipped > 0 || !summary.snapshotComplete
         ? 'partial'
         : 'success';
   } catch (error) {

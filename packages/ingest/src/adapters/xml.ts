@@ -20,18 +20,27 @@ import type { AdapterResult, RawRecord } from '../types.js';
 /** Ürün öğesi olabilecek etiket adları (öncelik sırasıyla). */
 const ITEM_TAGS = ['item', 'entry', 'product', 'urun', 'offer'];
 
-export function parseXml(content: string, itemTag?: string): AdapterResult {
-  const warnings: string[] = [];
+/**
+ * XML beslemesini PARÇA PARÇA çözümler.
+ *
+ * Tarama zaten artımlıydı (`exec` + `lastIndex`); biriken tek şey
+ * `records` dizisiydi. Artık parça dolunca teslim ediliyor ve serbest
+ * kalıyor -- bellek tavanı parçanın kendisi.
+ */
+export function* streamXmlBatches(
+  content: string,
+  options: { batchSize?: number; itemTag?: string } = {},
+): Generator<AdapterResult> {
+  const batchSize = Math.max(1, options.batchSize ?? 2_000);
+  const tag = options.itemTag ?? detectItemTag(content);
 
-  const tag = itemTag ?? detectItemTag(content);
   if (!tag) {
-    return {
+    yield {
       records: [],
       warnings: ['Tekrar eden ürün öğesi bulunamadı (item/entry/product bekleniyordu).'],
     };
+    return;
   }
-
-  const records: RawRecord[] = [];
 
   // Ad alanı öneki olabilir: <g:item> veya <item>.
   const itemPattern = new RegExp(
@@ -39,13 +48,14 @@ export function parseXml(content: string, itemTag?: string): AdapterResult {
     'gi',
   );
 
+  let records: RawRecord[] = [];
+  let warnings: string[] = [];
   let match: RegExpExecArray | null;
   let index = 0;
 
   while ((match = itemPattern.exec(content)) !== null) {
     index += 1;
-    const inner = match[1]!;
-    const record = parseChildren(inner);
+    const record = parseChildren(match[1]!);
 
     if (Object.keys(record).length === 0) {
       warnings.push(`${index}. öğe boş — atlandı.`);
@@ -53,6 +63,26 @@ export function parseXml(content: string, itemTag?: string): AdapterResult {
     }
 
     records.push(record);
+
+    if (records.length >= batchSize) {
+      yield { records, warnings };
+      records = [];
+      warnings = [];
+    }
+  }
+
+  if (records.length > 0 || warnings.length > 0) {
+    yield { records, warnings };
+  }
+}
+
+export function parseXml(content: string, itemTag?: string): AdapterResult {
+  const records: RawRecord[] = [];
+  const warnings: string[] = [];
+
+  for (const batch of streamXmlBatches(content, { itemTag })) {
+    for (const r of batch.records) records.push(r);
+    for (const w of batch.warnings) warnings.push(w);
   }
 
   return { records, warnings };

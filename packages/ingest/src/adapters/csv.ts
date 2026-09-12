@@ -16,30 +16,56 @@
 
 import type { AdapterResult, RawRecord } from '../types.js';
 
-export function parseCsv(content: string, delimiter?: string): AdapterResult {
+/** Bir turda bellekte tutulacak en fazla kalem. */
+export const DEFAULT_BATCH_SIZE = 2_000;
+
+/**
+ * Bir beslemeyi PARÇA PARÇA çözümler.
+ *
+ * Çağıran her parçayı işleyip bıraktığında bellek sabit kalır: aynı anda
+ * yalnızca `batchSize` kadar kayıt yaşar. 116 417 satırlık gerçek bir Awin
+ * beslemesinde eski yol 643 MB heap bırakıyordu; burada tavan parçanın
+ * kendisidir.
+ *
+ * UYARI -- METNİN KENDİSİ HÂLÂ BELLEKTE. Girdi bir `string` olduğu için
+ * çözümlenmiş gövde (ör. 30 MB) çağıranın elinde duruyor. Sınırlanan şey
+ * AYRIŞTIRMA ÇIKTISI: satır dizileri ve kayıt nesneleri. Gövdeyi de akıtmak
+ * `Fetcher` sözleşmesini değiştirmeyi gerektirir ve gövde/gzip-bomba
+ * sınırları oradadır -- bu yüzden bu turda dokunulmadı.
+ */
+export function* streamCsvBatches(
+  content: string,
+  options: { batchSize?: number; delimiter?: string } = {},
+): Generator<AdapterResult> {
+  const batchSize = Math.max(1, options.batchSize ?? DEFAULT_BATCH_SIZE);
+
   // Excel'in ürettiği feed'lerde BOM sık görülür ve ilk kolon adını bozar.
   const text = content.replace(/^﻿/, '');
-  const sep = delimiter ?? detectDelimiter(text);
+  const sep = options.delimiter ?? detectDelimiter(text);
 
-  const rows = splitRows(text, sep);
-  const warnings: string[] = [];
+  const satirlar = iterateRows(text, sep);
 
-  if (rows.length === 0) {
-    return { records: [], warnings: ['Dosya boş.'] };
+  const ilk = satirlar.next();
+  if (ilk.done) {
+    yield { records: [], warnings: ['Dosya boş.'] };
+    return;
   }
 
-  const header = rows[0]!.map((cell) => cell.trim());
-  const records: RawRecord[] = [];
+  const header = ilk.value.map((cell) => cell.trim());
 
-  for (let i = 1; i < rows.length; i += 1) {
-    const row = rows[i]!;
+  let records: RawRecord[] = [];
+  let warnings: string[] = [];
+  let satirNo = 1;
+
+  for (const row of satirlar) {
+    satirNo += 1;
 
     // Tamamen boş satırlar (dosya sonu) sessizce atlanır.
     if (row.length === 1 && row[0]!.trim() === '') continue;
 
     if (row.length !== header.length) {
       warnings.push(
-        `Satır ${i + 1}: ${header.length} kolon bekleniyordu, ${row.length} bulundu — atlandı.`,
+        `Satır ${satirNo}: ${header.length} kolon bekleniyordu, ${row.length} bulundu — atlandı.`,
       );
       continue;
     }
@@ -49,6 +75,35 @@ export function parseCsv(content: string, delimiter?: string): AdapterResult {
       record[header[c]!] = row[c]!;
     }
     records.push(record);
+
+    if (records.length >= batchSize) {
+      yield { records, warnings };
+      // YENİ diziler: `yield` edilenleri temizlemek çağıranın elindeki
+      // parçayı da boşaltırdı.
+      records = [];
+      warnings = [];
+    }
+  }
+
+  if (records.length > 0 || warnings.length > 0) {
+    yield { records, warnings };
+  }
+}
+
+/**
+ * Beslemenin TAMAMINI tek seferde çözümler.
+ *
+ * Küçük beslemeler, testler ve `--dry-run` için. Büyük beslemelerde
+ * `streamCsvBatches` kullanılır; ikisi AYNI çözümleyiciyi paylaşır, yani
+ * "akan yol" ile "toplu yol" davranış olarak ayrışamaz.
+ */
+export function parseCsv(content: string, delimiter?: string): AdapterResult {
+  const records: RawRecord[] = [];
+  const warnings: string[] = [];
+
+  for (const batch of streamCsvBatches(content, { delimiter })) {
+    for (const r of batch.records) records.push(r);
+    for (const w of batch.warnings) warnings.push(w);
   }
 
   return { records, warnings };
@@ -84,9 +139,20 @@ function occurrencesOutsideQuotes(line: string, char: string): number {
   return count;
 }
 
-/** Durum makinesiyle satır ve alanlara böler. */
-function splitRows(text: string, sep: string): string[][] {
-  const rows: string[][] = [];
+/**
+ * Durum makinesiyle satır ve alanlara böler -- ÜRETEÇ olarak.
+ *
+ * Eskiden `string[][]` döndürüyordu: 116 417 satırlık bir beslemede bu, tüm
+ * satırların dizi dizisi olarak bellekte durması demekti ve üstüne bir de
+ * `RawRecord[]` kuruluyordu. ÖLÇÜLDÜ: 30 MB'lık metin 643 MB heap bırakıyordu
+ * (~21x). Üreteç, aynı durum makinesini satır satır çalıştırır; çağıran
+ * tükettikçe satır serbest kalır.
+ *
+ * Ayrıştırma MANTIĞI DEĞİŞMEDİ -- yalnızca biriktirme kaldırıldı. `parseCsv`
+ * bunun üstünde duruyor, yani tek bir ayrıştırıcı var ve iki kod yolu
+ * birbirinden ayrışamaz.
+ */
+function* iterateRows(text: string, sep: string): Generator<string[]> {
   let row: string[] = [];
   let field = '';
   let inQuotes = false;
@@ -133,7 +199,7 @@ function splitRows(text: string, sep: string): string[][] {
 
     if (char === '\n') {
       row.push(field);
-      rows.push(row);
+      yield row;
       row = [];
       field = '';
       i += 1;
@@ -147,8 +213,6 @@ function splitRows(text: string, sep: string): string[][] {
   // Dosya satır sonu olmadan bitmiş olabilir.
   if (field !== '' || row.length > 0) {
     row.push(field);
-    rows.push(row);
+    yield row;
   }
-
-  return rows;
 }
