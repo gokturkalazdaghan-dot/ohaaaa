@@ -1169,7 +1169,7 @@ export async function getVendorBySlug(slug: string): Promise<Vendor | null> {
 export async function getVendorProducts(
   vendorId: string,
   options: { limit: number; offset: number },
-): Promise<SearchPage> {
+): Promise<StorePage> {
   return magazaUrunleri('vendor_id', vendorId, options, (offer) => offer.vendorId === vendorId);
 }
 
@@ -1184,7 +1184,7 @@ export async function getVendorProducts(
 export async function getMerchantProducts(
   merchantId: string,
   options: { limit: number; offset: number },
-): Promise<SearchPage> {
+): Promise<StorePage> {
   return magazaUrunleri(
     'merchant_id',
     merchantId,
@@ -1198,7 +1198,7 @@ async function magazaUrunleri(
   kimlik: string,
   options: { limit: number; offset: number },
   demoEslesme: (offer: Offer) => boolean,
-): Promise<SearchPage> {
+): Promise<StorePage> {
   const supabase = createAnonClient();
 
   if (!supabase) {
@@ -1209,21 +1209,37 @@ async function magazaUrunleri(
     return {
       results: results.slice(options.offset, options.offset + options.limit),
       totalCount: results.length,
+      hasMore: results.length > options.offset + options.limit,
     };
   }
 
-  const { data, error, count } = await supabase
-    .from('products')
-    .select(
-      `price_cents, shipping_fee_cents, currency,
-       group:product_groups!group_id (
-         id, slug, title, brand, image_url, offer_count,
-         min_price_cents, max_price_cents, best_offer_id
-       )`,
-      { count: 'exact' },
-    )
-    .eq(sutun, kimlik)
-    .eq('status', 'active')
+  /*
+   * SAYIM AYRI VE PARALEL İSTEKTE.
+   *
+   * Eskiden `{ count: 'exact' }` ürün sorgusuyla aynı isteğe gömülüydü.
+   * İkisi tek bir SQL ifadesi olduğu için 8 sn'lik bütçeyi PAYLAŞIYORLARDI:
+   * satırlar 10 ms sürse bile sayım (35.742 satırlık tam tarama, ~1,3 sn
+   * sıcak) soğuk istekte bütçeyi aşıyor ve İFADENİN TAMAMI iptal ediliyordu
+   * -- yani gösterilebilecek 24 ürün de gidiyordu. Üretimde yaşandı.
+   *
+   * Ayrılınca her biri kendi bütçesine sahip oluyor ve sayım düşse bile
+   * ürünler geliyor.
+   *
+   * BİR FAZLA SATIR isteniyor: sonraki sayfanın var olup olmadığı sayımdan
+   * bağımsız olarak böyle biliniyor. Fazladan satır kullanıcıya gösterilmez.
+   */
+  const [urunCevabi, sayimCevabi] = await Promise.all([
+    supabase
+      .from('products')
+      .select(
+        `price_cents, shipping_fee_cents, currency,
+         group:product_groups!group_id (
+           id, slug, title, brand, image_url, offer_count,
+           min_price_cents, max_price_cents, best_offer_id
+         )`,
+      )
+      .eq(sutun, kimlik)
+      .eq('status', 'active')
     /*
      * SIRALAMA `external_id` -- eskiden `updated_at desc` idi ve iki ayrı
      * sorunu vardı.
@@ -1257,15 +1273,43 @@ async function magazaUrunleri(
      * güncellenmiş). Anlamlı bir sıra istenirse -- fiyat, popülerlik --
      * o ayrı bir karar ve kendi dizinini gerektirir.
      */
-    .order('external_id')
-    .range(options.offset, options.offset + options.limit - 1);
+      .order('external_id')
+      .range(options.offset, options.offset + options.limit),
 
+    supabase
+      .from('products')
+      .select('id', { count: 'exact', head: true })
+      .eq(sutun, kimlik)
+      .eq('status', 'active'),
+  ]);
+
+  const { data, error } = urunCevabi;
   if (error) throw new Error(`Mağaza ürünleri okunamadı: ${error.message}`);
+
+  if (sayimCevabi.error) {
+    /*
+     * Sayım DÜŞEBİLİR ve bu sayfayı düşürmez. Bilinmeyen sayı `null`
+     * kalıyor; arayüz o rakamı hiç yazmıyor. Tahmini bir sayı basmak,
+     * ölçmediğimiz bir şeyi ölçmüş gibi göstermek olurdu.
+     */
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'Magaza urun sayisi okunamadi',
+        sutun,
+        hata: sayimCevabi.error.message,
+      }),
+    );
+  }
+
+  const satirlar = data ?? [];
+  const hasMore = satirlar.length > options.limit;
+  const gosterilecek = hasMore ? satirlar.slice(0, options.limit) : satirlar;
 
   const seen = new Set<string>();
   const results: SearchResult[] = [];
 
-  for (const row of data ?? []) {
+  for (const row of gosterilecek) {
     const group = unwrapRelation((row as Record<string, unknown>).group);
     if (!group) continue;
 
@@ -1294,7 +1338,35 @@ async function magazaUrunleri(
     });
   }
 
-  return { results, totalCount: count ?? results.length };
+  return {
+    results,
+    totalCount: sayimCevabi.error ? null : (sayimCevabi.count ?? null),
+    hasMore,
+  };
+}
+
+/**
+ * Bir mağaza vitrininin tek sayfası.
+ *
+ * `totalCount` NULL OLABİLİR ve bu bilinçli. Toplam sayı, 35.742 satırlık
+ * bir mağazada tabloyu baştan sona saymayı gerektiriyor (~1,3 sn sıcak,
+ * ölçüldü) ve soğuk istekte 8 sn'lik ifade zaman aşımına takılabiliyor.
+ * Eskiden sayım ürün sorgusuyla AYNI istekte gidiyordu, dolayısıyla sayım
+ * düştüğünde SAYFANIN TAMAMI hata ekranına düşüyordu -- üretimde yaşandı.
+ *
+ * Artık ikisi ayrı ve paralel: ürünler her hâlükârda geliyor, sayı
+ * gelemezse `null` kalıyor ve arayüz o rakamı hiç yazmıyor. Yardımcı bir
+ * sayının sayfayı düşürmesi, gösterilebilecek 24 ürünü gösterememek demek.
+ *
+ * `hasMore` sayımdan BAĞIMSIZ: bir fazla satır istenip gelip gelmediğine
+ * bakılıyor. Böylece sayı bilinmese de "sonraki sayfa" doğru çalışıyor.
+ */
+export interface StorePage {
+  results: SearchResult[];
+  /** Toplam ürün; SAYILAMADIYSA null -- tahmin edilmez. */
+  totalCount: number | null;
+  /** Bu sayfadan sonrası var mı. */
+  hasMore: boolean;
 }
 
 /**
@@ -1401,7 +1473,7 @@ export async function getStoreBySlug(slug: string): Promise<StoreProfile | null>
 export async function getStoreProducts(
   store: StoreProfile,
   options: { limit: number; offset: number },
-): Promise<SearchPage> {
+): Promise<StorePage> {
   if (store.kind === 'vendor') return getVendorProducts(store.id, options);
   return getMerchantProducts(store.id, options);
 }
