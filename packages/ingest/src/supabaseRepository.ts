@@ -36,7 +36,7 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
       const result = new Map<string, string>();
       if (slugs.length === 0) return result;
 
-      for (const batch of chunk(slugs, 500)) {
+      for (const batch of chunkByUrlBudget(slugs)) {
         const { data, error } = await supabase
           .from('categories')
           .select('id, slug')
@@ -58,7 +58,7 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
       if (gtins.length === 0) return result;
 
       // GTIN listesi büyük olabilir; parçalayarak sorgula.
-      for (const batch of chunk(gtins, 500)) {
+      for (const batch of chunkByUrlBudget(gtins)) {
         const { data, error } = await supabase
           .from('product_groups')
           .select('id, gtin')
@@ -91,7 +91,7 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
        * Sütun üretilen olduğu için algoritma değişirse ALTER TABLE ile
        * yeniden hesaplanır; bayat değer kalmaz.
        */
-      for (const batch of chunk(signatures, 200)) {
+      for (const batch of chunkByUrlBudget(signatures)) {
         const { data, error } = await supabase
           .from('product_groups')
           .select('id, match_signature')
@@ -151,7 +151,7 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
       // Hangilerinin yeni olduğunu bilmek için önce mevcutları oku.
       const existing = new Set<string>();
 
-      for (const batch of chunk(rows.map((r) => r.externalId), 500)) {
+      for (const batch of chunkByUrlBudget(rows.map((r) => r.externalId))) {
         const { data, error } = await supabase
           .from('products')
           .select('external_id')
@@ -274,7 +274,7 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
 
       const damga = checkedAt.toISOString();
 
-      for (const batch of chunk(externalIds, UPSERT_BATCH_SIZE)) {
+      for (const batch of chunkByUrlBudget(externalIds)) {
         const { error } = await supabase
           .from('products')
           .update({
@@ -456,6 +456,48 @@ export async function loadSources(
       authSecretRef: row.auth_secret_ref ? String(row.auth_secret_ref) : null,
     };
   });
+}
+
+/**
+ * ADRES BÜTÇESİNE GÖRE PARÇALAR — sabit sayıya göre değil.
+ *
+ * `.in(...)` değerleri sorgu dizesine girer, yani GET adresinin uzunluğuna
+ * eklenir. Sabit sayıda parçalamak, değerlerin UZUNLUĞUNU yok sayar ve
+ * uzunluk değiştiğinde sessizce kırılır.
+ *
+ * Üretimde tam olarak bu oldu (feed 111663, 35.767 ürün):
+ *   hata: Kanonik ürün adayları alınamadı: TypeError: fetch failed
+ * GTIN'ler 13 hane olduğu için 500'lük parça sorunsuz geçiyordu; eşleştirme
+ * imzaları ise serbest metin ("logitech|advanced logitech mk540" ~31 karakter)
+ * ve 200'lük parça adresi 7 KB'ın üzerine çıkarıyordu. Fark veri türündeydi,
+ * kodda değil -- bu yüzden GTIN yolu çalışırken imza yolu düşüyordu.
+ *
+ * 2000 karakter muhafazakâr seçildi: yaygın ara sunucu/sunucu sınırları
+ * 4-8 KB arasında ve yüzde kodlaması bazı karakterleri üç katına çıkarır.
+ * Tek bir değer bütçeyi aşsa bile kendi parçasında yalnız gönderilir --
+ * aksi halde döngü sonsuza kadar boş parça üretirdi.
+ */
+export function chunkByUrlBudget(items: string[], maxChars = 2000): string[][] {
+  const batches: string[][] = [];
+  let current: string[] = [];
+  let length = 0;
+
+  for (const item of items) {
+    // Yüzde kodlaması sonrası gerçek maliyet; ayırıcı için +1.
+    const cost = encodeURIComponent(item).length + 1;
+
+    if (current.length > 0 && length + cost > maxChars) {
+      batches.push(current);
+      current = [];
+      length = 0;
+    }
+
+    current.push(item);
+    length += cost;
+  }
+
+  if (current.length > 0) batches.push(current);
+  return batches;
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
