@@ -109,7 +109,16 @@ export default async function StorePage({ params, searchParams }: StorePageProps
     return <DataUnavailable />;
   }
 
-  const totalPages = Math.max(1, Math.ceil(products.totalCount / PAGE_SIZE));
+  /*
+   * Sayfa sayısı toplam biliniyorsa ondan, bilinmiyorsa bir sonraki sayfanın
+   * VARLIĞINDAN türetiliyor. İkincisi "toplam şu kadar" iddiası taşımaz --
+   * yalnızca gidilebilecek sayfayı gösterir. Sayım düştüğünde uydurma bir
+   * toplam basmak, ölçmediğimiz bir şeyi ölçmüş gibi göstermek olurdu.
+   */
+  const totalPages =
+    products.totalCount !== null
+      ? Math.max(1, Math.ceil(products.totalCount / PAGE_SIZE))
+      : page + (products.hasMore ? 1 : 0);
 
   function storeHref(changes: { sayfa?: string }): string {
     const target = changes.sayfa ?? String(page);
@@ -182,7 +191,17 @@ export default async function StorePage({ params, searchParams }: StorePageProps
           </h1>
 
           <p className="mt-2 text-sm text-muted">
-            <strong className="text-fg">{products.totalCount}</strong> ürün
+            {/* Sayı ancak SAYILABİLDİYSE yazılır; bilinmiyorsa hiç yazılmaz. */}
+            {products.totalCount !== null ? (
+              <>
+                <strong className="text-fg">
+                  {products.totalCount.toLocaleString('tr-TR')}
+                </strong>{' '}
+                ürün
+              </>
+            ) : (
+              'Ürünler'
+            )}
             {/* Puan yalnızca gerçekten oy varsa gösterilir. Sıfır oyla "0,0"
                 yazmak, mağazayı hiç oy almamış değil KÖTÜ göstermek olurdu. */}
             {vendor.ratingCount > 0 && (
