@@ -15,8 +15,38 @@ import type { IngestSummary, NormalizedOffer, SourceConfig } from './types.js';
 import { isAuthType } from './auth.js';
 import { redact } from './http/redact.js';
 
-/** Tek sorguda gönderilecek en fazla satır. Daha büyüğü istek sınırını aşar. */
-const UPSERT_BATCH_SIZE = 500;
+/**
+ * Tek upsert sorgusunda gönderilecek en fazla satır.
+ *
+ * 500 -> 100. SEBEP ÖLÇÜLDÜ, TAHMİN EDİLMEDİ.
+ *
+ * Gerçek alım 31.000 satır yazdıktan sonra düştü:
+ *
+ *   hata: Teklifler yazılamadı: canceling statement due to statement timeout
+ *
+ * Bu bir AĞ hatası değil, Postgres'in kendi süre sınırı. PostgREST'in
+ * bağlandığı `authenticator` rolünde ölçülen ayar:
+ *
+ *   statement_timeout = 8s
+ *   lock_timeout      = 8s
+ *
+ * Ölçülen yazma hızı 31.000 satır / 463 s = ~67 satır/sn. Yani:
+ *
+ *   parti 500 -> ~7,48 sn/parti   <- 8 sn eşiğinin TAM SINIRINDA
+ *   parti 100 -> ~1,50 sn/parti   <- 5 kat pay
+ *
+ * Bu, iki turun farklı yerlerde düşmesini de açıklıyor: parti süresi eşiğe
+ * o kadar yakındı ki sonuç tablo boyutuna ve o anki yüke bağlıydı. Yani
+ * hata rastgele görünüyordu ama sistematikti.
+ *
+ * YENIDEN DENEME BUNU ÇÖZMEZ ve bilinçli olarak `statement timeout` geçici
+ * hata kalıplarına EKLENMEDİ: aynı fazla büyük partiyi yeniden denemek aynı
+ * süre sınırına yeniden çarpmaktır. Çözüm partiyi küçültmek.
+ *
+ * BEDELİ: daha fazla tur (62 -> 310 istek). Toplam süre bir miktar artar
+ * ama alım TAMAMLANIR; yarım kalan bir alımın maliyeti daha yüksek.
+ */
+export const UPSERT_BATCH_SIZE = 100;
 
 /**
  * GEÇİCİ SUPABASE HATALARINDA YENİDEN DENEME -- YALNIZCA OKUMALARDA.

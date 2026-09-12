@@ -676,7 +676,20 @@ export async function getProductGroup(slug: string): Promise<ProductGroupWithOff
           priceCents,
           compareAtPriceCents:
             row.compare_at_price_cents === null ? null : Number(row.compare_at_price_cents),
-          currency: 'TRY' as const,
+          /*
+           * TEKLIFIN GERCEK PARA BIRIMI.
+           *
+           * Burada `'TRY' as const` SABIT yaziliydi ve asil hata buydu:
+           * sorgu `currency` kolonunu ZATEN cekiyordu ama esleme onu
+           * tamamen yok sayiyordu. Sonuc: GBP fiyatlar urun sayfasinda
+           * `₺` ile basiliyor, JSON-LD'de `priceCurrency: "TRY"` gidiyordu.
+           *
+           * Bu satir, `SearchResult`/`ProductGroup` tiplerine para birimi
+           * eklenmesinden BAGIMSIZ bir hataydi: o tipler duzeltildikten
+           * sonra bile urun detay sayfasi TRY gostermeye devam etti ve
+           * sebebi burasiydi.
+           */
+          currency: row.currency ? String(row.currency).trim() : 'TRY',
           stock: Number(row.stock),
           condition: row.condition as 'new' | 'refurbished' | 'used',
           shippingFeeCents,
