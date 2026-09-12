@@ -212,6 +212,14 @@ export interface ProductGroup {
   /** Yayindaki degerlendirmelerin urun puani ortalamasi (0 = puan yok). */
   rating: number;
   ratingCount: number;
+  /**
+   * Kanonik GTIN -- 14 haneye doldurulmus bicim, veritabanindaki halin aynisi.
+   *
+   * OPSIYONEL DEGIL, NULLABLE: uretimde 34.721 grubun 25.484'unde var,
+   * gerisinde yok (olculdu). Gosterim bicimine cevirmek icin
+   * `gtinDisplayForm` kullanilir; dolgulu hali dogrudan yayimlanmaz.
+   */
+  gtin: string | null;
 }
 
 export interface ProductGroupWithOffers extends ProductGroup {

@@ -154,6 +154,9 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     currency: 'TRY',
     rating: 0,
     ratingCount: 0,
+    // Demo kumesinde barkod YOK ve uydurulmaz: GTIN bir urunun
+    // kimligidir, ornek veri icin icat edilemez.
+    gtin: null,
     offers: [
       affiliateOffer({
         id: '60000000-0000-4000-8000-000000000001',
@@ -208,6 +211,9 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     currency: 'TRY',
     rating: 0,
     ratingCount: 0,
+    // Demo kumesinde barkod YOK ve uydurulmaz: GTIN bir urunun
+    // kimligidir, ornek veri icin icat edilemez.
+    gtin: null,
     offers: [
       affiliateOffer({
         id: '60000000-0000-4000-8000-000000000003',
@@ -248,6 +254,9 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     currency: 'TRY',
     rating: 0,
     ratingCount: 0,
+    // Demo kumesinde barkod YOK ve uydurulmaz: GTIN bir urunun
+    // kimligidir, ornek veri icin icat edilemez.
+    gtin: null,
     offers: [
       offer({
         id: 'offer-lenovo-tm', vendorId: 'vendor-teknomarkt',
@@ -280,6 +289,9 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     currency: 'TRY',
     rating: 0,
     ratingCount: 0,
+    // Demo kumesinde barkod YOK ve uydurulmaz: GTIN bir urunun
+    // kimligidir, ornek veri icin icat edilemez.
+    gtin: null,
     offers: [
       offer({
         id: 'offer-dyson-ebd', vendorId: 'vendor-ev-bahce',
@@ -312,6 +324,9 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     currency: 'TRY',
     rating: 0,
     ratingCount: 0,
+    // Demo kumesinde barkod YOK ve uydurulmaz: GTIN bir urunun
+    // kimligidir, ornek veri icin icat edilemez.
+    gtin: null,
     offers: [
       offer({
         id: 'offer-pegasus-mv', vendorId: 'vendor-moda-vitrin',
@@ -338,6 +353,9 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     currency: 'TRY',
     rating: 0,
     ratingCount: 0,
+    // Demo kumesinde barkod YOK ve uydurulmaz: GTIN bir urunun
+    // kimligidir, ornek veri icin icat edilemez.
+    gtin: null,
     offers: [
       offer({
         id: 'offer-airfryer-ebd', vendorId: 'vendor-ev-bahce',

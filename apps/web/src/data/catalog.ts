@@ -621,7 +621,7 @@ export async function getProductGroup(slug: string): Promise<ProductGroupWithOff
     const { data, error } = await supabase
       .from('product_groups')
       .select(
-        `id, slug, title, brand, image_url, description, category_id, attributes,
+        `id, slug, title, brand, gtin, image_url, description, category_id, attributes,
          offer_count, min_price_cents, max_price_cents, rating, rating_count,
          offers:products!group_id (
            id, fulfillment, vendor_id, merchant_id, product_url,
@@ -714,6 +714,7 @@ export async function getProductGroup(slug: string): Promise<ProductGroupWithOff
       slug: String(data.slug),
       title: String(data.title),
       brand: data.brand ? String(data.brand) : null,
+      gtin: data.gtin ? String(data.gtin) : null,
       imageUrl: data.image_url ? String(data.image_url) : null,
       description: data.description ? String(data.description) : null,
       categoryId: data.category_id ? String(data.category_id) : null,
