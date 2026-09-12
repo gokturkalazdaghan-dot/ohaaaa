@@ -75,6 +75,7 @@ const BASLIK = [
   AWIN_COLUMNS.merchantCategory,
   AWIN_COLUMNS.deliveryCost,
   AWIN_COLUMNS.currency,
+  AWIN_COLUMNS.merchantId,
 ].join(',');
 
 /** TEST VERİSİ — tek satır kurucu. */
@@ -94,6 +95,7 @@ function satir(over: Partial<Record<string, string>> = {}): string {
     [AWIN_COLUMNS.merchantCategory]: 'Elektronik',
     [AWIN_COLUMNS.deliveryCost]: '4.99',
     [AWIN_COLUMNS.currency]: 'GBP',
+    [AWIN_COLUMNS.merchantId]: '158122',
     ...over,
   };
   return [
@@ -102,6 +104,7 @@ function satir(over: Partial<Record<string, string>> = {}): string {
     v[AWIN_COLUMNS.brandName], v[AWIN_COLUMNS.merchantImageUrl], v[AWIN_COLUMNS.description],
     v[AWIN_COLUMNS.inStock], v[AWIN_COLUMNS.rrpPrice], v[AWIN_COLUMNS.merchantCategory],
     v[AWIN_COLUMNS.deliveryCost], v[AWIN_COLUMNS.currency],
+    v[AWIN_COLUMNS.merchantId],
   ].join(',');
 }
 

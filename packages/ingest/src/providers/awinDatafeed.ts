@@ -133,6 +133,15 @@ export const AWIN_FIELD_MAPPING: FieldMapping = {
   category: AWIN_COLUMNS.merchantCategory,
   shipping_fee: AWIN_COLUMNS.deliveryCost,
   currency: AWIN_COLUMNS.currency,
+  /*
+   * ÜRÜN ALANI DEĞİL -- MAĞAZA İZOLASYONUNUN TEK SİNYALİ.
+   *
+   * Awin'in Product Data indirmesi tek bir dosyada YÜZLERCE reklamverenin
+   * ürününü taşıyabiliyor. `assertMerchantIsolation` bu kolonu okuyup her
+   * satırın beklenen MID'e ait olduğunu doğrular; eşleşmeyen tek satırda
+   * tur durur. Eşlenmezse denetim yapılamaz ve hat FAIL CLOSED davranır.
+   */
+  merchant_id: AWIN_COLUMNS.merchantId,
 };
 
 /** `FieldMapping` üzerinde ZORUNLU alanlar -- eksikse kaynak çalışamaz. */

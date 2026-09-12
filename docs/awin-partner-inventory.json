@@ -9,8 +9,9 @@
     "approved": 1,
     "applied_no_decision": 10,
     "not_applied": 14,
-    "with_feed_address": 0,
-    "ready_to_ingest": 0
+    "with_feed_address": 1,
+    "ready_to_ingest": 0,
+    "with_feed_id": 1
   },
   "merchants": [
     {
@@ -626,7 +627,7 @@
       "deeplink_template": "https://www.awin1.com/cread.php?awinmid=158122...",
       "product_feed_flag": "Yes (Feed Last Updated 15/05/2026)",
       "feed_address": null,
-      "feed_id": null,
+      "feed_id": "2281",
       "commercial_data": {
         "product_count": null,
         "epc": null,
@@ -636,7 +637,8 @@
       },
       "partner_rank": null,
       "technical_readiness": "PARTIAL",
-      "blocker": "ONAYLI ve MID/deeplink/cookie tam. EKSİK: feed adresi ve feed ID (alım için zorunlu), doğrulanmış komisyon, ana sayfa. Feed adresi girilir girilmez alınabilir hale gelir."
+      "blocker": "Feed bağı kuruldu (kaynak: simple-project-awin-f2281, feed 2281 <-> MID 158122). KAYNAK ETKİN DEĞİL. Eksik: merchants.homepage_url (izinli alan adı bundan türetilir; boşken normalize.ts her ürün adresini reddeder) ve terms_verified_at (merchants_active_needs_verified_terms kısıtı aktifliği engelliyor).",
+      "feed_id_source": "Operatör bildirimi (Awin panosu): F2281 / numeric 2281, program \"simpleprojectus\", bölge US, ~659 ürün, advertiser feed sayısı 2."
     }
   ]
 }

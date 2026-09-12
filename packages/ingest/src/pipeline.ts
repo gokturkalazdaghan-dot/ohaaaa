@@ -39,6 +39,7 @@ import { parseCsv } from './adapters/csv.js';
 import { decompressToText, detectCompression } from './adapters/decompress.js';
 import { parseJson } from './adapters/json.js';
 import { parseXml } from './adapters/xml.js';
+import { assertMerchantIsolation } from './merchantIsolation.js';
 import { normalizeRecords } from './normalize.js';
 import { planNextRefresh } from './refreshSignals.js';
 import { buildAuthHeaders } from './auth.js';
@@ -321,6 +322,42 @@ export async function runSource(
         'Feed boş döndü. Katalog korundu; kaynağı kontrol edin.',
         false,
       );
+    }
+
+    /*
+     * --- 2b) MAĞAZA İZOLASYONU -------------------------------------------
+     *
+     * NORMALLEŞTİRMEDEN ÖNCE, YAZMADAN ÇOK ÖNCE.
+     *
+     * `upsertOffers(merchantId, ...)` bu turdaki HER satırı kaynağın tek
+     * mağazasına yazar; satırın gerçekten o mağazaya ait olup olmadığını
+     * sormaz. Ortaklık ağlarının BİRLEŞİK indirmeleri (tek `.csv.gz`
+     * içinde yüzlerce reklamveren) tam olarak bu boşluktan geçip yüzlerce
+     * mağazanın ürününü tek mağazanın altına yazardı -- sayaçlar yeşil,
+     * katalog yanlış.
+     *
+     * Denetim kaynağın kendi iddiasına dayanır: `expectedAdvertiserId`
+     * boşsa hiç çalışmaz ve mevcut kaynaklar aynen davranır. Doluysa tek
+     * bir yabancı satır bile turu durdurur.
+     *
+     * KIRPMADAN SONRA yapılıyor ve bu bilinçli: kırpılmış listede yabancı
+     * satır görülmese bile, görülen 50.000 satırın tamamının bize ait
+     * olduğunu doğrulamak gerekiyor. Kırpılmış tur zaten
+     * `snapshotComplete=false` olduğu için bayatlatma yapmaz.
+     */
+    if (source.expectedAdvertiserId) {
+      const izolasyon = assertMerchantIsolation(records, source.fieldMapping, {
+        advertiserId: source.expectedAdvertiserId,
+        feedId: source.feedId ?? null,
+        sourceSlug: source.slug,
+      });
+
+      summary.sampleErrors.push({
+        externalId: null,
+        reason:
+          `Mağaza izolasyonu doğrulandı: ${izolasyon.checked} satırın tamamı ` +
+          `reklamveren ${source.expectedAdvertiserId} için.`,
+      });
     }
 
     // --- 3) Normalleştir -----------------------------------------------------

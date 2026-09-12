@@ -8,6 +8,7 @@ export * from './normalize.js';
 export * from './supabaseRepository.js';
 export * from './queueRepository.js';
 export * from './sourceSyncHandler.js';
+export * from './merchantIsolation.js';
 export * from './runner.js';
 export * from './refreshSignals.js';
 export { parseCsv } from './adapters/csv.js';
