@@ -205,7 +205,31 @@ export function normalizeGtin(value: string | null | undefined): string | null {
   }
 
   const expected = (10 - (sum % 10)) % 10;
-  return expected === checkDigit ? digits : null;
+  if (expected !== checkDigit) return null;
+
+  /*
+   * 14 HANEYE DOLDURULUR -- VERİTABANIYLA AYNI BİÇİM.
+   *
+   * `public.normalize_gtin` sonucu `lpad(s, 14, '0')` ile döndürür ve
+   * `product_groups.gtin_normalized` bu fonksiyonla ÜRETİLEN bir sütundur.
+   * Buradaki karşılığı doldurmadan bırakmak iki katmanı ayrıştırıyordu:
+   *
+   *   veritabanındaki kayıt : 05099206039292   (14 hane)
+   *   feed'den gelen EAN    :  5099206039292   (13 hane)
+   *
+   * Eşleştirme düz metin karşılaştırmasıdır; aynı ürün eşleşmiyor, kod onu
+   * YENİ kanonik ürün sanıp açmaya çalışıyor ve benzersizlik kısıtına
+   * çarpıyordu. Üretimde ölçüldü (feed 111663, 35.767 ürün):
+   *
+   *   hata: Kanonik ürün oluşturulamadı: duplicate key value violates
+   *         unique constraint "product_groups_gtin_key"
+   *
+   * Açılan 1000 grubun 691'i 13 haneydi -- yani hata tek bir kayıtta değil,
+   * biçimin kendisindeydi. GS1 için 8/12/13/14 hane aynı GTIN'in farklı
+   * gösterimleridir; 14 hane kanonik biçimdir ve karşılaştırma ancak tek bir
+   * biçim üzerinden anlamlıdır.
+   */
+  return digits.padStart(14, '0');
 }
 
 /** Adres geçerli, https/http ve mağazanın alan adına ait olmalı. */

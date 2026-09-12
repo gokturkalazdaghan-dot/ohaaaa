@@ -59,15 +59,25 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
 
       // GTIN listesi büyük olabilir; parçalayarak sorgula.
       for (const batch of chunkByUrlBudget(gtins)) {
+        /*
+         * ARAMA `gtin_normalized` ÜZERİNDEN -- ham `gtin` ÜZERİNDEN DEĞİL.
+         *
+         * `gtin_normalized` üretilen bir sütundur (`normalize_gtin(gtin)`) ve
+         * her zaman 14 hanedir. Ham `gtin` ise geçmişte yazılmış kayıtlarda
+         * 8/12/13/14 hane olabilir; ona bakan bir arama aynı ürünü yalnızca
+         * biçim tuttuğunda bulur. Çağıran taraf da artık normalize edilmiş
+         * değer gönderdiği için iki uç tek bir biçimde buluşuyor.
+         */
         const { data, error } = await supabase
           .from('product_groups')
-          .select('id, gtin')
-          .in('gtin', batch);
+          .select('id, gtin_normalized')
+          .in('gtin_normalized', batch);
 
         if (error) throw new Error(`Kanonik ürün sorgusu başarısız: ${error.message}`);
 
         for (const row of data ?? []) {
-          if (row.gtin) result.set(String(row.gtin), String(row.id));
+          if (row.gtin_normalized)
+            result.set(String(row.gtin_normalized), String(row.id));
         }
       }
 
