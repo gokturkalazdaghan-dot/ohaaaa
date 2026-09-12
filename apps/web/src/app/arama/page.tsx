@@ -259,6 +259,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       brands: selectedBrands,
       freeShipping,
     });
+
   } catch (error) {
     console.error(
       JSON.stringify({
@@ -270,6 +271,17 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     );
     return <DataUnavailable title="Arama şu an çalışmıyor" />;
   }
+
+  /*
+   * SONUCLARIN ORTAK PARA BIRIMI.
+   *
+   * Fiyat araligi ve filtre etiketleri bunu kullanir. Karisik para birimi
+   * varsa TANIMSIZ kalir: en dusuk/en yuksek sayiyi yanlis simgeyle basmak
+   * kullaniciyi yanlis yonlendirir, `formatMoney` o durumda ham kod yazar.
+   */
+  const sonucParaBirimleri = new Set(results.results.map((result) => result.currency));
+  const paraBirimi =
+    sonucParaBirimleri.size === 1 ? [...sonucParaBirimleri][0] : undefined;
 
   /*
    * ÖLÇÜM: karar gerçekte ne üretti?
@@ -398,6 +410,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
               <FilterPanel
                 idPrefix="mobil"
                 facets={facets}
+                paraBirimi={paraBirimi}
                 activeCategoryId={activeCategory?.id}
                 kategori={kategori}
                 q={q}
@@ -416,6 +429,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             <FilterPanel
               idPrefix="masaustu"
               facets={facets}
+              paraBirimi={paraBirimi}
               activeCategoryId={activeCategory?.id}
               kategori={kategori}
               q={q}
@@ -491,6 +505,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 function FilterPanel({
   idPrefix,
   facets,
+  paraBirimi,
   activeCategoryId,
   kategori,
   q,
@@ -512,6 +527,8 @@ function FilterPanel({
   maxTl?: number;
   buildHref: (changes: Record<string, string | undefined>) => string;
   hasPriceFilter: boolean;
+  /** Sonuclarin ortak para birimi; karisiksa tanimsiz. */
+  paraBirimi?: string;
   selectedBrands: string[];
   freeShipping: boolean;
 }) {
@@ -552,6 +569,7 @@ function FilterPanel({
       <PriceFilter
         idPrefix={idPrefix}
         facets={facets}
+        paraBirimi={paraBirimi}
         q={q}
         kategori={kategori}
         sort={sort}
@@ -660,6 +678,7 @@ function FilterRow({
  * kontrolden kotudur.
  */
 function PriceFilter({
+  paraBirimi,
   idPrefix,
   facets,
   q,
@@ -683,6 +702,14 @@ function PriceFilter({
   active: boolean;
   selectedBrands: string[];
   freeShipping: boolean;
+  /**
+   * Sonuclarin ORTAK para birimi; karisiksa tanimsiz.
+   *
+   * Onceki hal hic almiyordu: aralik `formatMoney` varsayilanina duserek
+   * `₺` basiyor ve etiketler sabit "(TL)" yaziyordu. Katalog GBP oldugu
+   * icin hem aralik hem etiket yanlisti.
+   */
+  paraBirimi?: string;
 }) {
   if (facets.minPriceCents === null || facets.maxPriceCents === null) return null;
 
@@ -693,7 +720,7 @@ function PriceFilter({
     <section>
       <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">Fiyat</h2>
       <p className="mt-2 text-xs text-subtle">
-        {formatMoney(facets.minPriceCents)} – {formatMoney(facets.maxPriceCents)}
+        {formatMoney(facets.minPriceCents, paraBirimi)} – {formatMoney(facets.maxPriceCents, paraBirimi)}
       </p>
 
       {/* GET formu: JavaScript gerektirmez, sonuc paylasilabilir bir URL olur. */}
@@ -714,7 +741,7 @@ function PriceFilter({
 
         <div className="flex items-center gap-2">
           <label className="sr-only" htmlFor={`${idPrefix}-fiyat-min`}>
-            En az fiyat (TL)
+            En az fiyat ({paraBirimi ?? 'TRY'})
           </label>
           <input
             id={`${idPrefix}-fiyat-min`}
@@ -732,7 +759,7 @@ function PriceFilter({
             –
           </span>
           <label className="sr-only" htmlFor={`${idPrefix}-fiyat-max`}>
-            En fazla fiyat (TL)
+            En fazla fiyat ({paraBirimi ?? 'TRY'})
           </label>
           <input
             id={`${idPrefix}-fiyat-max`}

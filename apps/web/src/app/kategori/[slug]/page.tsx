@@ -129,6 +129,16 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     .filter((price): price is number => price !== null)
     .sort((a, b) => a - b)[0];
 
+  /*
+   * "Fiyatlar X'den basliyor" cumlesinin para birimi.
+   *
+   * Liste TEK para biriminde ise onu kullan; karisiksa hicbirini secmek
+   * dogru olmaz -- en dusuk sayiyi yanlis simgeyle basmak kullaniciyi
+   * yanlis yonlendirir. Karisikta `formatMoney` ham kodu yazar.
+   */
+  const paraBirimleri = new Set(results.results.map((result) => result.currency));
+  const listeParaBirimi = paraBirimleri.size === 1 ? [...paraBirimleri][0] : undefined;
+
   const totalOffers = results.results.reduce((sum, result) => sum + result.offerCount, 0);
   const totalPages = Math.max(1, Math.ceil(results.totalCount / PAGE_SIZE));
 
@@ -183,7 +193,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
               {totalPages > 1 && <> (sayfa {page}/{totalPages})</>}. Bu sayfada{' '}
               <strong className="text-fg">{totalOffers} mağaza teklifi</strong> var.
               {cheapest !== undefined && (
-                <> Fiyatlar {formatMoney(cheapest)}’den başlıyor.</>
+                <> Fiyatlar {formatMoney(cheapest, listeParaBirimi)}’den başlıyor.</>
               )}{' '}
               Sıralama kargo dahil toplam maliyete göre yapılır.
             </>

@@ -884,6 +884,14 @@ export interface ProductPrice {
   imageUrl: string | null;
   minPriceCents: number | null;
   offerCount: number;
+  /**
+   * Fiyatin GERCEK para birimi; bilinmiyorsa TANIMSIZ.
+   *
+   * Opsiyonel olmasi bilincli: cagiran taraf (FavoritesList) para birimi
+   * bilinmeyen kayitta fiyati HIC gostermiyor. Varsayilana dusmek GBP
+   * fiyati `₺` ile basmak olurdu.
+   */
+  currency?: string;
 }
 
 /**
@@ -905,17 +913,47 @@ export async function getProductPrices(slugs: string[]): Promise<ProductPrice[]>
   if (supabase) {
     const { data, error } = await supabase
       .from('product_groups')
-      .select('slug, title, image_url, min_price_cents, offer_count')
+      .select('id, slug, title, image_url, min_price_cents, offer_count')
       .in('slug', slugs);
 
     if (error) throw new Error(`Fiyatlar okunamadı: ${error.message}`);
 
-    return (data ?? []).map((row) => ({
+    const satirlar = data ?? [];
+
+    /*
+     * PARA BIRIMI: gruptaki aktif teklifin birimi.
+     *
+     * Bu uc favori listesini besliyor ve fiyat GOSTERIYOR; para birimi
+     * olmadan `formatMoney` TRY varsayilanina duser ve GBP fiyat `₺` ile
+     * basilir. Kaynak `products.currency` -- `product_groups.price_currency`
+     * DEGIL, cunku o sutun depo goclerinde yok (bkz. searchProducts).
+     *
+     * Slug sayisi favori listesi kadar (onlarca), yani tek ek sorgu ucuz.
+     */
+    const birimler = new Map<string, string>();
+    if (satirlar.length > 0) {
+      const { data: paraSatirlari } = await supabase
+        .from('products')
+        .select('group_id, currency')
+        .in('group_id', satirlar.map((row) => String(row.id)))
+        .eq('status', 'active');
+
+      for (const satir of paraSatirlari ?? []) {
+        const grup = String(satir.group_id);
+        if (satir.currency && !birimler.has(grup)) {
+          birimler.set(grup, String(satir.currency).trim());
+        }
+      }
+    }
+
+    return satirlar.map((row) => ({
       slug: String(row.slug),
       title: String(row.title),
       imageUrl: row.image_url ? String(row.image_url) : null,
       minPriceCents: row.min_price_cents === null ? null : Number(row.min_price_cents),
       offerCount: Number(row.offer_count),
+      // Bilinmiyorsa ALAN YOK: cagiran taraf fiyati hic gostermez.
+      currency: birimler.get(String(row.id)),
     }));
   }
 
@@ -927,6 +965,7 @@ export async function getProductPrices(slugs: string[]): Promise<ProductPrice[]>
       imageUrl: group.imageUrl,
       minPriceCents: group.minPriceCents,
       offerCount: group.offerCount,
+      currency: group.currency,
     }));
 }
 
