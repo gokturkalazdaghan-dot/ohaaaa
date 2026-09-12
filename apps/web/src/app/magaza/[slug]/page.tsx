@@ -6,7 +6,7 @@ import { DataUnavailable } from '@/components/DataUnavailable';
 import { JsonLd } from '@/components/JsonLd';
 import { Pagination } from '@/components/Pagination';
 import { ProductCard } from '@/components/ProductCard';
-import { getVendorBySlug, getVendorProducts } from '@/data/catalog';
+import { getStoreBySlug, getStoreProducts } from '@/data/catalog';
 import { siteUrl } from '@/lib/env';
 
 /**
@@ -45,7 +45,7 @@ export async function generateMetadata({
   const { slug } = await params;
   const page = readPage((await searchParams).sayfa);
 
-  const vendor = await getVendorBySlug(slug).catch(() => null);
+  const vendor = await getStoreBySlug(slug).catch(() => null);
   if (!vendor) return { title: 'Mağaza bulunamadı' };
 
   // Sayfa 2+ KENDİNİ kanonik gösterir: hepsini birinci sayfaya kanoniklesek
@@ -72,17 +72,26 @@ export default async function StorePage({ params, searchParams }: StorePageProps
   const { slug } = await params;
   const page = readPage((await searchParams).sayfa);
 
-  let vendor: Awaited<ReturnType<typeof getVendorBySlug>>;
-  let products: Awaited<ReturnType<typeof getVendorProducts>>;
+  /*
+   * MAĞAZA İKİ KAYNAKTAN GELEBİLİR: taşeron (`vendors`) ya da ortak mağaza
+   * (`merchants`). Sayfa ikisini ayırt etmez çünkü ziyaretçi için ikisi de
+   * "bu ürünü satan yer"dir; fark yalnızca hangi sütunla süzüldüğünde ve
+   * onu `getStoreProducts` biliyor.
+   *
+   * Önceden yalnızca taşeron okunuyordu ve o tablo üretimde BOŞ: kataloğun
+   * tamamını sağlayan ortak mağazanın sayfası 404 dönüyordu.
+   */
+  let vendor: Awaited<ReturnType<typeof getStoreBySlug>>;
+  let products: Awaited<ReturnType<typeof getStoreProducts>>;
 
   try {
-    vendor = await getVendorBySlug(slug);
+    vendor = await getStoreBySlug(slug);
 
     // Kesintide 404 vermek YANLIŞ olurdu: mağaza duruyor, biz ulaşamıyoruz.
     // 404, arama motoruna sayfanın kalıcı olarak silindiğini bildirir.
     if (!vendor) notFound();
 
-    products = await getVendorProducts(vendor.id, {
+    products = await getStoreProducts(vendor, {
       limit: PAGE_SIZE,
       offset: (page - 1) * PAGE_SIZE,
     });
