@@ -15,6 +15,14 @@ interface CurrentPrice {
   imageUrl: string | null;
   minPriceCents: number | null;
   offerCount: number;
+  /**
+   * Fiyatin GERCEK para birimi.
+   *
+   * OPSIYONEL: favori kaydi bu alan eklenmeden once yazilmis olabilir.
+   * Bilinmiyorsa fiyat GOSTERILMEZ -- varsayilana dusmek GBP fiyati `₺`
+   * ile basmak olurdu.
+   */
+  currency?: string;
 }
 
 /**
@@ -84,6 +92,7 @@ export function FavoritesList() {
       {favorites.map((item) => {
         const current = prices.get(item.slug);
         const currentPrice = current?.minPriceCents ?? null;
+        const birim = current?.currency;
 
         // Karşılaştırma yalnızca İKİ değer de biliniyorsa yapılır.
         const change =
@@ -124,7 +133,7 @@ export function FavoritesList() {
 
               <p className="mt-1 text-xs text-muted">
                 {item.savedPriceCents !== null && (
-                  <>Eklediğinizde {formatMoney(item.savedPriceCents)}</>
+                  <>Eklediğinizde {formatMoney(item.savedPriceCents, birim)}</>
                 )}
                 {current && current.offerCount > 0 && (
                   <> · {current.offerCount} mağaza</>
@@ -134,7 +143,7 @@ export function FavoritesList() {
 
             <div className="shrink-0 text-right">
               {currentPrice !== null ? (
-                <p className="tabular text-base font-bold text-fg">{formatMoney(currentPrice)}</p>
+                <p className="tabular text-base font-bold text-fg">{formatMoney(currentPrice, birim)}</p>
               ) : (
                 <p className="text-xs text-subtle">{loading ? 'Yükleniyor…' : 'Fiyat yok'}</p>
               )}
@@ -145,7 +154,7 @@ export function FavoritesList() {
                     change < 0 ? 'text-success' : 'text-danger'
                   }`}
                 >
-                  {change < 0 ? '↓' : '↑'} {formatMoney(Math.abs(change))}
+                  {change < 0 ? '↓' : '↑'} {formatMoney(Math.abs(change), birim)}
                 </p>
               )}
               {change === 0 && <p className="text-xs text-subtle">değişmedi</p>}

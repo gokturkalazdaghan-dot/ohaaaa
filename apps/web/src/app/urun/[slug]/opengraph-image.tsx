@@ -1,6 +1,5 @@
 import { ImageResponse } from 'next/og';
 
-import { formatMoney } from '@ohaaaa/shared';
 
 import { getProductGroup } from '@/data/catalog';
 
@@ -27,15 +26,23 @@ export default async function Image({ params }: { params: Promise<{ slug: string
 
   const baslik = group?.title ?? 'Ohaaaa';
   /*
-   * ₺ İŞARETİ BURADA KULLANILMAZ.
-   * Görsel üretiminin varsayılan yazı tipi U+20BA (Türk lirası) glifini
-   * taşımıyor; işaret yerine boş kutu çiziliyordu. Ölçüldü. Sayfanın kendi
-   * içinde ₺ doğru görünüyor (oradaki yazı tipi taşıyor), yalnızca bu
-   * görselde "TL" yazılıyor.
+   * PARA BIRIMI SIMGESI DEGIL KODU YAZILIR.
+   *
+   * Gorsel uretiminin varsayilan yazi tipi U+20BA (₺) glifini tasimiyor;
+   * isaret yerine bos kutu ciziliyordu (olculdu). Onceki hal bunu ₺'yi
+   * silip " TL" ekleyerek cozuyordu -- ama o COZUM, para biriminin her
+   * zaman TRY oldugunu varsayiyordu. Katalog GBP oldugu icin gorsel
+   * "54,99 TL" yaziyordu; gercek fiyat £54,99.
+   *
+   * Cozum: simge yerine UC HARFLI KOD. Kod ASCII oldugu icin her yazi
+   * tipinde cizilir ve hangi para birimi olursa olsun dogru kalir.
    */
   const fiyat =
     group?.minPriceCents !== null && group?.minPriceCents !== undefined
-      ? `${formatMoney(group.minPriceCents).replace('₺', '').trim()} TL`
+      ? `${(group.minPriceCents / 100).toLocaleString('tr-TR', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })} ${group.currency}`
       : null;
   const teklif = group?.offerCount ?? 0;
 

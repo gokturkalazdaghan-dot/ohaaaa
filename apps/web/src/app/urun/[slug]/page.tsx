@@ -37,7 +37,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
   if (!group) return { title: 'Ürün bulunamadı' };
 
   const priceText =
-    group.minPriceCents !== null ? ` — ${formatMoney(group.minPriceCents)}'den başlayan fiyatlarla` : '';
+    group.minPriceCents !== null ? ` — ${formatMoney(group.minPriceCents, group.currency)}'den başlayan fiyatlarla` : '';
 
   return {
     title: group.title,
@@ -355,7 +355,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
               title={group.title}
               text={
                 group.minPriceCents !== null
-                  ? `${group.title} — ${group.offerCount} mağazada, kargo dahil en düşük ${formatMoney(group.minPriceCents)}`
+                  ? `${group.title} — ${group.offerCount} mağazada, kargo dahil en düşük ${formatMoney(group.minPriceCents, group.currency)}`
                   : group.title
               }
             />
@@ -366,10 +366,10 @@ export default async function ProductPage({ params }: ProductPageProps) {
             <div>
               <p className="text-xs text-muted">Bu ürün {group.offerCount} mağazada var</p>
               <p className="tabular mt-0.5 text-xl font-black">
-                {group.minPriceCents !== null ? formatMoney(group.minPriceCents) : '—'}
+                {group.minPriceCents !== null ? formatMoney(group.minPriceCents, group.currency) : '—'}
                 {group.maxPriceCents !== null && group.maxPriceCents !== group.minPriceCents && (
                   <span className="ml-2 text-sm font-normal text-muted">
-                    – {formatMoney(group.maxPriceCents)}
+                    – {formatMoney(group.maxPriceCents, group.currency)}
                   </span>
                 )}
               </p>
@@ -379,7 +379,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
               <div className="ml-auto rounded-xl bg-success/12 px-4 py-2.5 text-right">
                 <p className="text-2xs text-success/85">Doğru mağazayı seçerek</p>
                 <p className="tabular text-lg font-black text-success">
-                  {formatMoney(savingsCents)} kazanın
+                  {formatMoney(savingsCents, group.currency)} kazanın
                 </p>
               </div>
             )}
