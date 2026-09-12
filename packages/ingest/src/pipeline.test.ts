@@ -223,7 +223,9 @@ test('GTIN eşleşmesi imzaya tercih edilir', async () => {
     async findGroupsByGtin(gtins) {
       // İlk ürünün barkodu zaten katalogda.
       return new Map(
-        gtins.includes('4548736134546') ? [['4548736134546', 'mevcut-grup']] : [],
+        // 14 hane: depo artik normalize edilmis GTIN ile sorar ve oyle doner
+        // (`gtin_normalized` uretilen sutunu her zaman 14 hanedir).
+        gtins.includes('04548736134546') ? [['04548736134546', 'mevcut-grup']] : [],
       );
     },
   });

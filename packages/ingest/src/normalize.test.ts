@@ -178,12 +178,12 @@ test('stok: alan yoksa stokta varsayılır, anlaşılmıyorsa stoksuz', () => {
 
 test('GTIN kontrol basamağı doğrulanır', () => {
   // Gerçek, geçerli barkodlar
-  assert.equal(normalizeGtin('0195949038204'), '0195949038204'); // iPhone 15
-  assert.equal(normalizeGtin('4548736134546'), '4548736134546'); // Sony XM5
+  assert.equal(normalizeGtin('0195949038204'), '00195949038204'); // iPhone 15 (14 haneye doldurulur)
+  assert.equal(normalizeGtin('4548736134546'), '04548736134546'); // Sony XM5
 
   // Ayırıcılar temizlenir
-  assert.equal(normalizeGtin(' 4548736134546 '), '4548736134546');
-  assert.equal(normalizeGtin('4-548736-134546'), '4548736134546');
+  assert.equal(normalizeGtin(' 4548736134546 '), '04548736134546');
+  assert.equal(normalizeGtin('4-548736-134546'), '04548736134546');
 });
 
 test('kontrol basamağı hatalı GTIN reddedilir', () => {
@@ -238,4 +238,50 @@ test('para birimi büyük harfe normalize edilir ve boşluk kırpılır', () => 
   const { offers } = normalizeRecords([record({ cur: '  gbp  ' })], mapping, OPTIONS);
 
   assert.equal(offers[0]?.currency, 'GBP');
+});
+
+/*
+ * GTIN BİÇİM PARİTESİ -- JS ile SQL aynı değeri üretmeli.
+ *
+ * `public.normalize_gtin` sonucu `lpad(s, 14, '0')` döndürür ve
+ * `product_groups.gtin_normalized` onunla ÜRETİLİR. JS tarafı doldurmadan
+ * bıraktığı sürece iki katman ayrışıyordu:
+ *
+ *   veritabanı : 05099206039292   feed : 5099206039292
+ *
+ * Eşleştirme düz metin karşılaştırmasıdır; aynı ürün eşleşmiyor, kod onu yeni
+ * kanonik ürün sanıp açıyor ve benzersizlik kısıtına çarpıyordu. Üretimde
+ * ölçüldü: 1000 grup açıldı, 691'i 13 haneydi, sonra alım düştü.
+ *
+ * Beklenen değerler canlı veritabanında `normalize_gtin()` çağrılarak
+ * doğrulandı (7/7 birebir).
+ */
+
+test('gtin 14 haneye doldurulur -- SQL normalize_gtin ile ayni', () => {
+  // Soldaki girdi, sagdaki canli veritabanindan olculen SQL ciktisi.
+  const beklenen: Array<[string, string | null]> = [
+    ['5099206039292', '05099206039292'],
+    ['05099206039292', '05099206039292'],
+    ['3004833192250', '03004833192250'],
+    ['12345670', '00000012345670'],
+    ['123', null],
+    ['', null],
+    ['abc', null],
+  ];
+
+  for (const [girdi, cikti] of beklenen) {
+    assert.equal(normalizeGtin(girdi), cikti, `girdi: ${JSON.stringify(girdi)}`);
+  }
+});
+
+test('ayni gtin farkli biciminde ayni degeri verir', () => {
+  // 13 hane ve 14 hane hali AYNI GTIN'dir; eslestirme ancak tek bicimde anlamli.
+  assert.equal(normalizeGtin('5099206039292'), normalizeGtin('05099206039292'));
+  assert.notEqual(normalizeGtin('5099206039292'), null);
+});
+
+test('gecersiz kontrol basamagi hala reddedilir', () => {
+  // Doldurma, dogrulamayi gevsetmemeli.
+  assert.equal(normalizeGtin('5099206039291'), null);
+  assert.equal(normalizeGtin('0000000000000'), '00000000000000');
 });

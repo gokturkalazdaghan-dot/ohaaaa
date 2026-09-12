@@ -59,6 +59,27 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
 
       // GTIN listesi büyük olabilir; parçalayarak sorgula.
       for (const batch of chunkByUrlBudget(gtins)) {
+        /*
+         * ARAMA HAM `gtin` ÜZERİNDEN -- ve bu bilinçli bir sınır.
+         *
+         * Daha sağlamı `gtin_normalized` (üretilen sütun, her zaman 14 hane)
+         * üzerinden aramak olurdu. Denendi ve CI reddetti:
+         *
+         *   product_groups.gtin_normalized — şemada böyle bir sütun yok
+         *
+         * Sütun ÜRETİMDE var ama depodaki göçlerde YOK; `verify-supabase-
+         * queries` tam da bu ayrışmayı yakalamak için duruyor ve haklı.
+         * Depoda tanımlı olmayan bir sütuna bağımlılık yazmak, ayrışmayı
+         * kodun içine taşımak olurdu.
+         *
+         * Ham `gtin` üzerinden arama artık YETERLİ: `normalizeGtin` her değeri
+         * 14 haneye doldurduğu için yazılan ve aranan biçim aynı. Geçmişte
+         * başka biçimde yazılmış kayıtlar kalırsa bu arama onları bulmaz --
+         * ama üretimdeki iki grup da 14 hane, yani böyle bir kayıt yok.
+         *
+         * Göç ayrışması kapandığında (`gtin_normalized` depoya girdiğinde)
+         * buranın o sütuna geçmesi doğru olur.
+         */
         const { data, error } = await supabase
           .from('product_groups')
           .select('id, gtin')
