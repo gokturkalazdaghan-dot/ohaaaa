@@ -10,7 +10,14 @@ import { isVisualSearchConfigured } from '@/lib/visualSearch';
 import { ProductCard } from '@/components/ProductCard';
 import { RecentlyViewed } from '@/components/RecentlyViewed';
 import { TrustSignals } from '@/components/TrustSignals';
-import { getCategories, getFlashDeals, getVendors, searchProducts } from '@/data/catalog';
+import {
+  getCategories,
+  getFlashDeals,
+  getGalleryProducts,
+  getVendors,
+  searchProducts,
+} from '@/data/catalog';
+import { ProductBentoGallery } from '@/components/ProductBentoGallery';
 
 /*
  * Ana sayfanın kendi meta verisi yoktu.
@@ -71,14 +78,16 @@ export default async function HomePage() {
    * hâlükârda çiziliyor: arama `/arama` sayfasına gider ve o sayfa zaten
    * kesintiye dayanıklı.
    */
-  const [dealsRes, categoriesRes, vendorsRes, trendingRes] = await Promise.all([
+  const [dealsRes, categoriesRes, vendorsRes, trendingRes, galeriRes] = await Promise.all([
     fetched('kampanyalar', getFlashDeals(3)),
     fetched('kategoriler', getCategories()),
     fetched('magazalar', getVendors()),
     fetched('one-cikanlar', searchProducts({ sort: 'offers', limit: 8 })),
+    fetched('galeri', getGalleryProducts(7)),
   ]);
 
   const deals = dealsRes.ok ? dealsRes.value : [];
+  const galeri = galeriRes.ok ? galeriRes.value : [];
   const categories = categoriesRes.ok ? categoriesRes.value : [];
   const vendors = vendorsRes.ok ? vendorsRes.value : [];
   const trending = trendingRes.ok ? trendingRes.value.results : [];
@@ -193,6 +202,24 @@ export default async function HomePage() {
       <div className="mt-2">
         <FlashDeals deals={deals} />
       </div>
+
+      {/*
+        --- Galeri ----------------------------------------------------------
+        Bento galerisi "Cok karsilastirilanlar" izgarasinin ONUNE konuldu:
+        ikisi de ayni kumeyi (en cok magazada bulunan urunler) gosteriyor,
+        biri gorsel kesif biri yapisal liste. Galeri once gelir cunku
+        gorsel tarama daha hizli; liste altinda fiyat/magaza sayisi ile
+        ayrintiyi verir. Ayni veriyi iki kez gostermek tekrar DEGIL, iki
+        farkli tarama bicimi.
+
+        Bos listede bilesen kendini hic cizmiyor -- bos bir galeri karesi
+        vitrine zarar verir.
+      */}
+      {galeri.length > 0 && (
+        <section className="mt-12">
+          <ProductBentoGallery products={galeri} />
+        </section>
+      )}
 
       {/* --- Urunler -------------------------------------------------------- */}
       {trending.length > 0 && (

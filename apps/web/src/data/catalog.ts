@@ -1781,3 +1781,105 @@ export async function getOhaaaaScore(productId: string): Promise<OhaaaaScore | n
     components: (row.components as ScoreComponent[]) ?? [],
   };
 }
+
+// ---------------------------------------------------------------------------
+// Bento galerisi
+// ---------------------------------------------------------------------------
+
+/** Galeride gosterilecek bir urun. */
+export interface GalleryProduct {
+  slug: string;
+  title: string;
+  brand: string | null;
+  imageUrl: string;
+  minPriceCents: number | null;
+  offerCount: number;
+  currency?: string;
+}
+
+/**
+ * Bento galerisi icin GERCEK urunler.
+ *
+ * NEDEN STOK FOTOGRAF DEGIL: galeri tasariminin ozgun hali rastgele
+ * `picsum.photos` / stok gorselleri kullaniyordu. Ohaaaa'nin elinde 31.000
+ * gercek urun gorseli var; dekoratif bir stok-foto galerisi urun kesif
+ * modeline hicbir sey katmaz. Bu fonksiyon galeriyi katalogla besliyor.
+ *
+ * SECIM OLCUTU: `offer_count` -- en cok magazada bulunan urunler. Bu,
+ * karsilastirma degeri en yuksek olanlar demek ve Ohaaaa'nin isi tam olarak
+ * o. Rastgele secim de yapilabilirdi ama vitrine deger katmazdi.
+ *
+ * Gorseli OLMAYAN urunler disarida: gorselsiz bir galeri karesi bos kutu
+ * demek. `image_url is not null` bu yuzden sorgunun icinde.
+ */
+export async function getGalleryProducts(limit = 7): Promise<GalleryProduct[]> {
+  const supabase = createAnonClient();
+
+  if (!supabase) {
+    return demoProductGroups
+      .filter((group) => group.imageUrl !== null)
+      .slice(0, limit)
+      .map((group) => ({
+        slug: group.slug,
+        title: group.title,
+        brand: group.brand,
+        imageUrl: group.imageUrl as string,
+        minPriceCents: group.minPriceCents,
+        offerCount: group.offerCount,
+        currency: group.currency,
+      }));
+  }
+
+  const { data, error } = await supabase
+    .from('product_groups')
+    .select('id, slug, title, brand, image_url, min_price_cents, offer_count')
+    .gt('offer_count', 0)
+    .not('image_url', 'is', null)
+    .order('offer_count', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    /*
+     * Galeri bir VITRIN, sayfanin govdesi degil. Okunamazsa bos donuluyor
+     * ve bilesen hic cizilmiyor -- demo veriyle doldurmak, gercek katalog
+     * varken sahte urun gostermek olurdu.
+     */
+    console.warn(
+      JSON.stringify({ level: 'warn', msg: 'Galeri urunleri okunamadi', hata: error.message }),
+    );
+    return [];
+  }
+
+  const satirlar = data ?? [];
+  if (satirlar.length === 0) return [];
+
+  /*
+   * PARA BIRIMI: `products.currency` -- `product_groups.price_currency`
+   * DEGIL. O sutun uretimde var ama depo goclerinde yok (ayrintili gerekce
+   * `searchProducts` icinde).
+   */
+  const birimler = new Map<string, string>();
+  const { data: paraSatirlari } = await supabase
+    .from('products')
+    .select('group_id, currency')
+    .in('group_id', satirlar.map((satir) => String(satir.id)))
+    .eq('status', 'active');
+
+  for (const satir of paraSatirlari ?? []) {
+    const grup = String(satir.group_id);
+    if (satir.currency && !birimler.has(grup)) {
+      birimler.set(grup, String(satir.currency).trim());
+    }
+  }
+
+  return satirlar.map((satir) => ({
+    slug: String(satir.slug),
+    title: String(satir.title),
+    brand: satir.brand ? String(satir.brand) : null,
+    imageUrl: String(satir.image_url),
+    minPriceCents:
+      satir.min_price_cents === null ? null : Number(satir.min_price_cents),
+    offerCount: Number(satir.offer_count),
+    currency: birimler.get(String(satir.id)),
+  }));
+}
