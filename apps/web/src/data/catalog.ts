@@ -11,7 +11,12 @@
 
 import 'server-only';
 
-import { buildCategoryTree, offerSellerName, rankShowcase } from '@ohaaaa/shared';
+import {
+  buildCategoryTree,
+  collectByKeyset,
+  offerSellerName,
+  rankShowcase,
+} from '@ohaaaa/shared';
 import type {
   Category,
   CategoryNode,
@@ -1914,6 +1919,91 @@ export async function getOhaaaaScore(productId: string): Promise<OhaaaaScore | n
     windowDays: Number(row.window_days ?? 90),
     components: (row.components as ScoreComponent[]) ?? [],
   };
+}
+
+// ---------------------------------------------------------------------------
+// Site haritası
+// ---------------------------------------------------------------------------
+/** Site haritasına girecek bir ürün grubu. */
+export interface SitemapProduct {
+  slug: string;
+  /** Öncelik hesabı için: çok teklifli ürünler karşılaştırma vaadini taşır. */
+  offerCount: number;
+}
+
+/**
+ * Bir okumada kaç grup isteniyor.
+ *
+ * 1.000 keyset sayfası ~38 ms (ölçüldü, konumdan BAĞIMSIZ). Daha büyük
+ * parçalar tek istekte daha çok satır getirir ama PostgREST yanıtını ve
+ * bellek tepe noktasını büyütür; 1.000 ikisinin arasında duruyor.
+ */
+const HARITA_SAYFA_BOYUTU = 1000;
+
+/**
+ * Site haritası için TÜM ürün adresleri.
+ *
+ * NEDEN `searchProducts` KULLANILMIYOR
+ * Kullanılıyordu ve sessizce kırıktı. `search_products` işlevi istenen
+ * limiti kesiyor:
+ *
+ *     limit greatest(1, least(coalesce(p_limit, 24), 100))
+ *
+ * yani site haritası 45.000 ürün isteyip 100 alıyordu. Ölçülen sonuç:
+ * canlı sitemap.xml'de 34.510 üründen 100'ü vardı -- kapsam %0,29. Koddaki
+ * `MAX_PRODUCTS = 45_000` sabiti bir niyet beyanıydı, etkisi yoktu.
+ *
+ * NEDEN KEYSET SAYFALAMA (offset değil)
+ * `offset` doğrusal olarak yavaşlar: veritabanı atladığı satırları yine de
+ * okur. Ölçüldü -- 20.000'inci satırdan 1.000 kayıt almak 736 ms, aynı işi
+ * `slug > sonSlug` ile yapmak 38 ms. Katalog büyüdükçe fark açılır ve
+ * offset eninde sonunda ifade zaman aşımına çarpar.
+ *
+ * `slug` bu iş için doğru anahtar: BENZERSİZ (tekil dizin var), dolayısıyla
+ * sayfa sınırında kayıt atlanmaz veya iki kez gelmez. `offer_count` ile
+ * sıralamak cazipti ama eşit değerler sayfalar arasında kayar.
+ */
+export async function getSitemapProducts(max = 45_000): Promise<SitemapProduct[]> {
+  const supabase = createAnonClient();
+
+  if (!supabase) {
+    return demoProductGroups
+      .filter((grup) => grup.offerCount > 0)
+      .map((grup) => ({ slug: grup.slug, offerCount: grup.offerCount }));
+  }
+
+  return collectByKeyset<SitemapProduct>({
+    max,
+    pageSize: HARITA_SAYFA_BOYUTU,
+    key: (urun) => urun.slug,
+    fetchPage: async (sonSlug, limit) => {
+      let sorgu = supabase
+        .from('product_groups')
+        .select('slug, offer_count')
+        .gt('offer_count', 0)
+        .order('slug')
+        .limit(limit);
+
+      if (sonSlug !== null) sorgu = sorgu.gt('slug', sonSlug);
+
+      const { data, error } = await sorgu;
+
+      if (error) {
+        /*
+         * YARIM LİSTE SESSİZCE YAYIMLANMAZ. Bir sayfa okunamazsa o ana kadar
+         * toplananı döndürmek, Google'a "kalan ürünler artık yok" demenin
+         * yumuşak hâli olurdu. Hata yukarı çıkıyor ve site haritası kendi
+         * yedeğine (statik sayfalar) düşüyor -- eksik değil, dürüst.
+         */
+        throw new Error(`Site haritasi urunleri okunamadi: ${error.message}`);
+      }
+
+      return (data ?? []).map((satir) => ({
+        slug: String(satir.slug),
+        offerCount: Number(satir.offer_count),
+      }));
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------
