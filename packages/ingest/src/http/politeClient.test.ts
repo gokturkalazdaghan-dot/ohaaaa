@@ -8,6 +8,7 @@
 
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
+import { gzipSync } from 'node:zlib';
 
 import {
   CircuitOpenError,
@@ -853,4 +854,73 @@ test('özel adrese ÇÖZÜLEN feed adresi istemci seviyesinde de reddedilir', as
    * `maxRetries: 3` olmasına rağmen yeniden denenmemeli.
    */
   assert.equal(cagrilar.length, 0, 'yasak hedefe hiç istek gitmemeli');
+});
+
+/*
+ * GZIP DOSYASI AÇILIYOR MU?
+ *
+ * Bu iki test üretimde yaşanan bir arızayı kilitliyor. Awin'in
+ * `compression/gzip` parametresi DOSYAYI gzip'ler ve `content-type:
+ * application/gzip` ile gönderir -- `fetch` yalnızca TAŞIMA sıkıştırmasını
+ * (`content-encoding`) açar, bunu açmaz. Açılmadan metne çevrilince sonuç
+ * sessizce çöp oluyordu ve hata "yanlış alan haritası" gibi görünüyordu:
+ *
+ *   5207 görüldü, 0 yeni, 5207 hatalı
+ *   Satır 2: 3 kolon bekleniyordu, 1 bulundu
+ *
+ * İkinci test şart: yalnızca birincisi olsaydı, HER gövdeyi açmaya çalışan
+ * bozuk bir uygulama da testi geçerdi.
+ */
+
+test('gzip ile sikistirilmis govde acilarak dondurulur', async () => {
+  const csv = 'data_feed_id,merchant_id,product_name\n111663,61655,Logitech MK270\n';
+  const gz = gzipSync(Buffer.from(csv, 'utf-8'));
+
+  const impl = (async (input: string | URL | Request) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    if (url.endsWith('/robots.txt')) return new Response('User-agent: *\nAllow: /');
+    return new Response(gz, {
+      status: 200,
+      headers: { 'content-type': 'application/gzip' },
+    });
+  }) as unknown as typeof fetch;
+
+  const clock = fakeClock();
+  const client = createPoliteClient({
+    resolveHost: fakeResolve,
+    userAgent: UA,
+    ...{ minDelayMs: 0, timeoutMs: 5000, maxRetries: 1, circuitBreakerThreshold: 5 },
+    fetchImpl: impl,
+    now: clock.now,
+    sleep: clock.sleep,
+  });
+
+  const sonuc = await client.get('https://feed.example/urunler.csv.gz');
+
+  assert.equal(sonuc.body, csv, 'gzip govde acilmadan dondu');
+  assert.ok(sonuc.body.startsWith('data_feed_id,'), 'CSV basligi okunamadi');
+  assert.equal(sonuc.body.split('\n')[1], '111663,61655,Logitech MK270');
+});
+
+test('sikistirilmamis govde degistirilmeden gecer', async () => {
+  const csv = 'a,b,c\n1,2,3\n';
+
+  const impl = (async (input: string | URL | Request) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    if (url.endsWith('/robots.txt')) return new Response('User-agent: *\nAllow: /');
+    return new Response(csv, { status: 200, headers: { 'content-type': 'text/csv' } });
+  }) as unknown as typeof fetch;
+
+  const clock = fakeClock();
+  const client = createPoliteClient({
+    resolveHost: fakeResolve,
+    userAgent: UA,
+    ...{ minDelayMs: 0, timeoutMs: 5000, maxRetries: 1, circuitBreakerThreshold: 5 },
+    fetchImpl: impl,
+    now: clock.now,
+    sleep: clock.sleep,
+  });
+
+  const sonuc = await client.get('https://feed.example/duz.csv');
+  assert.equal(sonuc.body, csv);
 });

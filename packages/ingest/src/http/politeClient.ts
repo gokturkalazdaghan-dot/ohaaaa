@@ -16,6 +16,8 @@
  * ek bağımlılık, tek kişilik bir operasyonda bakım yüzeyi demektir.
  */
 
+import { gunzipSync } from 'node:zlib';
+
 import { crawlDelayFor, isAllowed, parseRobotsTxt, type RobotsTxt } from './robots.js';
 import { maskUrl } from './redact.js';
 import { IngestError } from '../errors.js';
@@ -453,6 +455,15 @@ const YONLENDIRME_KODLARI = new Set([301, 302, 303, 307, 308]);
 const ROBOTS_MAX_BYTES = 512 * 1024;
 
 /**
+ * Gzip AÇILDIKTAN sonraki üst sınır (zip bombası koruması).
+ *
+ * İndirme sınırı (64 MiB) açılmadan ÖNCEKİ boyutu korur; açılmış hâl için
+ * ayrı bir tavan gerekir. 512 MiB ölçüme göre seçildi: feed 111663 sıkışık
+ * 21,9 MB, açılmış 108,3 MB -- yani gerçek bir feed'in ~5 katı pay var.
+ */
+const MAX_GUNZIP_BYTES = 512 * 1024 * 1024;
+
+/**
  * Gövdeyi SINIRA KADAR okur; sınır aşılırsa akışı iptal edip fırlatır.
  *
  * İki katmanlı: önce beyan edilen `content-length`, sonra GERÇEKTEN gelen
@@ -509,7 +520,50 @@ async function readBodyLimited(
     ofset += parca.byteLength;
   }
 
-  return new TextDecoder('utf-8').decode(birlesik);
+  return new TextDecoder('utf-8').decode(acGerekiyorsa(birlesik, url));
+}
+
+/**
+ * GZIP DOSYASINI AÇAR — TRANSPORT SIKIŞTIRMASINI DEĞİL.
+ *
+ * İkisi farklı şeydir ve karıştırılması bu depoda gerçek bir arızaya yol açtı.
+ * `fetch` yalnızca `content-encoding: gzip` başlığını, yani TAŞIMA katmanındaki
+ * sıkıştırmayı kendiliğinden açar. Awin'in `compression/gzip` parametresi ise
+ * DOSYANIN KENDİSİNİ gzip'ler ve `content-type: application/gzip` ile gönderir;
+ * `fetch` için bu sıradan bir ikili dosyadır ve dokunmaz.
+ *
+ * Açılmadan `TextDecoder`'a verilince sonuç sessizce çöp olur: ayrıştırıcı
+ * ikili baytların arasında tesadüfen virgül gördüğü yerde kolon sayar.
+ * Ölçüldü (üretim, feed 111663):
+ *   "5207 görüldü, 0 yeni, 5207 hatalı · Satır 2: 3 kolon bekleniyordu, 1 bulundu"
+ * Yani hata "boş feed" ya da "yanlış alan haritası" gibi GÖRÜNÜR; gerçek sebep
+ * bir katman aşağıdadır. Teşhisi pahalı kılan da buydu.
+ *
+ * KARAR: `content-type` değil SİHİRLİ BAYT (1f 8b) esas alınır. Başlık
+ * sunucudan sunucuya değişir (`application/gzip`, `application/x-gzip`,
+ * `application/octet-stream`, hatta `text/csv`); sihirli bayt gzip
+ * biçiminin kendi tanımıdır ve yanılmaz.
+ *
+ * ZIP BOMBASI: `maxOutputLength` olmadan 21 MB'lık bir dosya gigabaytlara
+ * açılıp süreci öldürebilir. İndirme sınırı burada işe yaramaz — o, açılmadan
+ * ÖNCEKİ boyutu korur. Sınır aşılırsa `zlib` fırlatır ve `IngestError`'a
+ * çevrilir: kalıcı bir yapılandırma hatasıdır, yeniden denemek sonucu
+ * değiştirmez.
+ */
+function acGerekiyorsa(govde: Uint8Array, url: string): Uint8Array {
+  const gzipMi = govde.length >= 2 && govde[0] === 0x1f && govde[1] === 0x8b;
+  if (!gzipMi) return govde;
+
+  try {
+    return gunzipSync(govde, { maxOutputLength: MAX_GUNZIP_BYTES });
+  } catch (hata) {
+    throw new IngestError(
+      'CONFIG_ERROR',
+      `Gzip gövde açılamadı (${maskUrl(url)}): ` +
+        (hata instanceof Error ? hata.message : String(hata)),
+      true,
+    );
+  }
 }
 
 /** Üstel geri çekilme + jitter. Jitter, eşzamanlı denemelerin çakışmasını önler. */
