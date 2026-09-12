@@ -1482,8 +1482,16 @@ export async function getStoreProducts(
  * Site haritasına girecek ortak mağazalar.
  *
  * Teklifi olmayan mağaza listelenmez: ürünsüz bir vitrin ince içeriktir ve
- * tarama bütçesini boşa harcar. Aktif mağaza sayısı bugün 1, dolayısıyla
- * mağaza başına bir sayım isteği kabul edilebilir.
+ * tarama bütçesini boşa harcar.
+ *
+ * SAYI DEĞİL VARLIK SORULUYOR. İlk hâli mağaza başına `count: 'exact'`
+ * yapıyordu ve o sayım 35.742 satırlık bir mağazada tabloyu baştan sona
+ * tarıyor (~1,3 sn). Site haritası zaten 35 sayfalık ürün okuması yapıyor;
+ * üstüne bu gelince mağaza sorgusu düşüyor ve harita ortak mağazaları HİÇ
+ * listelemiyordu -- canlıda ölçüldü, `/magaza` girişi 0 taneydi.
+ *
+ * Soru aslında "kaç tane" değil "en az bir tane var mı". `limit(1)` ilk
+ * eşleşmede duruyor: aynı cevap, 1,8 ms (ölçüldü) -- 750 kat ucuz.
  */
 export async function getActiveMerchants(): Promise<Array<{ slug: string }>> {
   const supabase = createAnonClient();
@@ -1502,16 +1510,18 @@ export async function getActiveMerchants(): Promise<Array<{ slug: string }>> {
 
   const sonuc = await Promise.all(
     magazalar.map(async (magaza) => {
-      const { count } = await supabase
+      const { data: teklif } = await supabase
         .from('products')
-        .select('id', { count: 'exact', head: true })
+        .select('id')
         .eq('merchant_id', String(magaza.id))
-        .eq('status', 'active');
-      return { slug: String(magaza.slug), adet: count ?? 0 };
+        .eq('status', 'active')
+        .limit(1);
+
+      return { slug: String(magaza.slug), teklifiVar: (teklif ?? []).length > 0 };
     }),
   );
 
-  return sonuc.filter((m) => m.adet > 0).map((m) => ({ slug: m.slug }));
+  return sonuc.filter((m) => m.teklifiVar).map((m) => ({ slug: m.slug }));
 }
 
 /** Ürün sayfasındaki "Bunlara da bakın" bloğu. */
