@@ -82,7 +82,11 @@ export default async function HomePage() {
     fetched('kampanyalar', getFlashDeals(3)),
     fetched('kategoriler', getCategories()),
     fetched('magazalar', getVendors()),
-    fetched('one-cikanlar', searchProducts({ sort: 'offers', limit: 8 })),
+    /*
+     * 16 isteniyor ama 8 gosteriliyor: asagida vitrindeki urunler bu
+     * listeden ELENIYOR ve eleme sonrasi yine sekiz kart kalmali.
+     */
+    fetched('one-cikanlar', searchProducts({ sort: 'offers', limit: 16 })),
     fetched('vitrin', getShowcaseTiers({ tiers: 3, perTier: 5 })),
   ]);
 
@@ -90,7 +94,20 @@ export default async function HomePage() {
   const vitrin = vitrinRes.ok ? vitrinRes.value : [];
   const categories = categoriesRes.ok ? categoriesRes.value : [];
   const vendors = vendorsRes.ok ? vendorsRes.value : [];
-  const trending = trendingRes.ok ? trendingRes.value.results : [];
+  /*
+   * VITRINDEKI URUNLER BU IZGARADA TEKRAR ETMEZ.
+   *
+   * Iki bolum de ayni olcute bakiyor (teklif sayisi), dolayisiyla filtresiz
+   * birakilirsa vitrinin ilk bes karesi ile bu izgaranin ilk bes karti AYNI
+   * urunler olur -- ayni sayfada ayni urunu iki kez gormek hata gibi
+   * gorunur. Eleme vitrinden sonra yapilir cunku vitrinin neyi sectigi ancak
+   * o zaman belli olur.
+   */
+  const vitrindekiler = new Set(vitrin.flatMap((b) => b.products.map((u) => u.slug)));
+  const trendingHam = trendingRes.ok ? trendingRes.value.results : [];
+  const trending = trendingHam
+    .filter((sonuc) => !vitrindekiler.has(sonuc.slug))
+    .slice(0, 8);
 
   /*
    * ÜÇ AYRI DURUM, ÜÇ AYRI MESAJ.
@@ -104,8 +121,13 @@ export default async function HomePage() {
    * gerçekten okuyabildiysek söyleyebiliriz.
    */
   const catalogUnavailable = !trendingRes.ok && !categoriesRes.ok;
+  /*
+   * Karar FILTRESIZ listeye bakar. `trending` vitrinde gosterilenler
+   * elendikten sonra kalanlar; kucuk bir katalogda vitrin hepsini
+   * tuketebilir ve o zaman "katalog bos" demek YANLIS olurdu.
+   */
   const catalogEmpty =
-    !catalogUnavailable && trending.length === 0 && deals.length === 0;
+    !catalogUnavailable && trendingHam.length === 0 && deals.length === 0;
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
