@@ -42,10 +42,6 @@
     {
       "path": "/api/cron/fiyat-alarmi",
       "schedule": "0 9 * * *"
-    },
-    {
-      "path": "/api/cron/alim",
-      "schedule": "0 * * * *"
     }
   ]
 }
