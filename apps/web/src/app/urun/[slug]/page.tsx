@@ -132,6 +132,13 @@ export default async function ProductPage({ params }: ProductPageProps) {
    */
   const sellableOffers = group.offers.filter((offer) => offer.stock > 0);
 
+  /*
+   * Tekliflerin ORTAK para birimi; farklilarsa null.
+   * Set kullanilyor cunku "hepsi ayni mi" sorusu tam olarak budur.
+   */
+  const paraBirimleri = new Set(sellableOffers.map((teklif) => teklif.currency));
+  const toplamParaBirimi = paraBirimleri.size === 1 ? [...paraBirimleri][0] : null;
+
   // Bu bir sunucu bileşeni ve sayfa her istekte yeniden render ediliyor
   // (önbelleğe alınmıyor), dolayısıyla "şu andan 24 saat sonrası" her
   // ziyaretçi için doğru hesaplanır. Lint kuralı render sırasında saat
@@ -166,11 +173,24 @@ export default async function ProductPage({ params }: ProductPageProps) {
       : {}),
     ...(group.imageUrl ? { image: [group.imageUrl] } : {}),
     url: productUrl,
-    ...(sellableOffers.length > 0
+    /*
+     * AGGREGATEOFFER YALNIZCA TEK PARA BIRIMINDE YAYINLANIR.
+     *
+     * schema.org `AggregateOffer` TEK bir `priceCurrency` tasir. Onceki hal
+     * bunu 'TRY' olarak SABIT yaziyordu; teklifler GBP oldugu icin Google'a
+     * yanlis para birimiyle fiyat bildiriliyordu (uretimde olculdu: katalogun
+     * tamami GBP). Yanlis yapilandirilmis veri, zengin sonucta yanlis fiyat
+     * gostermek demektir -- eksik veriden zararlidir.
+     *
+     * Teklifler farkli para birimleri tasiyorsa toplam ANLAMSIZDIR, bu yuzden
+     * AggregateOffer HIC yayinlanmaz; bireysel `Offer` kayitlari (her biri
+     * kendi para birimiyle) yine yayinlanir.
+     */
+    ...(sellableOffers.length > 0 && toplamParaBirimi
       ? {
           offers: {
             '@type': 'AggregateOffer',
-            priceCurrency: 'TRY',
+            priceCurrency: toplamParaBirimi,
             lowPrice: (Math.min(...sellableOffers.map((o) => o.priceCents)) / 100).toFixed(2),
             highPrice: (Math.max(...sellableOffers.map((o) => o.priceCents)) / 100).toFixed(2),
             offerCount: sellableOffers.length,
@@ -197,7 +217,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
                 shippingRate: {
                   '@type': 'MonetaryAmount',
                   value: (offer.shippingFeeCents / 100).toFixed(2),
-                  currency: 'TRY',
+                  currency: offer.currency,
                 },
                 deliveryTime: {
                   '@type': 'ShippingDeliveryTime',
@@ -258,6 +278,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         title={group.title}
         imageUrl={galleryImages[0] ?? null}
         priceCents={bestOffer?.priceCents ?? group.minPriceCents}
+        currency={bestOffer?.currency ?? group.currency}
       />
       <nav aria-label="Sayfa yolu" className="mb-6 flex items-center gap-2 text-xs text-muted">
         <Link href="/" className="hover:text-fg">Ana sayfa</Link>
@@ -282,6 +303,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
               points={priceHistory}
               currentCents={bestOffer.priceCents}
               compareAtCents={bestOffer.compareAtPriceCents}
+              currency={bestOffer.currency}
             />
           )}
 

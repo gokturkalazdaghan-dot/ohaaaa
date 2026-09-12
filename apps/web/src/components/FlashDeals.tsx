@@ -86,10 +86,10 @@ function HeadlineDeal({ deal }: { deal: FlashDeal }) {
 
         <div className="mt-6 flex flex-wrap items-baseline gap-3">
           <span className="tabular text-4xl font-black text-brand">
-            {formatMoney(deal.dealPriceCents)}
+            {formatMoney(deal.dealPriceCents, deal.currency)}
           </span>
           <span className="tabular text-lg text-subtle line-through">
-            {formatMoney(deal.originalPriceCents)}
+            {formatMoney(deal.originalPriceCents, deal.currency)}
           </span>
           {percent !== null && (
             <span className="rounded-lg bg-success/15 px-2 py-1 text-sm font-bold text-success">
@@ -133,10 +133,10 @@ function SecondaryDeal({ deal }: { deal: FlashDeal }) {
         <p className="line-clamp-2 text-sm font-medium">{deal.title}</p>
         <div className="mt-1.5 flex items-baseline gap-2">
           <span className="tabular text-base font-bold text-brand">
-            {formatMoney(deal.dealPriceCents)}
+            {formatMoney(deal.dealPriceCents, deal.currency)}
           </span>
           <span className="tabular text-xs text-subtle line-through">
-            {formatMoney(deal.originalPriceCents)}
+            {formatMoney(deal.originalPriceCents, deal.currency)}
           </span>
         </div>
       </div>

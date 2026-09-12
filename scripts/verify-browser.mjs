@@ -303,7 +303,10 @@ for (const [genislik, etiket] of [[320, 'en dar'], [390, 'mobil'], [1280, 'masa�
   const dizi = await arma.evaluate((el) =>
     [...el.querySelectorAll('svg [data-harf]')].map((p) => p.getAttribute('data-harf')).join(''),
   );
-  check(dizi === 'OHAAAA.COM', `Arma ${etiket} ekranda "OHAAAA.COM" çiziyor`, `okunan="${dizi}"`);
+  // Kelime isareti BUYUK HARFTEN kucuk harfe gecti: `OHAAAA.COM` -> `Ohaaaa.com`.
+  // Marka kurali (verify-brand.mjs) her iki bicimi de dogru sayar; arma artik
+  // ilk harfi buyuk olani cizyor ve `O` ile `h` bitisik.
+  check(dizi === 'Ohaaaa.com', `Arma ${etiket} ekranda "Ohaaaa.com" çiziyor`, `okunan="${dizi}"`);
 
   // A sayısı ayrıca sayılıyor: dizi karşılaştırması geçse bile bu, hatanın
   // tam olarak NEREDE olduğunu söyleyen ikinci bir okuma veriyor.

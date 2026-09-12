@@ -121,7 +121,7 @@ export function OfferRow({
           {offer.shippingFeeCents === 0 ? (
             <span className="text-success">Ücretsiz kargo</span>
           ) : (
-            <span>Kargo {formatMoney(offer.shippingFeeCents)}</span>
+            <span>Kargo {formatMoney(offer.shippingFeeCents, offer.currency)}</span>
           )}
         </span>
         <span>{offer.estimatedDeliveryDays} günde kargoda</span>
@@ -131,7 +131,7 @@ export function OfferRow({
       {/* Fiyat */}
       <div className="shrink-0 sm:w-44 sm:text-right">
         <div className="flex items-baseline gap-2 sm:justify-end">
-          <span className="tabular text-lg font-bold">{formatMoney(offer.priceCents)}</span>
+          <span className="tabular text-lg font-bold">{formatMoney(offer.priceCents, offer.currency)}</span>
           {percent !== null && (
             <span className="rounded bg-success/15 px-1.5 py-0.5 text-2xs font-bold text-success">
               %{percent}
@@ -141,12 +141,12 @@ export function OfferRow({
 
         {offer.compareAtPriceCents && (
           <p className="tabular text-xs text-subtle line-through">
-            {formatMoney(offer.compareAtPriceCents)}
+            {formatMoney(offer.compareAtPriceCents, offer.currency)}
           </p>
         )}
 
         <p className="tabular mt-0.5 text-2xs text-muted">
-          kargo dahil {formatMoney(offer.totalCostCents)}
+          kargo dahil {formatMoney(offer.totalCostCents, offer.currency)}
         </p>
         {isAffiliate && (
           <p className="mt-0.5 text-3xs text-subtle">satış {sellerName}’de tamamlanır</p>

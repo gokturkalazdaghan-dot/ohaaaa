@@ -150,6 +150,8 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     minPriceCents: 5_349_900,
     maxPriceCents: 5_629_900,
     // Demo kumesinde yorum YOK ve uydurulmaz.
+    // Demo kumesi Turkce pazar icin; TRY dogru deger.
+    currency: 'TRY',
     rating: 0,
     ratingCount: 0,
     offers: [
@@ -202,6 +204,8 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     minPriceCents: 1_149_900,
     maxPriceCents: 1_249_000,
     // Demo kumesinde yorum YOK ve uydurulmaz.
+    // Demo kumesi Turkce pazar icin; TRY dogru deger.
+    currency: 'TRY',
     rating: 0,
     ratingCount: 0,
     offers: [
@@ -240,6 +244,8 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     minPriceCents: 2_199_900,
     maxPriceCents: 2_249_000,
     // Demo kumesinde yorum YOK ve uydurulmaz.
+    // Demo kumesi Turkce pazar icin; TRY dogru deger.
+    currency: 'TRY',
     rating: 0,
     ratingCount: 0,
     offers: [
@@ -270,6 +276,8 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     minPriceCents: 2_899_900,
     maxPriceCents: 2_949_900,
     // Demo kumesinde yorum YOK ve uydurulmaz.
+    // Demo kumesi Turkce pazar icin; TRY dogru deger.
+    currency: 'TRY',
     rating: 0,
     ratingCount: 0,
     offers: [
@@ -300,6 +308,8 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     minPriceCents: 449_900,
     maxPriceCents: 449_900,
     // Demo kumesinde yorum YOK ve uydurulmaz.
+    // Demo kumesi Turkce pazar icin; TRY dogru deger.
+    currency: 'TRY',
     rating: 0,
     ratingCount: 0,
     offers: [
@@ -324,6 +334,8 @@ export const demoProductGroups: ProductGroupWithOffers[] = [
     minPriceCents: 799_900,
     maxPriceCents: 824_900,
     // Demo kumesinde yorum YOK ve uydurulmaz.
+    // Demo kumesi Turkce pazar icin; TRY dogru deger.
+    currency: 'TRY',
     rating: 0,
     ratingCount: 0,
     offers: [
@@ -354,19 +366,19 @@ export const demoFlashDeals: FlashDeal[] = [
   {
     id: 'deal-xm5', productId: 'offer-xm5-tm', groupSlug: 'sony-wh-1000xm5',
     headline: 'Günün En Oha Fiyatı', title: 'Sony WH-1000XM5 Kablosuz Kulaklık',
-    imageUrl: null, originalPriceCents: 1_189_900, dealPriceCents: 999_900,
+    imageUrl: null, originalPriceCents: 1_189_900, dealPriceCents: 999_900, currency: 'TRY',
     stockLimit: 200, soldCount: 137, vendorName: 'Teknomarkt', endsAt: endOfToday(),
   },
   {
     id: 'deal-airfryer', productId: 'offer-airfryer-ebd', groupSlug: 'philips-airfryer-xxl',
     headline: 'Oha Fırsatı', title: 'Philips Airfryer XXL 7.3L',
-    imageUrl: null, originalPriceCents: 799_900, dealPriceCents: 699_900,
+    imageUrl: null, originalPriceCents: 799_900, dealPriceCents: 699_900, currency: 'TRY',
     stockLimit: 120, soldCount: 64, vendorName: 'Ev & Bahçe Dünyası', endsAt: endOfToday(),
   },
   {
     id: 'deal-pegasus', productId: 'offer-pegasus-mv', groupSlug: 'nike-air-zoom-pegasus-40',
     headline: 'Oha Fırsatı', title: 'Nike Air Zoom Pegasus 40',
-    imageUrl: null, originalPriceCents: 449_900, dealPriceCents: 379_900,
+    imageUrl: null, originalPriceCents: 449_900, dealPriceCents: 379_900, currency: 'TRY',
     stockLimit: 80, soldCount: 51, vendorName: 'Moda Vitrin', endsAt: endOfToday(),
   },
 ];
