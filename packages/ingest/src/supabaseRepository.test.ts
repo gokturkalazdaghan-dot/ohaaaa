@@ -16,6 +16,7 @@ import {
   geciciOkumaHatasiMi,
   okumayiYenidenDene,
   idempotentYazmayiYenidenDene,
+  UPSERT_BATCH_SIZE,
 } from './supabaseRepository.js';
 
 test('butce asilmadan once parcalamaz', () => {
@@ -209,4 +210,42 @@ test('idempotent yazma KALICI hatayi yeniden DENEMEZ', async () => {
   // Bu test sart ve konusu tam olarak kisit ihlali: mukerrer anahtar
   // hatasini yeniden denemek ayni hatayi dort kez alip arizayi gizlemekti.
   assert.equal(cagri, 1);
+});
+
+// ---------------------------------------------------------------------------
+// UPSERT PARTI BOYUTU -- STATEMENT TIMEOUT KILIDI
+// ---------------------------------------------------------------------------
+// Bu hata URETIMDE IKI KEZ tekrarladi ve ikisinde de farkli yerde dustu:
+//   tur 1: 5.001 urunde  "Gateway Timeout"
+//   tur 2: 31.000 urunde "canceling statement due to statement timeout"
+//
+// Sebep sistematikti ama rastgele gorunuyordu: PostgREST'in bagli oldugu
+// `authenticator` rolunde statement_timeout = 8s (uretimde olculdu) ve
+// olculen yazma hizi ~67 satir/sn. Yani 500 satirlik parti ~7,48 sn
+// suruyordu -- esigin TAM SINIRINDA. Sonuc tablo boyutuna ve o anki yuke
+// bagli kaliyordu.
+//
+// Bu test sabiti asagi dogru kilitler. Biri onu yeniden yukseltirse test
+// duser ve yeniden OLCMEK zorunda kalir.
+
+test('upsert parti boyutu statement_timeout altinda kaliyor', () => {
+  // Uretimde olculen degerler.
+  const STATEMENT_TIMEOUT_SN = 8;
+  const OLCULEN_HIZ_SATIR_SN = 67;
+
+  const partiSuresiSn = UPSERT_BATCH_SIZE / OLCULEN_HIZ_SATIR_SN;
+
+  // En az 3 kat pay istiyoruz: yuk ve tablo buyumesi hizi dusurur.
+  assert.ok(
+    partiSuresiSn * 3 < STATEMENT_TIMEOUT_SN,
+    `parti ${UPSERT_BATCH_SIZE} satir -> ~${partiSuresiSn.toFixed(2)} sn; `
+      + `${STATEMENT_TIMEOUT_SN} sn esigine karsi 3 kat pay yok. `
+      + 'Yukseltmeden ONCE gercek yazma hizini yeniden olcun.',
+  );
+});
+
+test('parti boyutu anlamsiz derecede kucuk de degil', () => {
+  // Asiri kucuk parti tur sayisini patlatir ve alim suresi uzar.
+  // Bu test iki yonlu bir bant tanimliyor: dogruluk ve verim birlikte.
+  assert.ok(UPSERT_BATCH_SIZE >= 50, 'parti 50 satirin altina inmemeli');
 });
