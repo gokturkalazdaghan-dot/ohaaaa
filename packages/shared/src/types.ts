@@ -200,6 +200,15 @@ export interface ProductGroup {
   offerCount: number;
   minPriceCents: number | null;
   maxPriceCents: number | null;
+  /**
+   * Fiyatlarin GERCEK para birimi -- `product_groups.price_currency`.
+   *
+   * ZORUNLU ve bu bilincli. Opsiyonel olsaydi cagiran taraf onu atlayip
+   * `formatMoney`'nin varsayilanina (TRY) duserdi; uretimde tam olarak o
+   * oldu: GBP fiyatlar `₺` ile basildi ve fiyat ~44 kat dusuk gorundu.
+   * Zorunlu alan, o hatayi derleme zamaninda imkansiz kiliyor.
+   */
+  currency: Currency;
   /** Yayindaki degerlendirmelerin urun puani ortalamasi (0 = puan yok). */
   rating: number;
   ratingCount: number;
@@ -219,6 +228,11 @@ export interface SearchResult {
   offerCount: number;
   minPriceCents: number | null;
   maxPriceCents: number | null;
+  /**
+   * Fiyatlarin GERCEK para birimi. Bkz. `ProductGroup.currency` -- ayni
+   * gerekce: zorunlu olmasi, TRY varsayimina sessizce dusmeyi engelliyor.
+   */
+  currency: Currency;
   bestOfferId: string | null;
   bestVendorId: string | null;
   bestVendorName: string | null;
@@ -233,6 +247,8 @@ export interface FlashDeal {
   imageUrl: string | null;
   originalPriceCents: number;
   dealPriceCents: number;
+  /** Fiyatlarin GERCEK para birimi -- `products.currency`. */
+  currency: Currency;
   stockLimit: number | null;
   soldCount: number;
   vendorName: string | null;
@@ -363,6 +379,8 @@ export interface PriceDrop {
   categoryId: string | null;
   currentPriceCents: number;
   referencePriceCents: number;
+  /** Fiyatlarin GERCEK para birimi. Bkz. `ProductGroup.currency`. */
+  currency: Currency;
   /** 0-1 arası oran. 0.25 = %25 düşüş. */
   dropRatio: number;
   observedDays: number;

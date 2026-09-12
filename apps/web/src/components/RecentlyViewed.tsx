@@ -20,15 +20,18 @@ export function RecordProductView({
   title,
   imageUrl,
   priceCents,
+  currency,
 }: {
   slug: string;
   title: string;
   imageUrl: string | null;
   priceCents: number | null;
+  /** Teklifin gercek para birimi; kayitla birlikte saklanir. */
+  currency: string;
 }) {
   useEffect(() => {
-    recordView({ slug, title, imageUrl, priceCents });
-  }, [slug, title, imageUrl, priceCents]);
+    recordView({ slug, title, imageUrl, priceCents, currency });
+  }, [slug, title, imageUrl, priceCents, currency]);
 
   return null;
 }
@@ -87,9 +90,16 @@ export function RecentlyViewed({ excludeSlug }: { excludeSlug?: string }) {
 
               <div className="flex flex-1 flex-col justify-between gap-1 p-3">
                 <p className="clamp-2 text-xs leading-snug text-fg">{item.title}</p>
-                {item.priceCents !== null && (
+                {/*
+                  PARA BIRIMI BILINMIYORSA FIYAT GOSTERILMEZ.
+
+                  Bu alan eklenmeden once yazilmis localStorage kayitlarinda
+                  `currency` yok. Varsayilana dusmek GBP fiyati `₺` ile
+                  basmak demekti -- uretimdeki hatanin ta kendisi.
+                */}
+                {item.priceCents !== null && item.currency && (
                   <p className="tabular text-sm font-bold text-brand">
-                    {formatMoney(item.priceCents)}
+                    {formatMoney(item.priceCents, item.currency)}
                   </p>
                 )}
               </div>

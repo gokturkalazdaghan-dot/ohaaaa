@@ -85,7 +85,9 @@ export function DealsView({
                 url: `${siteUrl}/urun/${drop.slug}`,
                 offers: {
                   '@type': 'AggregateOffer',
-                  priceCurrency: 'TRY',
+                  // Firsatin KENDI para birimi. Sabit 'TRY' yaziliyordu ve
+                  // katalog GBP oldugu icin Google'a yanlis fiyat bildiriyordu.
+                  priceCurrency: drop.currency,
                   lowPrice: (drop.currentPriceCents / 100).toFixed(2),
                   offerCount: drop.offerCount,
                 },
@@ -222,7 +224,17 @@ export function DealsView({
           değiştirilebilir. Ürün sayfasında o üründe gördüğümüz bütün fiyat
           geçmişini ve her mağazanın kargo dahil toplam maliyetini
           bulabilirsiniz. En düşük fiyat şu an{' '}
-          {formatMoney(Math.min(...drops.map((drop) => drop.currentPriceCents)))}.
+          {formatMoney(
+            Math.min(...drops.map((drop) => drop.currentPriceCents)),
+            /*
+             * Liste TEK para biriminde ise onu kullan; karisiksa hicbirini
+             * secmek dogru olmaz -- en dusuk sayiyi yanlis simgeyle basmak
+             * kullaniciyi yanlis yonlendirir. Karisikta ham kod yazilir.
+             */
+            new Set(drops.map((drop) => drop.currency)).size === 1
+              ? drops[0]?.currency
+              : undefined,
+          )}.
         </p>
       )}
     </div>

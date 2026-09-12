@@ -24,6 +24,16 @@ export interface ViewedProduct {
   title: string;
   imageUrl: string | null;
   priceCents: number | null;
+  /*
+   * Fiyatin GERCEK para birimi.
+   *
+   * OPSIYONEL ve bu bilincli: localStorage'da BU ALAN EKLENMEDEN ONCE
+   * yazilmis kayitlar var ve onlarda deger yok. `formatMoney`'nin
+   * varsayilanina dusmek yanlis simge basmak olurdu (GBP fiyat `₺` gorunur),
+   * bu yuzden bileşen para birimi bilinmeyen kayitlarda FIYATI HIC gostermez.
+   * Yanlis fiyat, eksik fiyattan pahalidir.
+   */
+  currency?: string;
   /** Kayıt zamanı — sıralama için. */
   at: number;
 }

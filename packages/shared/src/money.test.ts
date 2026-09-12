@@ -64,3 +64,52 @@ test('gecersiz bicim etiketi de COKMEZ', () => {
   assert.equal(typeof cikti, 'string');
   assert.match(cikti, /1234\.56|1\.234,56/);
 });
+
+// ---------------------------------------------------------------------------
+// GERCEK PARA BIRIMI GOSTERIMI -- URETIM HATASININ KILIDI
+// ---------------------------------------------------------------------------
+// Uretimde olculdu: veritabaninda 5.003 urun GBP, site ise `₺` ile
+// basiyordu. £23,99 luk urun "₺23,99" gorunuyordu -- fiyat ~44 kat dusuk.
+// Sebep `formatMoney`'de DEGILDI: fonksiyon dogru, cagiran taraf para
+// birimini gecmiyor ve varsayilan TRY devreye giriyordu.
+//
+// Asagidaki testler dort pazarin da DOGRU simgeyle basildigini kilitler.
+
+test('GBP kendi simgesiyle basilir -- TRY varsayilanina DUSMEZ', () => {
+  const cikti = formatMoney(2399, 'GBP');
+  assert.match(cikti, /£/, 'GBP simgesi bulunmali');
+  assert.ok(!cikti.includes('₺'), 'TRY simgesi BULUNMAMALI');
+  assert.match(cikti, /23[.,]99/);
+});
+
+test('USD kendi simgesiyle basilir', () => {
+  const cikti = formatMoney(2399, 'USD');
+  assert.match(cikti, /\$/);
+  assert.ok(!cikti.includes('₺'));
+});
+
+test('EUR kendi simgesiyle basilir', () => {
+  const cikti = formatMoney(2399, 'EUR');
+  assert.match(cikti, /€/);
+  assert.ok(!cikti.includes('₺'));
+});
+
+test('TRY kendi simgesiyle basilir -- mevcut davranis KORUNUR', () => {
+  const cikti = formatMoney(2399, 'TRY');
+  assert.match(cikti, /₺/);
+});
+
+test('ayni tutar farkli para biriminde FARKLI metin uretir', () => {
+  // Bu test sart: para birimini yok sayan bir uygulama dort cagriyi da
+  // ayni metne cevirir ve uretimdeki hata sessizce geri gelir.
+  const ciktilar = new Set(
+    (['GBP', 'USD', 'EUR', 'TRY'] as const).map((kod) => formatMoney(2399, kod)),
+  );
+  assert.equal(ciktilar.size, 4, 'dort para birimi dort farkli metin vermeli');
+});
+
+test('para birimi VERILMEZSE TRY varsayilir -- bu davranis bilinerek duruyor', () => {
+  // Varsayilanin kendisi hata DEGIL; hata onu katalog fiyatlarinda kullanmakti.
+  // Test varsayilani kilitler ki bir gun degistirilirse bilincli olsun.
+  assert.match(formatMoney(2399), /₺/);
+});

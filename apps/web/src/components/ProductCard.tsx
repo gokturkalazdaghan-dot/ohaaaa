@@ -81,7 +81,7 @@ export function ProductCard({
         <div className="mt-auto pt-3">
           {result.minPriceCents !== null && (
             <p className="tabular text-lg font-extrabold leading-none text-fg">
-              {formatMoney(result.minPriceCents)}
+              {formatMoney(result.minPriceCents, result.currency)}
             </p>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
