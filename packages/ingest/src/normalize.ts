@@ -133,8 +133,22 @@ function normalizeOne(
     productUrl,
     priceCents,
     compareAtPriceCents,
+    /*
+     * BOŞ HÜCRE DE VARSAYILANA DÜŞER -- `??` DEĞİL `||`.
+     *
+     * Burada `??` vardı ve yalnızca null/undefined'ı yakalıyordu. Kolon
+     * VAR ama hücre BOŞ olduğunda (`''`) geri dönüş çalışmıyor, teklif
+     * `currency: ''` ile yazılıyordu. `offers.currency` ise
+     * `char(3) not null`: satır ya reddedilir ya da üç boşluk olarak
+     * girer ve para birimi sessizce kaybolur.
+     *
+     * Bu, ortaklık feed'lerinde YAYGIN bir durum -- çoğu feed para
+     * birimini satır başına tekrarlamaz, feed düzeyinde bildirir ve
+     * hücreyi boş bırakır. Komşu alanlar (brand, description, category)
+     * zaten `|| null` ile boşluğu ele alıyordu; bu satır tek istisnaydı.
+     */
     currency: (mapping.currency ? read(record, mapping.currency) : null)?.trim().toUpperCase()
-      ?? options.defaultCurrency,
+      || options.defaultCurrency,
     stock,
     gtin,
     brand: (mapping.brand ? read(record, mapping.brand) : null)?.trim().slice(0, 120) || null,

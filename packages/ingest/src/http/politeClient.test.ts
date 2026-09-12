@@ -9,6 +9,8 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 
+import { decompressToText } from '../adapters/decompress.js';
+
 import {
   CircuitOpenError,
   RobotsDisallowedError,
@@ -853,4 +855,74 @@ test('özel adrese ÇÖZÜLEN feed adresi istemci seviyesinde de reddedilir', as
    * `maxRetries: 3` olmasına rağmen yeniden denenmemeli.
    */
   assert.equal(cagrilar.length, 0, 'yasak hedefe hiç istek gitmemeli');
+});
+
+/*
+ * HAM BAYT TAŞINIR — SIKIŞTIRILMIŞ FEED'LERİN ÖN KOŞULU.
+ *
+ * Gövde yalnızca metin olarak taşınsaydı `.csv.gz` feed'leri açılamazdı:
+ * gzip baytları UTF-8'e çevrildiğinde geri dönüşsüz bozulur.
+ */
+test('sıkıştırılmamış gövdede hem metin hem baytlar döner', async () => {
+  const impl = (async (input: string | URL | Request) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    if (url.endsWith('/robots.txt')) return new Response('', { status: 200 });
+    return new Response('id,title\n1,X', { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const clock = fakeClock();
+  const client = createPoliteClient({
+    resolveHost: fakeResolve,
+    userAgent: UA,
+    minDelayMs: 0,
+    timeoutMs: 5000,
+    maxRetries: 0,
+    circuitBreakerThreshold: 5,
+    fetchImpl: impl,
+    now: clock.now,
+    sleep: clock.sleep,
+  });
+
+  const sonuc = await client.get('https://feed.example/x.csv');
+
+  assert.equal(sonuc.body, 'id,title\n1,X');
+  assert.ok(sonuc.bytes instanceof Uint8Array);
+  assert.equal(new TextDecoder('utf-8').decode(sonuc.bytes!), 'id,title\n1,X');
+});
+
+test('gzip gövde UTF-8e ÇEVRİLMEZ; baytlar bozulmadan gelir', async () => {
+  /*
+   * Çevirmek çöp bir dizgi üretir (U+FFFD dolu) ve 64 MB'lık bir gövdede
+   * ~128 MB boşa giden bellek demektir. Açma işi baytlar üzerinden
+   * `decompressToText` ile yapıldığı için metin bilerek boş bırakılır.
+   */
+  const { gzipSync } = await import('node:zlib');
+  const ham = 'aw_product_id,product_name\n1,Test';
+  const sikistirilmis = gzipSync(Buffer.from(ham, 'utf8'));
+
+  const impl = (async (input: string | URL | Request) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    if (url.endsWith('/robots.txt')) return new Response('', { status: 200 });
+    return new Response(sikistirilmis, { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const clock = fakeClock();
+  const client = createPoliteClient({
+    resolveHost: fakeResolve,
+    userAgent: UA,
+    minDelayMs: 0,
+    timeoutMs: 5000,
+    maxRetries: 0,
+    circuitBreakerThreshold: 5,
+    fetchImpl: impl,
+    now: clock.now,
+    sleep: clock.sleep,
+  });
+
+  const sonuc = await client.get('https://feed.example/x.csv.gz');
+
+  assert.equal(sonuc.body, '', 'sıkıştırılmış gövde metne çevrilmemeli');
+  assert.ok(sonuc.bytes && sonuc.bytes.byteLength > 0);
+  // Baytlar bozulmadan geldi mi: açıldığında özgün içerik çıkmalı.
+  assert.equal(decompressToText(sonuc.bytes!, { maxBytes: 1024 * 1024 }), ham);
 });

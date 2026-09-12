@@ -36,6 +36,7 @@ import type {
 } from './types.js';
 
 import { parseCsv } from './adapters/csv.js';
+import { decompressToText, detectCompression } from './adapters/decompress.js';
 import { parseJson } from './adapters/json.js';
 import { parseXml } from './adapters/xml.js';
 import { normalizeRecords } from './normalize.js';
@@ -142,7 +143,7 @@ export interface Fetcher {
   get(
     url: string,
     options?: { headers?: Record<string, string> },
-  ): Promise<{ body: string; contentType: string | null }>;
+  ): Promise<{ body: string; contentType: string | null; bytes?: Uint8Array }>;
 }
 
 const ADAPTERS = {
@@ -153,6 +154,21 @@ const ADAPTERS = {
 
 /** Bir çalışmada en fazla kaç kalem işlenir. Bellek ve süre koruması. */
 const MAX_ITEMS_PER_RUN = 50_000;
+/**
+ * AÇILMIŞ gövdenin üst sınırı.
+ *
+ * `politeClient.maxBodyBytes` (64 MB) yalnızca İNDİRİLEN baytı sınırlar ve
+ * sıkıştırılmış bir gövdede bu sınır aldatıcıdır: 64 MB'lık bir gzip
+ * gigabaytlarca açılabilir. Sıkıştırma bombası tam olarak bu boşluktan
+ * geçerdi, o yüzden açılmış boyut AYRI ve açma SIRASINDA sınırlanıyor.
+ *
+ * DEĞER NEREDEN GELİYOR: hat zaten `MAX_ITEMS_PER_RUN` (50.000) kalemden
+ * fazlasını işlemiyor. Satır başına cömert bir 2 KB varsayımıyla üst
+ * sınır ~100 MB eder; 256 MB bunun 2,5 katı. Daha büyüğünü açmak, ZATEN
+ * kırpılacak bir gövdeyi belleğe almak olurdu -- yani işçiyi hiçbir ürün
+ * kazanmadan riske atmak.
+ */
+const MAX_DECOMPRESSED_BYTES = 256 * 1024 * 1024;
 /** ingest_runs.sample_errors alanında saklanan örnek hata sayısı. */
 const MAX_SAMPLE_ERRORS = 20;
 
@@ -231,7 +247,32 @@ export async function runSource(
      * boş nesne döner -- iki yol tek çağrı noktasından geçsin diye.
      */
     const basliklar = buildAuthHeaders(source);
-    const { body } = await deps.fetcher.get(adres, { headers: basliklar });
+    const yanit = await deps.fetcher.get(adres, { headers: basliklar });
+
+    /*
+     * --- 1b) Gerekiyorsa AÇ ---------------------------------------------
+     *
+     * Ortaklık ağlarının ürün feed'leri sıklıkla SIKIŞTIRILMIŞ DOSYA
+     * olarak sunulur (`.csv.gz`). Bu, `content-encoding: gzip`ten
+     * FARKLIDIR: onu `fetch` kendiliğinden açar, bunu açmaz -- gövdenin
+     * KENDİSİ bir gzip dosyasıdır.
+     *
+     * Biçim METNE DEĞİL BAYTA bakılarak anlaşılır ve açma da bayttan
+     * yapılır: gzip baytları UTF-8'e çevrildiğinde geri dönüşsüz bozulur.
+     * Getirici bayt taşımıyorsa (testlerdeki sahteler, sıkıştırılmamış
+     * kaynaklar) mevcut yol aynen işler.
+     *
+     * `content-type` BİLEREK KULLANILMIYOR: aynı `.gz` adresi sunucudan
+     * sunucuya `application/octet-stream`, `application/gzip` ya da
+     * `text/csv` dönebiliyor. Sihirli baytlar belirsizlik bırakmaz.
+     */
+    let body = yanit.body;
+    if (yanit.bytes && detectCompression(yanit.bytes) !== 'none') {
+      body = decompressToText(yanit.bytes, {
+        maxBytes: MAX_DECOMPRESSED_BYTES,
+        url: source.slug,
+      });
+    }
 
     // --- 2) Ayrıştır ---------------------------------------------------------
     const parsed = adapter(body);
