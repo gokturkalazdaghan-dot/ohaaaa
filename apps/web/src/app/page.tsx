@@ -13,11 +13,11 @@ import { TrustSignals } from '@/components/TrustSignals';
 import {
   getCategories,
   getFlashDeals,
-  getGalleryProducts,
+  getShowcaseTiers,
   getVendors,
   searchProducts,
 } from '@/data/catalog';
-import { ProductBentoGallery } from '@/components/ProductBentoGallery';
+import { ShowcaseTiers } from '@/components/ShowcaseTiers';
 
 /*
  * Ana sayfanın kendi meta verisi yoktu.
@@ -78,19 +78,36 @@ export default async function HomePage() {
    * hâlükârda çiziliyor: arama `/arama` sayfasına gider ve o sayfa zaten
    * kesintiye dayanıklı.
    */
-  const [dealsRes, categoriesRes, vendorsRes, trendingRes, galeriRes] = await Promise.all([
+  const [dealsRes, categoriesRes, vendorsRes, trendingRes, vitrinRes] = await Promise.all([
     fetched('kampanyalar', getFlashDeals(3)),
     fetched('kategoriler', getCategories()),
     fetched('magazalar', getVendors()),
-    fetched('one-cikanlar', searchProducts({ sort: 'offers', limit: 8 })),
-    fetched('galeri', getGalleryProducts(7)),
+    /*
+     * 16 isteniyor ama 8 gosteriliyor: asagida vitrindeki urunler bu
+     * listeden ELENIYOR ve eleme sonrasi yine sekiz kart kalmali.
+     */
+    fetched('one-cikanlar', searchProducts({ sort: 'offers', limit: 16 })),
+    fetched('vitrin', getShowcaseTiers({ tiers: 3, perTier: 5 })),
   ]);
 
   const deals = dealsRes.ok ? dealsRes.value : [];
-  const galeri = galeriRes.ok ? galeriRes.value : [];
+  const vitrin = vitrinRes.ok ? vitrinRes.value : [];
   const categories = categoriesRes.ok ? categoriesRes.value : [];
   const vendors = vendorsRes.ok ? vendorsRes.value : [];
-  const trending = trendingRes.ok ? trendingRes.value.results : [];
+  /*
+   * VITRINDEKI URUNLER BU IZGARADA TEKRAR ETMEZ.
+   *
+   * Iki bolum de ayni olcute bakiyor (teklif sayisi), dolayisiyla filtresiz
+   * birakilirsa vitrinin ilk bes karesi ile bu izgaranin ilk bes karti AYNI
+   * urunler olur -- ayni sayfada ayni urunu iki kez gormek hata gibi
+   * gorunur. Eleme vitrinden sonra yapilir cunku vitrinin neyi sectigi ancak
+   * o zaman belli olur.
+   */
+  const vitrindekiler = new Set(vitrin.flatMap((b) => b.products.map((u) => u.slug)));
+  const trendingHam = trendingRes.ok ? trendingRes.value.results : [];
+  const trending = trendingHam
+    .filter((sonuc) => !vitrindekiler.has(sonuc.slug))
+    .slice(0, 8);
 
   /*
    * ÜÇ AYRI DURUM, ÜÇ AYRI MESAJ.
@@ -104,8 +121,13 @@ export default async function HomePage() {
    * gerçekten okuyabildiysek söyleyebiliriz.
    */
   const catalogUnavailable = !trendingRes.ok && !categoriesRes.ok;
+  /*
+   * Karar FILTRESIZ listeye bakar. `trending` vitrinde gosterilenler
+   * elendikten sonra kalanlar; kucuk bir katalogda vitrin hepsini
+   * tuketebilir ve o zaman "katalog bos" demek YANLIS olurdu.
+   */
   const catalogEmpty =
-    !catalogUnavailable && trending.length === 0 && deals.length === 0;
+    !catalogUnavailable && trendingHam.length === 0 && deals.length === 0;
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
@@ -204,20 +226,19 @@ export default async function HomePage() {
       </div>
 
       {/*
-        --- Galeri ----------------------------------------------------------
-        Bento galerisi "Cok karsilastirilanlar" izgarasinin ONUNE konuldu:
-        ikisi de ayni kumeyi (en cok magazada bulunan urunler) gosteriyor,
-        biri gorsel kesif biri yapisal liste. Galeri once gelir cunku
-        gorsel tarama daha hizli; liste altinda fiyat/magaza sayisi ile
-        ayrintiyi verir. Ayni veriyi iki kez gostermek tekrar DEGIL, iki
-        farkli tarama bicimi.
+        --- Vitrin -----------------------------------------------------------
+        Vitrin "Cok karsilastirilanlar" izgarasinin ONUNE konuldu: ikisi ayni
+        kataloga bakar ama farkli soruyu cevaplar. Vitrin "hangi magaza, hangi
+        bes urun" der (satici bazli basamaklar); asagidaki izgara "hangi urun
+        en cok karsilastiriliyor" der (magazadan bagimsiz). Once vitrin gelir
+        cunku kare gorseller goz tarafindan daha hizli taranir.
 
-        Bos listede bilesen kendini hic cizmiyor -- bos bir galeri karesi
+        Bos listede bilesen kendini hic cizmiyor -- bos bir vitrin karesi
         vitrine zarar verir.
       */}
-      {galeri.length > 0 && (
+      {vitrin.length > 0 && (
         <section className="mt-12">
-          <ProductBentoGallery products={galeri} />
+          <ShowcaseTiers tiers={vitrin} />
         </section>
       )}
 

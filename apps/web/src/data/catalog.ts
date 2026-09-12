@@ -11,8 +11,7 @@
 
 import 'server-only';
 
-import { offerSellerName
-} from '@ohaaaa/shared';
+import { offerSellerName, rankShowcase } from '@ohaaaa/shared';
 import type {
   Category,
   FlashDeal,
@@ -1783,11 +1782,15 @@ export async function getOhaaaaScore(productId: string): Promise<OhaaaaScore | n
 }
 
 // ---------------------------------------------------------------------------
-// Bento galerisi
+// Vitrin basamakları
 // ---------------------------------------------------------------------------
-
-/** Galeride gosterilecek bir urun. */
-export interface GalleryProduct {
+/**
+ * Vitrinde gösterilen bir ürün.
+ *
+ * `score` GERÇEK Ohaaaa skorudur (`ohaaaa_score`). Ölçülemediğinde `null`
+ * gelir ve HİÇBİR YERDE doldurulmaz -- ne burada ne arayüzde.
+ */
+export interface ShowcaseProduct {
   slug: string;
   title: string;
   brand: string | null;
@@ -1795,91 +1798,305 @@ export interface GalleryProduct {
   minPriceCents: number | null;
   offerCount: number;
   currency?: string;
+  score: number | null;
 }
 
 /**
- * Bento galerisi icin GERCEK urunler.
+ * Vitrinin bir basamağı: bir satıcı ve onun öne çıkan ürünleri.
  *
- * NEDEN STOK FOTOGRAF DEGIL: galeri tasariminin ozgun hali rastgele
- * `picsum.photos` / stok gorselleri kullaniyordu. Ohaaaa'nin elinde 31.000
- * gercek urun gorseli var; dekoratif bir stok-foto galerisi urun kesif
- * modeline hicbir sey katmaz. Bu fonksiyon galeriyi katalogla besliyor.
+ * BASAMAK SIRASI NEYE GÖRE
+ * Satıcıları sıralamak için ölçebildiğimiz tek şey kataloğa kaç aktif teklif
+ * koydukları. `merchants.partner_rank` sütunu var ama HERKESE AÇIK DEĞİL
+ * (anon rolüne o sütunun okuma izni verilmemiş -- ölçüldü), dolayısıyla
+ * ziyaretçiye çizilen bir bölümde kullanılamaz. Teklif sayısı hem okunabilir
+ * hem de gerçekten ölçülmüş bir büyüklük.
  *
- * SECIM OLCUTU: `offer_count` -- en cok magazada bulunan urunler. Bu,
- * karsilastirma degeri en yuksek olanlar demek ve Ohaaaa'nin isi tam olarak
- * o. Rastgele secim de yapilabilirdi ama vitrine deger katmazdi.
- *
- * Gorseli OLMAYAN urunler disarida: gorselsiz bir galeri karesi bos kutu
- * demek. `image_url is not null` bu yuzden sorgunun icinde.
+ * Yalnızca `status = 'active'` mağazalar görünür; bunu satır güvenliği
+ * (RLS) zaten zorluyor. Başvurusu sürenler (`prospect`) vitrinde yer almaz
+ * -- henüz satmadıkları bir şeyi öneriyor gibi görünmemeliyiz.
  */
-export async function getGalleryProducts(limit = 7): Promise<GalleryProduct[]> {
-  const supabase = createAnonClient();
+export interface ShowcaseTier {
+  merchantSlug: string;
+  merchantName: string;
+  /** Satıcının aktif teklif sayısı -- basamak sırasının ölçülen dayanağı. */
+  offerCount: number;
+  products: ShowcaseProduct[];
+}
 
-  if (!supabase) {
-    return demoProductGroups
-      .filter((group) => group.imageUrl !== null)
-      .slice(0, limit)
-      .map((group) => ({
-        slug: group.slug,
-        title: group.title,
-        brand: group.brand,
-        imageUrl: group.imageUrl as string,
-        minPriceCents: group.minPriceCents,
-        offerCount: group.offerCount,
-        currency: group.currency,
-      }));
+/**
+ * Basamak başına kaç aday grup taranır.
+ *
+ * Havuz büyüdükçe seçim iyileşir ama `.in(...)` listesi GET adresine yazılır
+ * ve adres uzunluğunun pratik bir sınırı var (daha önce ölçüldü: ~6 KB'ta
+ * istekler düşüyor). 24 uuid ≈ 0,9 KB; üç basamakta 72 uuid ≈ 2,7 KB.
+ */
+const VITRIN_ADAY_HAVUZU = 24;
+
+/**
+ * Basamak başına kaç adayın skoru gerçekten hesaplanır.
+ *
+ * `ohaaaa_score` ürün başına ayrı bir RPC çağrısıdır; havuzun tamamını
+ * puanlamak 24 gidiş-dönüş demek olurdu. En umutlu adaylar (en çok teklifle
+ * karşılaştırılabilenler) puanlanır, gerisi yedek sırayla dizilir.
+ */
+const VITRIN_PUANLAMA_BUTCESI = 8;
+
+/** Bir teklifin kargo dahil toplamı. */
+function toplamMaliyet(satir: Record<string, unknown>): number {
+  return Number(satir.price_cents ?? 0) + Number(satir.shipping_fee_cents ?? 0);
+}
+
+/** Demo kümesinden basamak üretir (Supabase yapılandırılmamışken). */
+function demoShowcaseTiers(tiers: number, perTier: number): ShowcaseTier[] {
+  const sayac = new Map<string, number>();
+  for (const grup of demoProductGroups) {
+    for (const teklif of grup.offers) {
+      if (!teklif.merchant) continue;
+      sayac.set(teklif.merchant.slug, (sayac.get(teklif.merchant.slug) ?? 0) + 1);
+    }
   }
 
-  const { data, error } = await supabase
-    .from('product_groups')
-    .select('id, slug, title, brand, image_url, min_price_cents, offer_count')
-    .gt('offer_count', 0)
-    .not('image_url', 'is', null)
-    .order('offer_count', { ascending: false })
-    .limit(limit);
+  return [...sayac.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, tiers)
+    .map(([slug, adet]) => {
+      const adaylar = demoProductGroups
+        .filter((grup) => grup.offers.some((t) => t.merchant?.slug === slug))
+        .map((grup) => ({
+          slug: grup.slug,
+          title: grup.title,
+          brand: grup.brand,
+          imageUrl: grup.imageUrl ?? '',
+          minPriceCents: grup.minPriceCents,
+          offerCount: grup.offerCount,
+          currency: grup.currency,
+          // Demo kümesinde fiyat geçmişi yok; skor gerçekten ölçülemez.
+          score: null,
+          totalCostCents: grup.minPriceCents,
+        }));
 
-  if (error) {
+      const ad = demoProductGroups
+        .flatMap((g) => g.offers)
+        .find((t) => t.merchant?.slug === slug)?.merchant?.displayName ?? slug;
+
+      return {
+        merchantSlug: slug,
+        merchantName: ad,
+        offerCount: adet,
+        products: rankShowcase(adaylar, perTier).map(({ totalCostCents: _t, ...urun }) => urun),
+      };
+    })
+    .filter((basamak) => basamak.products.length > 0);
+}
+
+/**
+ * Vitrin basamakları: en iyi satıcıdan başlayarak, her satıcının öne çıkan
+ * ürünleri.
+ *
+ * SIRALAMA GERÇEK SKORLA BAŞLAR. Her basamağın adayları `ohaaaa_score` ile
+ * puanlanır; puanı olanlar öne geçer. Bugün kataloğun tamamında ölçülebilen
+ * ağırlık eşiğin altında (her ürünün tek bir fiyat gözlemi var), yani hiçbir
+ * ürün skor üretmiyor -- bu ÖLÇÜLDÜ. O yüzden sıralama şimdilik yedek ölçüte
+ * düşüyor ve arayüz hangi ölçütü kullandığını yazıyor. İkinci besleme fiyat
+ * geçmişini iki gözleme çıkardığında skor yolu kendiliğinden devreye girer;
+ * burada değiştirilecek bir şey kalmaz.
+ */
+export async function getShowcaseTiers(options?: {
+  tiers?: number;
+  perTier?: number;
+}): Promise<ShowcaseTier[]> {
+  const tiers = Math.max(1, options?.tiers ?? 3);
+  const perTier = Math.max(1, options?.perTier ?? 5);
+
+  const supabase = createAnonClient();
+  if (!supabase) return demoShowcaseTiers(tiers, perTier);
+
+  const { data: magazaSatirlari, error: magazaHatasi } = await supabase
+    .from('merchants')
+    .select('id, slug, display_name')
+    .eq('status', 'active')
+    .limit(20);
+
+  if (magazaHatasi) {
     /*
-     * Galeri bir VITRIN, sayfanin govdesi degil. Okunamazsa bos donuluyor
-     * ve bilesen hic cizilmiyor -- demo veriyle doldurmak, gercek katalog
-     * varken sahte urun gostermek olurdu.
+     * Vitrin bir BÖLÜM, sayfanın gövdesi değil. Okunamazsa boş dönülür ve
+     * bileşen hiç çizilmez; demo veriyle doldurmak gerçek katalog varken
+     * sahte mağaza göstermek olurdu.
      */
     console.warn(
-      JSON.stringify({ level: 'warn', msg: 'Galeri urunleri okunamadi', hata: error.message }),
+      JSON.stringify({
+        level: 'warn',
+        msg: 'Vitrin magazalari okunamadi',
+        hata: magazaHatasi.message,
+      }),
     );
     return [];
   }
 
-  const satirlar = data ?? [];
-  if (satirlar.length === 0) return [];
+  const magazalar = magazaSatirlari ?? [];
+  if (magazalar.length === 0) return [];
 
   /*
-   * PARA BIRIMI: `products.currency` -- `product_groups.price_currency`
-   * DEGIL. O sutun uretimde var ama depo goclerinde yok (ayrintili gerekce
-   * `searchProducts` icinde).
+   * SAYIMLAR VE ADAY GRUPLAR AYNI ANDA.
+   *
+   * Ana sayfa dinamik çiziliyor (her istekte), dolayısıyla buradaki her
+   * gidiş-dönüş doğrudan yanıt süresine biniyor. Aday grup sorgusu
+   * mağazalara hiç bakmıyor, dolayısıyla sayımları beklemesi gereksizdi.
+   * Havuz sınırı seçilen basamak sayısına göre değil İSTENEN sayıya göre
+   * hesaplanıyor -- en fazla o kadar basamak olabilir.
+   *
+   * Görseli olmayan grup vitrine alınmaz: boş bir kare vitrine zarar verir.
    */
-  const birimler = new Map<string, string>();
-  const { data: paraSatirlari } = await supabase
-    .from('products')
-    .select('group_id, currency')
-    .in('group_id', satirlar.map((satir) => String(satir.id)))
-    .eq('status', 'active');
+  const [sayimlar, grupCevabi] = await Promise.all([
+    Promise.all(
+      magazalar.map(async (magaza) => {
+        const { count } = await supabase
+          .from('products')
+          .select('id', { count: 'exact', head: true })
+          .eq('merchant_id', String(magaza.id))
+          .eq('status', 'active');
+        return { magaza, adet: count ?? 0 };
+      }),
+    ),
+    supabase
+      .from('product_groups')
+      .select('id, slug, title, brand, image_url, min_price_cents, offer_count')
+      .gt('offer_count', 0)
+      .not('image_url', 'is', null)
+      .order('offer_count', { ascending: false })
+      .limit(VITRIN_ADAY_HAVUZU * tiers),
+  ]);
 
-  for (const satir of paraSatirlari ?? []) {
-    const grup = String(satir.group_id);
-    if (satir.currency && !birimler.has(grup)) {
-      birimler.set(grup, String(satir.currency).trim());
-    }
+  const secilenler = sayimlar
+    .filter((x) => x.adet > 0)
+    .sort((a, b) => b.adet - a.adet)
+    .slice(0, tiers);
+
+  if (secilenler.length === 0) return [];
+
+  const { data: grupSatirlari, error: grupHatasi } = grupCevabi;
+
+  if (grupHatasi) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'Vitrin adaylari okunamadi',
+        hata: grupHatasi.message,
+      }),
+    );
+    return [];
   }
 
-  return satirlar.map((satir) => ({
-    slug: String(satir.slug),
-    title: String(satir.title),
-    brand: satir.brand ? String(satir.brand) : null,
-    imageUrl: String(satir.image_url),
-    minPriceCents:
-      satir.min_price_cents === null ? null : Number(satir.min_price_cents),
-    offerCount: Number(satir.offer_count),
-    currency: birimler.get(String(satir.id)),
-  }));
+  const gruplar = grupSatirlari ?? [];
+  if (gruplar.length === 0) return [];
+
+  const grupKimlikleri = gruplar.map((g) => String(g.id));
+
+  /*
+   * BASAMAKLAR BİRBİRİNİ BEKLEMEZ.
+   *
+   * Basamak başına iki gidiş-dönüş var (teklifler, sonra skorlar). Sırayla
+   * yapılsaydı üç basamak altı gidiş-dönüş demek olurdu ve hepsi dinamik ana
+   * sayfanın yanıt süresine eklenirdi. Basamaklar birbirinin verisine hiç
+   * bakmıyor, dolayısıyla paralel çalışabilirler; sıra `secilenler`
+   * dizilimiyle korunuyor.
+   */
+  const basamakSonuclari = await Promise.all(
+    secilenler.map(async ({ magaza, adet }): Promise<ShowcaseTier | null> => {
+      /*
+       * Bu mağazanın aday gruplardaki EN UCUZ teklifi.
+       *
+       * Skoru teklif başına hesaplıyoruz (fonksiyonun imzası ürün kimliği
+       * istiyor), dolayısıyla grubu temsil edecek tek bir teklif seçilmeli.
+       * Kargo dahil en ucuz olanı seçmek, kullanıcının o gruptan gerçekte
+       * alacağı teklifle aynı olanı seçmektir.
+       */
+      const { data: teklifSatirlari, error: teklifHatasi } = await supabase
+        .from('products')
+        .select('id, group_id, currency, price_cents, shipping_fee_cents')
+        .in('group_id', grupKimlikleri)
+        .eq('merchant_id', String(magaza.id))
+        .eq('status', 'active')
+        .gt('stock', 0);
+
+      if (teklifHatasi) {
+        console.warn(
+          JSON.stringify({
+            level: 'warn',
+            msg: 'Vitrin teklifleri okunamadi',
+            magaza: String(magaza.slug),
+            hata: teklifHatasi.message,
+          }),
+        );
+        return null;
+      }
+
+      const enUcuz = new Map<string, { id: string; currency?: string; toplam: number }>();
+      for (const satir of teklifSatirlari ?? []) {
+        const grup = String(satir.group_id);
+        const toplam = toplamMaliyet(satir);
+        const onceki = enUcuz.get(grup);
+        if (!onceki || toplam < onceki.toplam) {
+          enUcuz.set(grup, {
+            id: String(satir.id),
+            currency: satir.currency ? String(satir.currency).trim() : undefined,
+            toplam,
+          });
+        }
+      }
+
+      if (enUcuz.size === 0) return null;
+
+      type Aday = ShowcaseProduct & { totalCostCents: number | null; offerId: string };
+
+      const adaylar: Aday[] = gruplar
+        .filter((g) => enUcuz.has(String(g.id)))
+        .map((g) => {
+          const teklif = enUcuz.get(String(g.id)) as { id: string; currency?: string; toplam: number };
+          return {
+            slug: String(g.slug),
+            title: String(g.title),
+            brand: g.brand ? String(g.brand) : null,
+            imageUrl: String(g.image_url),
+            minPriceCents: g.min_price_cents === null ? null : Number(g.min_price_cents),
+            offerCount: Number(g.offer_count),
+            currency: teklif.currency,
+            score: null,
+            totalCostCents: teklif.toplam,
+            offerId: teklif.id,
+          };
+        });
+
+      /*
+       * Puanlama bütçesi en umutlu adaylara harcanır. "Umutlu" ölçülebilir bir
+       * şey: skorun karşılaştırma bileşeni ancak grupta birden çok teklif
+       * varsa açılıyor, dolayısıyla önce yedek sırayla dizip baştan alıyoruz.
+       */
+      const puanlanacaklar = rankShowcase(adaylar, VITRIN_PUANLAMA_BUTCESI);
+      const puanlar = await Promise.all(
+        puanlanacaklar.map(async (aday) => ({
+          slug: aday.slug,
+          score: (await getOhaaaaScore(aday.offerId).catch(() => null))?.score ?? null,
+        })),
+      );
+      const puanHaritasi = new Map(puanlar.map((p) => [p.slug, p.score]));
+
+      const puanli = adaylar.map((aday) => ({
+        ...aday,
+        score: puanHaritasi.get(aday.slug) ?? null,
+      }));
+
+      const secilen = rankShowcase(puanli, perTier);
+      if (secilen.length === 0) return null;
+
+      return {
+        merchantSlug: String(magaza.slug),
+        merchantName: String(magaza.display_name),
+        offerCount: adet,
+        products: secilen.map(({ totalCostCents: _t, offerId: _o, ...urun }) => urun),
+      };
+  }),
+  );
+
+  return basamakSonuclari.filter((basamak): basamak is ShowcaseTier => basamak !== null);
 }

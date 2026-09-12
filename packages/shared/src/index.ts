@@ -13,3 +13,4 @@ export * from './partners.js';
 export * from './aiProvider.js';
 export * from './orchestrator/index.js';
 export * from './dataengine/index.js';
+export * from './showcase.js';
