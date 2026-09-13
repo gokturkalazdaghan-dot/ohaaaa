@@ -13,6 +13,7 @@ import { TrustSignals } from '@/components/TrustSignals';
 import {
   getCategoryTree,
   getFlashDeals,
+  getSearchHints,
   getShowcaseTiers,
   getVendors,
   searchProducts,
@@ -78,7 +79,8 @@ export default async function HomePage() {
    * hâlükârda çiziliyor: arama `/arama` sayfasına gider ve o sayfa zaten
    * kesintiye dayanıklı.
    */
-  const [dealsRes, categoriesRes, vendorsRes, trendingRes, vitrinRes] = await Promise.all([
+  const [dealsRes, categoriesRes, vendorsRes, trendingRes, vitrinRes, ipucuRes] =
+    await Promise.all([
     fetched('kampanyalar', getFlashDeals(3)),
     fetched('kategoriler', getCategoryTree()),
     fetched('magazalar', getVendors()),
@@ -88,8 +90,10 @@ export default async function HomePage() {
      */
     fetched('one-cikanlar', searchProducts({ sort: 'offers', limit: 16 })),
     fetched('vitrin', getShowcaseTiers({ tiers: 3, perTier: 5 })),
-  ]);
+    fetched('arama-ipuclari', getSearchHints(5)),
+    ]);
 
+  const ipuclari = ipucuRes.ok ? ipucuRes.value : undefined;
   const deals = dealsRes.ok ? dealsRes.value : [];
   const vitrin = vitrinRes.ok ? vitrinRes.value : [];
   const categories = categoriesRes.ok ? categoriesRes.value : [];
@@ -171,6 +175,7 @@ export default async function HomePage() {
               size="hero"
               label="Ürün, marka veya model ara"
               visualSearchEnabled={isVisualSearchConfigured()}
+              hints={ipuclari}
             />
           </Suspense>
         </div>

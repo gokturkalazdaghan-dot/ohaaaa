@@ -12,7 +12,24 @@ import {
 import { VisualSearchButton } from './VisualSearchButton';
 import { VoiceSearchButton } from './VoiceSearchButton';
 
-const SUGGESTIONS = ['iPhone 15', 'kulaklık', 'airfryer', 'koşu ayakkabısı', 'süpürge'];
+import { formatMoney } from '@ohaaaa/shared';
+
+/**
+ * Arama kutusunun ipuçları.
+ *
+ * ÖNCEDEN SABİT BİR LİSTE VARDI: iPhone 15, kulaklık, airfryer, koşu
+ * ayakkabısı, süpürge -- ve hiçbiri katalogda YOKTU. "Popüler" diye sunulan
+ * her öneri tıklanınca boş sonuç veriyordu. Aynı satırda "5.000 TL altında"
+ * yazıyordu; katalogda tek bir TRY fiyat yok.
+ *
+ * Artık ipuçları sunucudan, GERÇEK katalogdan geliyor (`getSearchHints`).
+ * Veri yoksa şerit hiç çizilmiyor -- sabit listeye geri düşmek, tam da
+ * kaldırılan hatayı geri getirmek olurdu.
+ */
+export interface SearchBarHints {
+  brands: string[];
+  example: { brand: string; currency: string; priceCents: number } | null;
+}
 
 /**
  * Arama çubuğu.
@@ -26,8 +43,11 @@ export function SearchBar({
   autoFocus = false,
   label,
   visualSearchEnabled = false,
+  hints,
 }: {
   size?: 'hero' | 'compact';
+  /** Katalogdan türetilen ipuçları. Verilmezse ipucu şeridi çizilmez. */
+  hints?: SearchBarHints;
   autoFocus?: boolean;
   /**
    * Görme modeli sunucuda yapılandırılmış mı. Sunucudan gelir; fotoğrafla
@@ -271,18 +291,21 @@ export function SearchBar({
           okunuyor. Yeteneği söylemek şart -- kimse denemediği sürece
           cümleyle arama diye bir şey yok demektir.
         */
-        <p className="mt-3 text-xs leading-relaxed text-subtle">
-          Cümleyle de arayabilirsin —{' '}
-          <span className="text-muted">
-            “5.000 TL altında iyi bir oyuncu kulaklığı bul”
-          </span>
-        </p>
+        hints?.example ? (
+          <p className="mt-3 text-xs leading-relaxed text-subtle">
+            Cümleyle de arayabilirsin —{' '}
+            <span className="text-muted">
+              “{formatMoney(hints.example.priceCents, hints.example.currency)} altında{' '}
+              {hints.example.brand} bul”
+            </span>
+          </p>
+        ) : null
       )}
 
-      {isHero && (
+      {isHero && (hints?.brands.length ?? 0) > 0 && (
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className="text-xs text-subtle">Popüler:</span>
-          {SUGGESTIONS.map((suggestion) => (
+          <span className="text-xs text-subtle">Çok ürünü olan markalar:</span>
+          {(hints?.brands ?? []).map((suggestion) => (
             <button
               key={suggestion}
               type="button"
