@@ -17,8 +17,10 @@ import {
   buildCategoryTree,
   collectByKeyset,
   eszamanliHaritala,
+  listelemeSiralamasi,
   offerSellerName,
   rankShowcase,
+  rpcsizListelenebilir,
 } from '@ohaaaa/shared';
 import type {
   Category,
@@ -197,6 +199,254 @@ function normalize(value: string): string {
     Â: 'a', Î: 'i', Û: 'u', â: 'a', î: 'i', û: 'u',
   };
   return value.replace(/[ĞÜŞİÖÇIğüşıöçÂÎÛâîû]/g, (char) => map[char] ?? char).toLowerCase();
+}
+
+// ---------------------------------------------------------------------------
+// Gezinme listelemesi (serbest metin YOK)
+// ---------------------------------------------------------------------------
+/**
+ * BU YOL NEDEN RPC'DEN AYRILDI.
+ *
+ * `search_products`, sıralamasını çalışma anındaki `p_sort` parametresine
+ * bağlı `case` ifadeleriyle yazıyor (ayrıntı: `listelemeSiralamasi`). Böyle
+ * bir sıralamayı hiçbir indeks karşılayamaz, dolayısıyla `limit 24` ancak
+ * filtreye uyan BÜTÜN satırlar okunup sıralandıktan sonra devreye giriyor.
+ * Üretimde ölçüldü (anon rolü, gerçek HTTP API):
+ *
+ *   /rest/v1/rpc/search_products  kategori=kulaklik  →  HTTP 500 · 57014
+ *
+ * Buradaki sorgu aynı sonucu DÜZ SÜTUN sıralamasıyla ister. Bu, tek başına
+ * bir hız kazancı DEĞİLDİR -- ölçüldü, indeks yokken o da zaman aşımına
+ * uğruyor. Kazandırdığı şey şu: sıralama artık bir btree indeksinin
+ * karşılayabileceği biçimde. Aynı tabloda indeksi OLAN bir sıralama ile
+ * OLMAYAN bir sıralamanın aynı andaki ölçümü:
+ *
+ *   order=min_price_cents.asc  (indeks VAR)  →  HTTP 200 · 0,88-1,71 sn
+ *   order=offer_count.desc     (indeks YOK)  →  HTTP 500 · 57014
+ *
+ * Yani bu değişiklik ÖN KOŞUL: indeks olmadan fayda vermez, kendisi olmadan
+ * da indeks kullanılamaz.
+ */
+
+/**
+ * Kategori kapsamı: kategorinin KENDİSİ + doğrudan çocukları.
+ *
+ * `search_products` ile aynı kapsam kuralı. Orada `is_active` filtresi YOK;
+ * burada da olmamalı -- aksi hâlde pasif bir alt kategoride duran ürünler
+ * RPC yolunda görünüp bu yolda kaybolurdu.
+ */
+async function kategoriKapsaminiOku(categoryId: string): Promise<string[]> {
+  const supabase = createAnonClient();
+  if (!supabase) return [categoryId];
+
+  const { data, error } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('parent_id', categoryId);
+
+  /*
+   * Okunamadıysa YALNIZCA kendi kategorisi kullanılır. Alt kategorileri
+   * atlamak, sonucu DARALTIR; hata fırlatıp sayfayı düşürmekten iyidir ve
+   * kullanıcıya yanlış ürün göstermez.
+   */
+  if (error) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'Kategori kapsami okunamadi; yalnizca kendi kategorisi kullanildi',
+        kategori: categoryId,
+        hata: error.message,
+      }),
+    );
+    return [categoryId];
+  }
+
+  return [categoryId, ...(data ?? []).map((satir) => String(satir.id))];
+}
+
+const kategoriKapsami = onbellekle(
+  'kategori-kapsami',
+  kategoriKapsaminiOku,
+  ONBELLEK.taksonomi,
+);
+
+/** En iyi teklifin para birimi ve satıcısı. */
+interface TeklifOzeti {
+  currency: string | null;
+  vendorId: string | null;
+  vendorName: string | null;
+}
+
+/**
+ * En iyi tekliflerin para birimi + satıcısı, TEK sorguda.
+ *
+ * RPC bunu üç `left join` ile yapıyordu (`products`, `vendors`, `merchants`).
+ * Burada aynı üç ilişki PostgREST'in gömülü kaynaklarıyla okunuyor; sorgu
+ * sayısı artmıyor, `aramaOku`'nun bugün zaten attığı para birimi sorgusunun
+ * yerine geçiyor.
+ *
+ * Kimlik listesi sayfa boyutuyla SINIRLI (en çok 100), yani bu sorgu birincil
+ * anahtar üzerinden sabit maliyetli.
+ */
+async function tekliflerinOzetiniOku(
+  supabase: NonNullable<ReturnType<typeof createAnonClient>>,
+  teklifKimlikleri: string[],
+): Promise<Map<string, TeklifOzeti>> {
+  const ozet = new Map<string, TeklifOzeti>();
+  if (teklifKimlikleri.length === 0) return ozet;
+
+  const { data, error } = await supabase
+    .from('products')
+    .select('id, currency, vendor:vendors(id, display_name), merchant:merchants(id, display_name)')
+    .in('id', teklifKimlikleri);
+
+  /*
+   * Bu sorgu LİSTEYİ KIRMAZ. Kırılırsa ürünler yine gösterilir; para birimi
+   * ve satıcı adı boş kalır. Yanlış simge ya da yanlış satıcı adı basmaktansa
+   * hiç basmamak doğrudur.
+   */
+  if (error) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'Listeleme icin teklif ozeti okunamadi',
+        hata: error.message,
+      }),
+    );
+    return ozet;
+  }
+
+  for (const satir of data ?? []) {
+    const vendor = unwrapRelation((satir as Record<string, unknown>).vendor);
+    const merchant = unwrapRelation((satir as Record<string, unknown>).merchant);
+    const kaynak = vendor ?? merchant;
+
+    ozet.set(String(satir.id), {
+      currency: satir.currency ? String(satir.currency).trim() : null,
+      vendorId: kaynak?.id ? String(kaynak.id) : null,
+      vendorName: kaynak?.display_name ? String(kaynak.display_name) : null,
+    });
+  }
+
+  return ozet;
+}
+
+/**
+ * Serbest metin İÇERMEYEN listeleme: kategori, sıralama, sayfalama.
+ *
+ * Anlam `search_products` ile birebir aynı olmalı. Korunan noktalar:
+ *   • Kapsam: `offer_count > 0` + kategori VE doğrudan alt kategorileri.
+ *   • Sıralama: `listelemeSiralamasi` (RPC'nin `case` zincirinin sadeleşmiş
+ *     ama davranışça özdeş hâli), `nulls last` dahil.
+ *   • Sayfalama: `offset`/`limit` aynı; `limit` yine 1..100 arasına sıkışır.
+ *   • Toplam: filtreye uyan satır sayısı, sayfalamadan ÖNCE.
+ *
+ * KORUNAN BİR HATA: `p_min_price`/`p_max_price` bugün ÜRETİMDE ETKİSİZ.
+ * RPC'deki koşul `p_currency is null or p_min_price is null or ...` biçiminde
+ * ve web katmanı `p_currency` göndermiyor, yani ilk terim her zaman doğru
+ * çıkıyor ve fiyat filtresi hiç uygulanmıyor. Bu yol da uygulamıyor --
+ * bilinçli: performans değişikliğinin içinde sessizce davranış değiştirmek,
+ * sonucun hangi değişiklikten geldiğini ölçülemez hâle getirir. Ayrı iş.
+ */
+async function listelemeOku(params: SearchParams): Promise<SearchPage> {
+  const supabase = createAnonClient();
+  if (!supabase) return searchDemo(params);
+
+  // RPC ile aynı sınırlar: `limit greatest(1, least(coalesce(p_limit,24),100))`.
+  const limit = Math.max(1, Math.min(params.limit ?? 24, 100));
+  const offset = Math.max(0, params.offset ?? 0);
+
+  const kapsam = params.categoryId ? await kategoriKapsami(params.categoryId) : null;
+
+  const satirSorgusu = (() => {
+    let q = supabase
+      .from('product_groups')
+      .select(
+        'id, slug, title, brand, image_url, offer_count, min_price_cents, max_price_cents, best_offer_id',
+      )
+      .gt('offer_count', 0);
+    if (kapsam) q = q.in('category_id', kapsam);
+    for (const anahtar of listelemeSiralamasi(params.sort ?? 'relevance')) {
+      q = q.order(anahtar.sutun, { ascending: anahtar.artan, nullsFirst: false });
+    }
+    return q.range(offset, offset + limit - 1);
+  })();
+
+  /*
+   * TOPLAM NEDEN AYRI SORGU
+   * RPC bunu `count(*) over ()` ile veriyordu; o pencere fonksiyonu, `limit`
+   * devreye girmeden ÖNCE eşleşen bütün satırların maddileşmesini zorunlu
+   * kılar -- yani sayfa başına 24 satır isterken 32.845 satır üretilir.
+   * Ayrı bir `count` ise indeksten karşılanabilir.
+   *
+   * Toplam UYDURULMUYOR: sayfalama (`totalPages`) ve "N sonuç" metni bu
+   * değere dayanıyor, dolayısıyla atlanamaz.
+   *
+   * İki sorgu PARALEL gidiyor; ek gidiş-dönüş süresi yok.
+   */
+  const sayimSorgusu = (() => {
+    let q = supabase
+      .from('product_groups')
+      .select('id', { count: 'exact', head: true })
+      .gt('offer_count', 0);
+    if (kapsam) q = q.in('category_id', kapsam);
+    return q;
+  })();
+
+  const [satirCevabi, sayimCevabi] = await Promise.all([satirSorgusu, sayimSorgusu]);
+
+  if (satirCevabi.error) {
+    throw new Error(`Listeleme başarısız: ${satirCevabi.error.message}`);
+  }
+
+  const rows = (satirCevabi.data ?? []) as Record<string, unknown>[];
+
+  /*
+   * Sayım kırılırsa liste YİNE gösterilir; toplam, bu sayfada görülen kadarı
+   * olur. Bu bir ALT SINIR: gösterilen sayı eksik kalabilir ve sonraki sayfa
+   * bağlantısı çıkmayabilir. Uydurulmuş bir üst sınır göstermektense
+   * eksiğini göstermek yeğdir -- kullanıcı olmayan bir sayfaya tıklamaz.
+   */
+  let totalCount = offset + rows.length;
+  if (sayimCevabi.error) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'Listeleme toplami okunamadi; gorulen kadari kullanildi',
+        hata: sayimCevabi.error.message,
+      }),
+    );
+  } else if (typeof sayimCevabi.count === 'number') {
+    totalCount = sayimCevabi.count;
+  }
+
+  const teklifKimlikleri = rows
+    .map((row) => (row.best_offer_id ? String(row.best_offer_id) : null))
+    .filter((id): id is string => id !== null);
+
+  const ozetler = await tekliflerinOzetiniOku(supabase, teklifKimlikleri);
+
+  const results = rows.map((row): SearchResult => {
+    const ozet = ozetler.get(String(row.best_offer_id ?? ''));
+    return {
+      groupId: String(row.id),
+      slug: String(row.slug),
+      title: String(row.title),
+      brand: row.brand ? String(row.brand) : null,
+      imageUrl: row.image_url ? String(row.image_url) : null,
+      offerCount: Number(row.offer_count),
+      minPriceCents: row.min_price_cents === null ? null : Number(row.min_price_cents),
+      maxPriceCents: row.max_price_cents === null ? null : Number(row.max_price_cents),
+      /* `aramaOku` ile aynı kaynak ve aynı geri düşüş: para birimi
+         `products.currency`, okunamazsa 'TRY'. */
+      currency: ozet?.currency ?? 'TRY',
+      bestOfferId: row.best_offer_id ? String(row.best_offer_id) : null,
+      bestVendorId: ozet?.vendorId ?? null,
+      bestVendorName: ozet?.vendorName ?? null,
+    };
+  });
+
+  return { results, totalCount };
 }
 
 // ---------------------------------------------------------------------------
@@ -2509,8 +2759,17 @@ export const getSearchHints = onbellekle('arama-ipuclari', aramaIpuclariniOku, O
  */
 export const getPriceDrops = onbellekle('fiyat-dusenler', fiyatiDusenleriOku, ONBELLEK.vitrin);
 
-/** Serbest metin ARAMASI OLMAYAN listeleme -- kategori, sıralama, sayfalama. */
-const listelemeOnbellekli = onbellekle('listeleme', aramaOku, ONBELLEK.listeleme);
+/**
+ * Serbest metin ARAMASI OLMAYAN listeleme -- kategori, sıralama, sayfalama.
+ *
+ * `listelemeOku` RPC'ye HİÇ uğramaz. Marka ya da ücretsiz kargo filtresi
+ * varsa (anlamı PostgREST'te birebir korunamayan iki durum) çağrı yine
+ * `aramaOku` üzerinden RPC'ye gider -- bkz. `rpcsizListelenebilir`.
+ */
+const listelemeOnbellekli = onbellekle('listeleme', listelemeOku, ONBELLEK.listeleme);
+
+/** Filtresi RPC gerektiren, serbest metinsiz listeleme (marka / kargo). */
+const rpcListelemeOnbellekli = onbellekle('listeleme-rpc', aramaOku, ONBELLEK.listeleme);
 
 /**
  * Ürün araması.
@@ -2527,7 +2786,8 @@ const listelemeOnbellekli = onbellekle('listeleme', aramaOku, ONBELLEK.listeleme
  */
 export async function searchProducts(params: SearchParams): Promise<SearchPage> {
   if (params.query && params.query.trim().length > 0) return aramaOku(params);
-  return listelemeOnbellekli(params);
+  if (rpcsizListelenebilir(params)) return listelemeOnbellekli(params);
+  return rpcListelemeOnbellekli(params);
 }
 
 // ---------------------------------------------------------------------------
