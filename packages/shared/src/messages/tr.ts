@@ -45,9 +45,24 @@ export const TR = {
   'ev.altBaslikVurgu': 'kargo dahil toplam tutarı',
   'ev.cokKarsilastirilanlar': 'Çok karşılaştırılanlar',
   'ev.karsilastirdigimizMagazalar': 'Karşılaştırdığımız mağazalar',
-  'ev.katalogBos': 'Katalog satıcılarla birlikte dolacak',
   'ev.listelenemiyor': 'Ürünleri şu an listeleyemiyoruz',
   'ev.kategoriler': 'Kategoriler',
+
+
+  // --- Kullanıcı değeri bölümü ---
+  'deger.baslik': 'Satın almadan önce Ohaaaa.',
+  'deger.altMetin':
+    'Ürününü farklı seçeneklerle keşfet, fiyatları ve mağazaları karşılaştır, sana en uygun seçeneğe daha bilinçli karar ver.',
+  'deger.kesfetBaslik': 'Daha fazlasını keşfet',
+  'deger.kesfetMetin': 'İhtiyacına uygun ürünleri tek yerde bul.',
+  'deger.karsilastirBaslik': 'Karşılaştır',
+  'deger.karsilastirMetin': 'Fiyat, özellik ve mağaza seçeneklerini kolayca karşılaştır.',
+  'deger.firsatBaslik': 'Fırsatı yakala',
+  'deger.firsatMetin': 'Farklı teklifleri gör ve avantajlı seçeneği bul.',
+  'deger.kararBaslik': 'Daha bilinçli karar ver',
+  'deger.kararMetin': 'Ürün ve mağaza bilgilerini satın almadan önce incele.',
+  'deger.markaMesaji': 'Ohaaaa! Aramaya değil, doğru ürünü bulmaya gel.',
+  'deger.cta': 'Ürün keşfet',
 
   // --- Vitrin ---
   'vitrin.baslik': 'Vitrin',

@@ -262,7 +262,7 @@ export default async function HomePage() {
           description="Veri kaynağımıza geçici olarak ulaşamıyoruz. Size eski veya yanlış bir fiyat göstermektense hiç göstermemeyi tercih ediyoruz. Arama kutusu çalışmaya devam ediyor."
         />
       )}
-      {catalogEmpty && <LaunchState locale={contentLocale} />}
+      {catalogEmpty && <ValueSection locale={contentLocale} />}
 
       {/* --- Firsatlar -----------------------------------------------------
           Ana sayfa bu bloğu KENDİ işaretlemesiyle çiziyordu; FlashDeals
@@ -362,65 +362,79 @@ function SectionHead({
 }
 
 /*
- * Lansman durumu.
+ * KULLANICI DEĞERİ BÖLÜMÜ.
  *
- * Katalog bos oldugunda gorunur. Iki isi var: ziyaretciye durumu durustce
- * soylemek (uydurma urun/fiyat koymadan) ve asil ihtiyac olan tarafi -
- * saticiyi - basvuruya goturmek. Katalog magazalardan gelir; bu yuzden bos
- * bir ana sayfanin en degerli kullanimi satici kazanmaktir.
+ * Burada önceden LANSMAN/SATICI bloğu vardı: marka kiti indirme bağlantısı,
+ * listeleme koşulları ve ambalaj karşılığı. Hepsi SATICIYA yazılmıştı --
+ * oysa bu bloğu gören kişi ürün arayan ziyaretçi. Katalog boşken ona satıcı
+ * koşullarını anlatmak, onu kendisiyle ilgisi olmayan bir sayfaya
+ * gönderiyordu.
+ *
+ * Yerine geçen bölüm tek bir soruyu cevaplıyor: "Ohaaaa bana ne yarıyor?"
+ *
+ * İÇERİKTE OLMAYANLAR VE NEDENİ
+ * "En ucuz", "her zaman en iyi fiyat", "binlerce mağaza" gibi ifadeler
+ * bilinçli olarak YOK. Bunlar ya doğrulanamayan sayılar ya da tutulması
+ * garanti edilemeyen vaatler; katalog boşken yazılmaları ise doğrudan
+ * yanlış beyan olurdu. Söylenen her şey ürünün BUGÜN yaptığı şey.
+ *
+ * MALZEME
+ * Beyaz ağırlıklı yüzey, ince kenarlık, çok hafif bulanıklık. Bulanıklık
+ * metnin ARKASINDA değil, panelin kendisinde: yazı her zaman opak yüzey
+ * üzerinde durur, yoksa cam efekti okunabilirliği düşürürdü.
  */
-function LaunchState({ locale }: { locale: Locale }) {
+function ValueSection({ locale }: { locale: Locale }) {
   return (
-    <section className="mt-2" aria-labelledby="lansman">
-      <div className="rounded-2xl border border-line bg-surface p-6 sm:p-8">
-        <p className="text-sm font-semibold uppercase tracking-wide text-brand">Yeni açıldı</p>
-        <h2 id="lansman" className="mt-3 text-2xl font-extrabold tracking-tight text-fg sm:text-3xl">
-          {t(locale, 'ev.katalogBos')}
+    <section className="mt-2" aria-labelledby="deger-basligi">
+      <div className="rounded-3xl border border-line/80 bg-surface/75 p-6 backdrop-blur-[2px] sm:p-9">
+        <h2
+          id="deger-basligi"
+          className="text-2xl font-extrabold tracking-tight text-fg sm:text-3xl"
+        >
+          {t(locale, 'deger.baslik')}
         </h2>
-        <p className="mt-4 max-w-2xl leading-relaxed text-muted">
-          Şu anda yayında ürün yok. Gerçek satıcıdan gelmeyen hiçbir fiyatı
-          göstermiyoruz — örnek ürün ya da temsili fiyat koymuyoruz. İlk
-          mağazalar bağlandıkça karşılaştırma burada başlayacak.
+        <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-muted sm:text-base">
+          {t(locale, 'deger.altMetin')}
         </p>
-        <div className="mt-7 flex flex-wrap items-center gap-3">
+
+        {/*
+          Mobilde YATAY KAYDIRMA yok: dört fayda kaydırma ile gizlenirse
+          kullanıcı üçünü hiç görmez. Tek sütun liste -> iki sütun ızgara ->
+          dörtlü satır; her kırılımda hepsi aynı anda ekranda.
+        */}
+        <ul className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {VALUE_POINTS.map((point) => (
+            <li
+              key={point.title}
+              className="rounded-2xl border border-line/70 bg-bg-elevated/80 p-4 sm:p-5"
+            >
+              <p className="text-[15px] font-semibold text-fg">{t(locale, point.title)}</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted">{t(locale, point.body)}</p>
+            </li>
+          ))}
+        </ul>
+
+        <div className="mt-7 flex flex-col gap-4 border-t border-line/70 pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[15px] font-semibold text-brand">
+            {t(locale, 'deger.markaMesaji')}
+          </p>
+          {/* TEK çağrı: ana arama deneyimi. İkinci bir düğme, bölümün
+              cevapladığı tek soruyu bulandırırdı. */}
           <Link
-            href="/tasoron"
-            className="rounded-full press bg-brand-cta px-6 py-3 text-sm font-bold text-[#fffaf5] transition-colors hover:bg-brand-strong"
+            href="/arama"
+            className="press inline-flex shrink-0 items-center justify-center rounded-full bg-brand-cta px-6 py-3 text-sm font-bold text-[#fffaf5] transition-colors hover:bg-brand-strong"
           >
-            Mağazanızı ücretsiz yayınlayın
-          </Link>
-          <Link
-            href="/tasoron/marka"
-            className="rounded-full border border-line px-6 py-3 text-sm font-semibold text-fg transition-colors hover:border-brand/45"
-          >
-            Marka kitini indir
+            {t(locale, 'deger.cta')}
           </Link>
         </div>
       </div>
-
-      <ul className="mt-6 grid gap-4 sm:grid-cols-3">
-        {LAUNCH_POINTS.map((point) => (
-          <li key={point.title} className="rounded-2xl border border-line bg-surface p-5">
-            <p className="font-semibold text-fg">{point.title}</p>
-            <p className="mt-2 text-sm leading-relaxed text-muted">{point.body}</p>
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }
 
-const LAUNCH_POINTS = [
-  {
-    title: 'Listeleme ücretsiz',
-    body: 'Aylık ücret, kurulum bedeli ya da satış komisyonu yok.',
-  },
-  {
-    title: 'Karşılığı ambalajınız',
-    body: 'Gönderilerinizde Ohaaaa koli bandını ve armasını kullanırsınız. Baskı dosyaları bizden.',
-  },
-  {
-    title: 'Fiyat sizin',
-    body: 'Fiyat ve stok sizin sisteminizden gelir; biz yalnızca kargo dahil toplamı karşılaştırırız.',
-  },
-];
+const VALUE_POINTS = [
+  { title: 'deger.kesfetBaslik', body: 'deger.kesfetMetin' },
+  { title: 'deger.karsilastirBaslik', body: 'deger.karsilastirMetin' },
+  { title: 'deger.firsatBaslik', body: 'deger.firsatMetin' },
+  { title: 'deger.kararBaslik', body: 'deger.kararMetin' },
+] as const;
