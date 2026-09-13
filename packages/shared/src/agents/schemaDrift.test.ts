@@ -25,6 +25,20 @@ const KOK = resolve(process.cwd(), '../..');
  * testler bu ölçülmüş yanıtları kullanıyor -- ve testin iddiası
  * "üretim böyle" değil, "ajan bu veriyi DOĞRU SINIFLANDIRIYOR".
  */
+/**
+ * ÖLÇÜLMÜŞ ÜRETİM YANITLARININ TEKRAR OYNATILMASI -- TARİHSEL.
+ *
+ * Aşağıdaki satırlar uydurma değil: 13 Eylül 2026'da üretimden ölçülmüş
+ * gerçek katalog yanıtları. `Ohaaaa.com` tablosu o gün RLS açık, politikasız
+ * ve `anon`a tam CRUD verilmiş hâldeydi -- sınıflandırıcının GİZLİ YETKİ
+ * RİSKİ demesi gereken tam olarak bu durum.
+ *
+ * O bulgu AYNI GÜN kapatıldı: `anon` ve `authenticated` yetkileri tabloda
+ * REVOKE edildi. Yani bu fixture artık CANLI durumu değil, sınıflandırma
+ * mantığının doğru çalıştığını kanıtlayan tarihsel bir vakayı temsil ediyor.
+ * Bilerek olduğu gibi bırakıldı: kontrolün gerçek bir açığı yakaladığını
+ * gösteren regresyon testi, açık kapandı diye değersizleşmez.
+ */
 class OlculmusYurutucu implements MetadataYurutucu {
   readonly cagrilar: Array<{ sql: string; params: readonly unknown[] }> = [];
   async sorgula(sql: string, params: readonly unknown[]) {
