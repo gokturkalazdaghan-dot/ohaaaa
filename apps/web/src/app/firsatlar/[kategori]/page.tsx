@@ -1,8 +1,11 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
+import { t } from '@ohaaaa/shared';
+
 import { DataUnavailable } from '@/components/DataUnavailable';
 import { getCategories, getPriceDrops } from '@/data/catalog';
+import { getRequestLocale } from '@/lib/locale';
 
 import { DealsView, MIN_DROP_RATIO, WINDOW_DAYS } from '../DealsView';
 
@@ -22,23 +25,25 @@ type Props = { params: Promise<{ kategori: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { kategori } = await params;
+  const { contentLocale } = await getRequestLocale();
 
   // Metadata üretimi katalog kesintisinde sayfayı düşürmemeli: başlık
   // olmadan da sayfanın kendisi anlamlı bir hata gösterebilir.
   const categories = await getCategories().catch(() => []);
   const category = categories.find((candidate) => candidate.slug === kategori);
 
-  if (!category) return { title: 'Fırsat kategorisi bulunamadı' };
+  if (!category) return { title: t(contentLocale, 'firsat.kategoriBulunamadi') };
 
   return {
-    title: `${category.name} Fırsatları — Fiyatı Düşen Ürünler`,
-    description:
-      `${category.name} kategorisinde son ${WINDOW_DAYS} günde kendi ölçtüğümüz ` +
-      `fiyatlara göre gerçekten ucuzlayan ürünler. Mağazanın üstü çizili fiyatı kullanılmaz.`,
+    title: t(contentLocale, 'firsat.kategoriSayfaBasligi', { ad: category.name }),
+    description: t(contentLocale, 'firsat.kategoriMetaAciklama', {
+      ad: category.name,
+      gun: WINDOW_DAYS,
+    }),
     alternates: { canonical: `/firsatlar/${category.slug}` },
     openGraph: {
-      title: `${category.name} Fırsatları · Ohaaaa`,
-      description: `${category.name} kategorisinde ölçülmüş fiyat düşüşleri.`,
+      title: t(contentLocale, 'firsat.kategoriOgBaslik', { ad: category.name }),
+      description: t(contentLocale, 'firsat.kategoriOgAciklama', { ad: category.name }),
     },
   };
 }
@@ -54,6 +59,7 @@ export async function generateStaticParams(): Promise<Array<{ kategori: string }
 
 export default async function CategoryDealsPage({ params }: Props) {
   const { kategori } = await params;
+  const { contentLocale, contentTag } = await getRequestLocale();
 
   let drops: Awaited<ReturnType<typeof getPriceDrops>>;
   let categories: Awaited<ReturnType<typeof getCategories>>;
@@ -84,19 +90,18 @@ export default async function CategoryDealsPage({ params }: Props) {
         error: error instanceof Error ? error.message : String(error),
       }),
     );
-    return <DataUnavailable title="Fırsatları şu an gösteremiyoruz" />;
+    return <DataUnavailable title={t(contentLocale, 'firsat.gosteremiyoruz')} />;
   }
 
   return (
     <DealsView
+      locale={contentLocale}
+      contentTag={contentTag}
       drops={drops}
       categories={categories}
       activeCategory={category}
-      heading={`${category.name} Fırsatları`}
-      intro={
-        `${category.name} kategorisinde son ${WINDOW_DAYS} günde kendi ölçümlerimizde ` +
-        'fiyatı düşen ürünler.'
-      }
+      heading={t(contentLocale, 'firsat.kategoriBaslik', { ad: category.name })}
+      intro={t(contentLocale, 'firsat.kategoriGiris', { ad: category.name, gun: WINDOW_DAYS })}
     />
   );
 }

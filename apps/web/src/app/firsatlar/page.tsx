@@ -1,7 +1,10 @@
 import type { Metadata } from 'next';
 
+import { t } from '@ohaaaa/shared';
+
 import { DataUnavailable } from '@/components/DataUnavailable';
 import { getCategories, getPriceDrops } from '@/data/catalog';
+import { getRequestLocale } from '@/lib/locale';
 
 import { DealsView, MIN_DROP_RATIO, WINDOW_DAYS } from './DealsView';
 
@@ -26,19 +29,31 @@ export const revalidate = 900;
 
 const LIMIT = 24;
 
-export const metadata: Metadata = {
-  title: 'Fiyatı Düşen Ürünler',
-  description:
-    'Son 30 günde kendi ölçtüğümüz fiyatlara göre gerçekten ucuzlayan ürünler. ' +
-    'Mağazanın üstü çizili fiyatı kullanılmaz; düşüş bizim ölçümümüzden çıkar.',
-  alternates: { canonical: '/firsatlar' },
-  openGraph: {
-    title: 'Fiyatı Düşen Ürünler · Ohaaaa',
-    description: 'Düşüşü mağaza değil, biz ölçüyoruz. Son 30 günün gerçek fiyat düşüşleri.',
-  },
-};
+/*
+ * SABİT `metadata` YERİNE `generateMetadata`.
+ *
+ * Sabit nesne istek başlıklarını göremez, dolayısıyla dili de göremez --
+ * sayfa gövdesi İngilizceye dönerken başlık ve açıklama Türkçe kalırdı.
+ * Ayrıca "son 30 gün" metne ELLE yazılmıştı: `WINDOW_DAYS` değiştiğinde
+ * sayfa 15 gün ölçüp meta etiketinde 30 gün iddia edebilirdi.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const { contentLocale } = await getRequestLocale();
+
+  return {
+    title: t(contentLocale, 'firsat.baslik'),
+    description: t(contentLocale, 'firsat.metaAciklama', { gun: WINDOW_DAYS }),
+    alternates: { canonical: '/firsatlar' },
+    openGraph: {
+      title: t(contentLocale, 'firsat.ogBaslik'),
+      description: t(contentLocale, 'firsat.ogAciklama', { gun: WINDOW_DAYS }),
+    },
+  };
+}
 
 export default async function DealsPage() {
+  const { contentLocale, contentTag } = await getRequestLocale();
+
   let drops: Awaited<ReturnType<typeof getPriceDrops>>;
   let categories: Awaited<ReturnType<typeof getCategories>>;
 
@@ -55,20 +70,18 @@ export default async function DealsPage() {
         error: error instanceof Error ? error.message : String(error),
       }),
     );
-    return <DataUnavailable title="Fırsatları şu an gösteremiyoruz" />;
+    return <DataUnavailable title={t(contentLocale, 'firsat.gosteremiyoruz')} />;
   }
 
   return (
     <DealsView
+      locale={contentLocale}
+      contentTag={contentTag}
       drops={drops}
       categories={categories}
       activeCategory={null}
-      heading="Fiyatı Düşen Ürünler"
-      intro={
-        'Aynı ürünü günlerce ölçüyoruz. Bu sayfada, son ' +
-        WINDOW_DAYS +
-        ' günde kendi ölçümlerimizde fiyatı gerçekten düşen ürünler var.'
-      }
+      heading={t(contentLocale, 'firsat.baslik')}
+      intro={t(contentLocale, 'firsat.giris', { gun: WINDOW_DAYS })}
     />
   );
 }
