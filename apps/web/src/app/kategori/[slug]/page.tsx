@@ -3,12 +3,11 @@ import { ProductCard } from '@/components/ProductCard';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import { formatMoney } from '@ohaaaa/shared';
+import { formatCount, formatMoney, siblingsOf, t, type Locale } from '@ohaaaa/shared';
 
 import { DataUnavailable } from '@/components/DataUnavailable';
 import { JsonLd } from '@/components/JsonLd';
 import { Pagination } from '@/components/Pagination';
-import { siblingsOf } from '@ohaaaa/shared';
 
 import {
   categoryHasProducts,
@@ -17,6 +16,8 @@ import {
   type SortOption,
 } from '@/data/catalog';
 import { siteUrl } from '@/lib/env';
+import { tRich } from '@/lib/i18n';
+import { getRequestLocale } from '@/lib/locale';
 
 /** Sayfa basina urun. SQL tarafi 100'de sinirlar. */
 const PAGE_SIZE = 24;
@@ -35,11 +36,24 @@ const PAGE_SIZE = 24;
  * Ayrı yol vermek bu çelişkiyi kökten çözer ve temiz URL bonusu getirir.
  */
 
-const SORT_OPTIONS: Array<{ value: SortOption; label: string }> = [
-  { value: 'offers', label: 'En çok mağaza' },
-  { value: 'price_asc', label: 'Artan fiyat' },
-  { value: 'price_desc', label: 'Azalan fiyat' },
-];
+/**
+ * Sıralama seçenekleri DİLE GÖRE üretiliyor.
+ *
+ * Sabit bir dizi olamazdı: etiketler çeviriye tabi ama `value` alanları
+ * URL'de görünüyor ve DEĞİŞMEMELİ -- adres her dilde aynı kalmalı ki
+ * paylaşılan bir bağlantı dilden bağımsız çalışsın. Bu yüzden etiketler
+ * çağrı anında, geçerli değerler ise sabit listede duruyor.
+ */
+function sortOptions(locale: Locale): Array<{ value: SortOption; label: string }> {
+  return [
+    { value: 'offers', label: t(locale, 'kategori.enCokMagaza') },
+    { value: 'price_asc', label: t(locale, 'kategori.artanFiyat') },
+    { value: 'price_desc', label: t(locale, 'kategori.azalanFiyat') },
+  ];
+}
+
+/** Geçerli sıralama değerleri -- dilden BAĞIMSIZ, URL'de görünen budur. */
+const SORT_VALUES: readonly SortOption[] = ['offers', 'price_asc', 'price_desc'];
 
 type CategoryPageProps = {
   params: Promise<{ slug: string }>;
@@ -64,10 +78,11 @@ export async function generateMetadata({
 }: CategoryPageProps): Promise<Metadata> {
   const { slug } = await params;
   const page = readPage((await searchParams).sayfa);
+  const { contentLocale } = await getRequestLocale();
   const categories = await getCategories();
   const category = categories.find((candidate) => candidate.slug === slug);
 
-  if (!category) return { title: 'Kategori bulunamadı' };
+  if (!category) return { title: t(contentLocale, 'kategori.bulunamadi') };
 
   // Sayfa 2+ KENDINI kanonik gosterir. Hepsini 1. sayfaya kanonikleseydik
   // 2. sayfadaki urunler hicbir kanonik sayfada gecmez, yani dizinde
@@ -90,15 +105,16 @@ export async function generateMetadata({
   const doluMu = await categoryHasProducts(category.id).catch(() => true);
 
   return {
-    title: page > 1 ? `${category.name} Fiyatları — sayfa ${page}` : `${category.name} Fiyatları`,
+    title:
+      page > 1
+        ? t(contentLocale, 'kategori.fiyatlariSayfa', { ad: category.name, sayfa: page })
+        : t(contentLocale, 'kategori.fiyatlari', { ad: category.name }),
     ...(doluMu ? {} : { robots: { index: false, follow: true } }),
-    description:
-      `${category.name} kategorisindeki ürünleri onlarca mağazada karşılaştırın. ` +
-      `Kargo dahil en iyi toplam fiyatı görün, en ucuz satıcıyı tek bakışta bulun.`,
+    description: t(contentLocale, 'kategori.metaAciklama', { ad: category.name }),
     alternates: { canonical },
     openGraph: {
-      title: `${category.name} Fiyatları · Ohaaaa`,
-      description: `${category.name} kategorisinde mağaza fiyatlarını karşılaştırın.`,
+      title: t(contentLocale, 'kategori.ogBaslik', { ad: category.name }),
+      description: t(contentLocale, 'kategori.ogAciklama', { ad: category.name }),
     },
   };
 }
@@ -107,13 +123,12 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   const { slug } = await params;
   const { sirala, sayfa } = await searchParams;
   const page = readPage(sayfa);
+  const { contentLocale, contentTag } = await getRequestLocale();
 
   let categories: Awaited<ReturnType<typeof getCategories>>;
   let results: Awaited<ReturnType<typeof searchProducts>>;
 
-  const sort = SORT_OPTIONS.some((option) => option.value === sirala)
-    ? (sirala as SortOption)
-    : 'offers';
+  const sort = SORT_VALUES.includes(sirala as SortOption) ? (sirala as SortOption) : 'offers';
 
   // Kesintide 404 vermek YANLIŞ olurdu: kategori duruyor, biz ulaşamıyoruz.
   // 404, arama motoruna sayfanın kalıcı olarak silindiğini bildirir.
@@ -200,7 +215,12 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
             yanlış olur.
           */
           itemListElement: [
-            { '@type': 'ListItem', position: 1, name: 'Ana sayfa', item: siteUrl },
+            {
+              '@type': 'ListItem',
+              position: 1,
+              name: t(contentLocale, 'ortak.anaSayfa'),
+              item: siteUrl,
+            },
             ...(parent
               ? [{
                   '@type': 'ListItem',
@@ -219,9 +239,12 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
         }}
       />
 
-      <nav aria-label="Sayfa yolu" className="mb-6 flex items-center gap-2 text-xs text-muted">
+      <nav
+        aria-label={t(contentLocale, 'ortak.sayfaYolu')}
+        className="mb-6 flex items-center gap-2 text-xs text-muted"
+      >
         <Link href="/" className="transition-colors hover:text-fg">
-          Ana sayfa
+          {t(contentLocale, 'ortak.anaSayfa')}
         </Link>
         <span aria-hidden="true">/</span>
         {parent && (
@@ -238,7 +261,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
       <header>
         {/* Anlamlı H1 (madde 1): kategori adı + niyeti karşılayan sözcük. */}
         <h1 className="text-3xl font-bold tracking-tight text-fg">
-          {category.name} Fiyatları
+          {t(contentLocale, 'kategori.fiyatlari', { ad: category.name })}
         </h1>
 
         {/*
@@ -249,7 +272,10 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
           Bilgisayar'a inebilmek sayfanın en çok işe yarayan bağlantısı.
         */}
         {children.length > 0 && (
-          <nav aria-label="Alt kategoriler" className="mt-4 flex flex-wrap gap-2">
+          <nav
+            aria-label={t(contentLocale, 'kategori.altKategoriler')}
+            className="mt-4 flex flex-wrap gap-2"
+          >
             {children.map((child) => (
               <Link key={child.id} href={`/kategori/${child.slug}`} className="chip">
                 {child.name}
@@ -261,26 +287,53 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
         <p className="mt-3 max-w-2xl leading-relaxed text-muted">
           {results.results.length > 0 ? (
             <>
-              {category.name} kategorisinde{' '}
-              <strong className="text-fg">{results.totalCount} ürünü</strong> karşılaştırıyoruz
-              {totalPages > 1 && <> (sayfa {page}/{totalPages})</>}. Bu sayfada{' '}
-              <strong className="text-fg">{totalOffers} mağaza teklifi</strong> var.
+              {tRich(contentLocale, 'kategori.ozetSayim', {
+                ad: category.name,
+                urunSayisi: (
+                  <strong className="text-fg">
+                    {t(contentLocale, 'kategori.urunAdet', {
+                      adet: formatCount(results.totalCount, contentTag),
+                    })}
+                  </strong>
+                ),
+                // Tek sayfalık kategoride "(sayfa 1/1)" yazmak gürültüdür.
+                sayfaBilgisi:
+                  totalPages > 1
+                    ? t(contentLocale, 'kategori.sayfaBilgisi', { sayfa: page, toplam: totalPages })
+                    : '',
+              })}{' '}
+              {tRich(contentLocale, 'kategori.buSayfada', {
+                teklifSayisi: (
+                  <strong className="text-fg">
+                    {t(contentLocale, 'kategori.magazaTeklifi', {
+                      adet: formatCount(totalOffers, contentTag),
+                    })}
+                  </strong>
+                ),
+              })}{' '}
               {cheapest !== undefined && (
-                <> Fiyatlar {formatMoney(cheapest, listeParaBirimi)}’den başlıyor.</>
-              )}{' '}
-              Sıralama kargo dahil toplam maliyete göre yapılır.
+                <>{t(contentLocale, 'kategori.enDusukFiyat', {
+                  fiyat: formatMoney(cheapest, listeParaBirimi),
+                })}{' '}</>
+              )}
+              {t(contentLocale, 'kategori.siralamaAciklama')}
             </>
           ) : (
-            <>Bu kategoride henüz ürün yok. Yeni satıcılar eklendikçe burası dolacak.</>
+            t(contentLocale, 'kategori.bosKategori')
           )}
         </p>
       </header>
 
       {results.results.length > 0 && (
         <>
-          <nav aria-label="Sıralama" className="mt-6 flex flex-wrap items-center gap-2">
-            <span className="mr-1 text-sm font-semibold text-muted">Sırala</span>
-            {SORT_OPTIONS.map((option) => (
+          <nav
+            aria-label={t(contentLocale, 'ortak.siralama')}
+            className="mt-6 flex flex-wrap items-center gap-2"
+          >
+            <span className="mr-1 text-sm font-semibold text-muted">
+              {t(contentLocale, 'ortak.sirala')}
+            </span>
+            {sortOptions(contentLocale).map((option) => (
               <Link
                 key={option.value}
                 href={categoryHref({ sirala: option.value, sayfa: '1' })}
@@ -299,7 +352,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
             gizli: sayfada zaten "<kategori> Fiyatları" yazıyor, ikinci bir
             görünür başlık tekrar olurdu.
           */}
-          <h2 className="sr-only">Ürünler</h2>
+          <h2 className="sr-only">{t(contentLocale, 'ortak.urunler')}</h2>
           <ul className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
             {results.results.map((result, index) => (
               <li key={result.groupId}>
@@ -324,9 +377,14 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
         kategoriyi paylaşanlar) gerçek alternatiflerdir.
       */}
       {siblings.length > 0 && (
-        <nav aria-label="Diğer kategoriler" className="mt-16 border-t border-line pt-8">
+        <nav
+          aria-label={t(contentLocale, 'kategori.digerKategoriler')}
+          className="mt-16 border-t border-line pt-8"
+        >
           <h2 className="text-sm font-semibold">
-            {parent ? `${parent.name} altındaki diğer kategoriler` : 'Diğer kategoriler'}
+            {parent
+              ? t(contentLocale, 'kategori.altindakiDigerleri', { ust: parent.name })
+              : t(contentLocale, 'kategori.digerKategoriler')}
           </h2>
           <div className="mt-4 flex flex-wrap gap-2">
             {siblings.map((candidate) => (

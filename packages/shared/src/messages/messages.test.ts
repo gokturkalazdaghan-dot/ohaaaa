@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { EN, TR, TRANSLATED_LOCALES, isTranslatedLocale, t } from './index.js';
+import { EN, TR, TRANSLATED_LOCALES, isTranslatedLocale, splitMessage, t } from './index.js';
 
 test('İngilizce sözlük Türkçe ile BİREBİR aynı anahtarları taşır', () => {
   /*
@@ -56,4 +56,53 @@ test('çevirisi olmayan dil Türkçeye düşer, anahtar ekrana basılmaz', () =>
 test('çevirisi olan diller açıkça bildiriliyor', () => {
   assert.deepEqual(TRANSLATED_LOCALES.sort(), ['en', 'tr']);
   assert.ok(isTranslatedLocale('tr') && isTranslatedLocale('en'));
+});
+
+// --- splitMessage ---------------------------------------------------------
+
+test('splitMessage cumleyi duz parca ve degisken olarak ayirir', () => {
+  const parcalar = splitMessage('tr', 'kategori.urunAdet');
+  assert.deepEqual(parcalar, [
+    { kind: 'param', name: 'adet' },
+    { kind: 'text', value: ' ürünü' },
+  ]);
+});
+
+test('splitMessage bos parca uretmez', () => {
+  // Yer tutucu BAŞTA: naif bir `split` burada boş bir ilk parça bırakır ve
+  // arayüz katmanı her cümlenin başına boş bir düğüm basardı.
+  for (const locale of ['tr', 'en'] as const) {
+    for (const parca of splitMessage(locale, 'kategori.urunAdet')) {
+      if (parca.kind === 'text') assert.notEqual(parca.value, '');
+    }
+  }
+});
+
+test('splitMessage her degiskeni AYRI parca olarak verir', () => {
+  const adlar = splitMessage('tr', 'kategori.ozetSayim')
+    .filter((parca) => parca.kind === 'param')
+    .map((parca) => (parca.kind === 'param' ? parca.name : ''));
+
+  assert.deepEqual(adlar.sort(), ['ad', 'sayfaBilgisi', 'urunSayisi']);
+});
+
+/*
+ * SÖZ DİZİMİ DİLE GÖRE DEĞİŞİYOR -- `splitMessage`'in var olma sebebi bu.
+ * Türkçe cümle kategori adıyla başlıyor, İngilizce cümle sayıyla. Cümleyi
+ * parçalara bölüp sabit sırada birleştirseydik İngilizcesi bozuk kurulurdu.
+ */
+test('degisken sirasi dile gore DEGISIYOR', () => {
+  const sira = (locale: 'tr' | 'en') =>
+    splitMessage(locale, 'kategori.ozetSayim')
+      .filter((parca) => parca.kind === 'param')
+      .map((parca) => (parca.kind === 'param' ? parca.name : ''));
+
+  assert.equal(sira('tr')[0], 'ad');
+  assert.equal(sira('en')[0], 'urunSayisi');
+});
+
+test('degiskensiz metin tek parca doner', () => {
+  assert.deepEqual(splitMessage('tr', 'ortak.anaSayfa'), [
+    { kind: 'text', value: 'Ana sayfa' },
+  ]);
 });

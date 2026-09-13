@@ -75,4 +75,38 @@ export function t(
   });
 }
 
+/**
+ * Bir metni "düz parça" ve "değişken" dizisine ayırır.
+ *
+ * NEDEN VAR: bazı cümlelerin ORTASINDA vurgu var -- "34.510 ürünü
+ * karşılaştırıyoruz" cümlesinde vurgulanan şey sayıdır. `t()` yalnızca
+ * metin döndürdüğü için vurguyu taşıyamaz; cümleyi parçalara bölüp ayrı
+ * anahtarlara koymak ise SÖZ DİZİMİNİ tek dile çivilerdi (Türkçesi
+ * "{ad} kategorisinde {n} ürünü..." diye başlar, İngilizcesi "We compare
+ * {n} products in {ad}" diye).
+ *
+ * Bu yüzden cümle TEK anahtar olarak duruyor ve nereye ne geleceğini
+ * çağıran taraf karar veriyor. Arayüz katmanı her `param` parçasının
+ * yerine kendi düğümünü koyar.
+ *
+ * BURADA HTML AYRIŞTIRILMIYOR: sözlükte etiket yok, yalnızca `{ad}`
+ * yer tutucusu var. Sözlükten gelen hiçbir metin ham HTML olarak
+ * yorumlanmaz -- yani bir çeviri dosyası kod çalıştıramaz.
+ */
+export type MessagePart = { kind: 'text'; value: string } | { kind: 'param'; name: string };
+
+export function splitMessage(locale: Locale, key: MessageKey): MessagePart[] {
+  const ham = t(locale, key);
+
+  return ham
+    .split(/(\{\w+\})/g)
+    // Bölme, yer tutucu başta ya da sonda olduğunda BOŞ parça üretir;
+    // onları taşımak çağıranı gereksiz yere boş düğüm basmaya iter.
+    .filter((parca) => parca !== '')
+    .map((parca): MessagePart => {
+      const eslesme = /^\{(\w+)\}$/.exec(parca);
+      return eslesme ? { kind: 'param', name: eslesme[1]! } : { kind: 'text', value: parca };
+    });
+}
+
 export { TR, EN };

@@ -7,6 +7,7 @@ import {
   MARKETS,
   MARKET_CONFIG,
   currencyOf,
+  formatCount,
   isLocale,
   isMarket,
   localeTag,
@@ -262,4 +263,25 @@ test('tip korumaları yalnızca bilinen değerleri kabul eder', () => {
   assert.ok(isMarket('TR') && isMarket('EU') && isMarket('US') && isMarket('UK'));
   // 'DE' ve 'GB' artık PAZAR DEĞİL -- ikisi de ülke kodu.
   assert.ok(!isMarket('tr') && !isMarket('DE') && !isMarket('GB') && !isMarket(null));
+});
+
+// --- Sayı biçimi ----------------------------------------------------------
+
+/*
+ * SAYFADA "34510 ürünü karşılaştırıyoruz" YAZIYORDU. Beş haneden sonra
+ * basamak ayracı olmadan sayı okunmuyor; ayraç ise dile göre değişiyor.
+ */
+test('formatCount basamak ayracini OKUYANIN diline gore secer', () => {
+  assert.equal(formatCount(34510, 'tr-TR'), '34.510');
+  assert.equal(formatCount(34510, 'en-GB'), '34,510');
+  assert.equal(formatCount(34510, 'en-US'), '34,510');
+});
+
+test('formatCount kucuk sayilari bozmaz', () => {
+  assert.equal(formatCount(0, 'tr-TR'), '0');
+  assert.equal(formatCount(7, 'en-GB'), '7');
+});
+
+test('formatCount etiket verilmezse varsayilan pazara duser', () => {
+  assert.equal(formatCount(1234), formatCount(1234, MARKET_CONFIG[DEFAULT_MARKET].numberLocale));
 });
