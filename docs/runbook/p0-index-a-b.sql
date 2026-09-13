@@ -27,6 +27,16 @@
 --   * Tablo 34.721 satır / 33 MB -- ACCESS EXCLUSIVE kilit penceresi kısa.
 --   * Site zaten >120 sn yanıt veriyor; kısa kilit, mevcut durumdan iyidir.
 -- lock_timeout kilit kuyruğu oluşturmayı engeller: alamazsa çekilir.
+--
+-- statement_timeout NEDEN 3 DAKİKA (15 değil)
+-- İndeks ~3,6 MB; sağlıklı bir örnekte saniyenin altında biter. Tavan,
+-- sorunu gizlemek için değil, KİLİDİ BIRAKMAK için var: bu düz CREATE
+-- INDEX süresince product_groups üzerinde ACCESS EXCLUSIVE kilit durur ve
+-- katalog tamamen bloke olur. 15 dakikalık bir tavan, teşhis değeri
+-- katmadan kataloğu 15 dakika kilitli tutabilirdi.
+-- 3 dakikayı aşması BAŞLI BAŞINA BULGUDUR: 3,6 MB'lık bir yapı bu sürede
+-- bitmiyorsa sorun indeks değildir. O durumda tavanı YÜKSELTME -- DUR ve
+-- bildir.
 
 -- ---------- ADIM 1: ÖN DURUM (çalıştır, çıktıyı sakla) ----------
 select i.relname as indeks, x.indisvalid, x.indisready, pg_get_indexdef(i.oid) as tanim
@@ -43,7 +53,7 @@ order by i.relname;
 -- ---------- ADIM 2: INDEX B (baskın hata yolu, ~349/354) ----------
 begin;
 set local lock_timeout = '10s';
-set local statement_timeout = '15min';
+set local statement_timeout = '3min';
 set local maintenance_work_mem = '128MB';
 
 create index if not exists product_groups_category_offers_idx
@@ -58,7 +68,7 @@ commit;
 -- ---------- ADIM 3: INDEX A (kategorisiz varyant) ----------
 begin;
 set local lock_timeout = '10s';
-set local statement_timeout = '15min';
+set local statement_timeout = '3min';
 set local maintenance_work_mem = '128MB';
 
 create index if not exists product_groups_offers_idx
