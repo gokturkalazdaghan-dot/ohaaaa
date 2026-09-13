@@ -1,11 +1,12 @@
 import Link from 'next/link';
 
-import { formatMoney, type Category, type PriceDrop } from '@ohaaaa/shared';
+import { formatCount, formatMoney, t, type Category, type Locale, type PriceDrop } from '@ohaaaa/shared';
 
 import { JsonLd } from '@/components/JsonLd';
 import { PriceDropCard } from '@/components/PriceDropCard';
 import { ShareButton } from '@/components/ShareButton';
 import { siteUrl } from '@/lib/env';
+import { tRich } from '@/lib/i18n';
 
 /**
  * `/firsatlar` ve `/firsatlar/[kategori]` sayfalarının ortak gövdesi.
@@ -23,15 +24,21 @@ export const WINDOW_DAYS = 30;
 export const MIN_DROP_RATIO = 0.05;
 
 export function DealsView({
+  locale,
+  contentTag,
   drops,
   categories,
   activeCategory,
   heading,
   intro,
 }: {
+  locale: Locale;
+  /** Sayı biçimi için okuyanın BCP-47 etiketi. */
+  contentTag: string;
   drops: PriceDrop[];
   categories: Category[];
   activeCategory: Category | null;
+  /** Sayfa başlığı -- çağıran taraf kendi diline göre üretir. */
   heading: string;
   intro: string;
 }) {
@@ -45,8 +52,13 @@ export function DealsView({
           '@context': 'https://schema.org',
           '@type': 'BreadcrumbList',
           itemListElement: [
-            { '@type': 'ListItem', position: 1, name: 'Ana sayfa', item: siteUrl },
-            { '@type': 'ListItem', position: 2, name: 'Fırsatlar', item: `${siteUrl}/firsatlar` },
+            { '@type': 'ListItem', position: 1, name: t(locale, 'ortak.anaSayfa'), item: siteUrl },
+            {
+              '@type': 'ListItem',
+              position: 2,
+              name: t(locale, 'ortak.firsatlar'),
+              item: `${siteUrl}/firsatlar`,
+            },
             ...(activeCategory
               ? [
                   {
@@ -97,21 +109,24 @@ export function DealsView({
         />
       )}
 
-      <nav aria-label="Sayfa yolu" className="mb-6 flex flex-wrap items-center gap-2 text-xs text-muted">
+      <nav
+        aria-label={t(locale, 'ortak.sayfaYolu')}
+        className="mb-6 flex flex-wrap items-center gap-2 text-xs text-muted"
+      >
         <Link href="/" className="transition-colors hover:text-fg">
-          Ana sayfa
+          {t(locale, 'ortak.anaSayfa')}
         </Link>
         <span aria-hidden="true">/</span>
         {activeCategory ? (
           <>
             <Link href="/firsatlar" className="transition-colors hover:text-fg">
-              Fırsatlar
+              {t(locale, 'ortak.firsatlar')}
             </Link>
             <span aria-hidden="true">/</span>
             <span className="text-fg">{activeCategory.name}</span>
           </>
         ) : (
-          <span className="text-fg">Fırsatlar</span>
+          <span className="text-fg">{t(locale, 'ortak.firsatlar')}</span>
         )}
       </nav>
 
@@ -125,21 +140,26 @@ export function DealsView({
           görmesi, oranın kendisinden daha değerli.
         */}
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-subtle">
-          Buradaki oranlar mağazanın üstü çizili fiyatından değil, son{' '}
-          {WINDOW_DAYS} günde <strong className="text-muted">bizim kendi ölçtüğümüz</strong>{' '}
-          fiyatlardan çıkar. Bir ürünün listeye girmesi için en az iki ayrı
-          fiyat ölçümü ve %{Math.round(MIN_DROP_RATIO * 100)} üzerinde düşüş
-          gerekir.
+          {tRich(locale, 'firsat.yontem', {
+            gun: WINDOW_DAYS,
+            oran: Math.round(MIN_DROP_RATIO * 100),
+            vurgu: (
+              <strong className="text-muted">{t(locale, 'firsat.yontemVurgu')}</strong>
+            ),
+          })}
         </p>
       </header>
 
-      <nav aria-label="Fırsat kategorileri" className="mt-7 flex flex-wrap items-center gap-2">
+      <nav
+        aria-label={t(locale, 'firsat.kategoriler')}
+        className="mt-7 flex flex-wrap items-center gap-2"
+      >
         <Link
           href="/firsatlar"
           aria-current={activeCategory ? undefined : 'true'}
           className={`chip ${activeCategory ? '' : 'chip-active'}`}
         >
-          Tümü
+          {t(locale, 'ortak.tumu')}
         </Link>
         {categories.map((category) => (
           <Link
@@ -157,8 +177,22 @@ export function DealsView({
         <>
           <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-muted">
-              <strong className="text-fg">{drops.length} üründe</strong> düşüş ölçtük
-              {enBuyuk > 0 && <> — en büyüğü %{Math.round(enBuyuk * 100)}.</>}
+              {tRich(locale, 'firsat.dususOlctuk', {
+                urunAdet: (
+                  <strong className="text-fg">
+                    {t(locale, 'firsat.urunAdet', {
+                      adet: formatCount(drops.length, contentTag),
+                    })}
+                  </strong>
+                ),
+              })}
+              {enBuyuk > 0 && (
+                <>
+                  {' — '}
+                  {t(locale, 'firsat.enBuyugu', { oran: Math.round(enBuyuk * 100) })}
+                </>
+              )}
+              .
             </p>
 
             {/*
@@ -168,13 +202,19 @@ export function DealsView({
             <ShareButton
               path={yol}
               title={heading}
-              text={`${heading}: ${drops.length} üründe düşüş ölçtük${
-                enBuyuk > 0 ? `, en büyüğü %${Math.round(enBuyuk * 100)}` : ''
-              }`}
+              text={
+                t(locale, 'firsat.paylasMetni', {
+                  baslik: heading,
+                  adet: formatCount(drops.length, contentTag),
+                }) +
+                (enBuyuk > 0
+                  ? `, ${t(locale, 'firsat.enBuyugu', { oran: Math.round(enBuyuk * 100) })}`
+                  : '')
+              }
             />
           </div>
 
-          <h2 className="sr-only">Fiyatı düşen ürünler</h2>
+          <h2 className="sr-only">{t(locale, 'firsat.baslik')}</h2>
           <ul className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
             {drops.map((drop, index) => (
               <li key={drop.groupId}>
@@ -193,26 +233,24 @@ export function DealsView({
         <section className="mt-10 rounded-2xl border border-line bg-surface-2 p-8 text-center">
           <h2 className="text-lg font-bold text-fg">
             {activeCategory
-              ? `${activeCategory.name} kategorisinde şu an ölçülmüş bir düşüş yok`
-              : 'Şu an ölçülmüş bir fiyat düşüşü yok'}
+              ? t(locale, 'firsat.bosKategori', { ad: activeCategory.name })
+              : t(locale, 'firsat.bosGenel')}
           </h2>
           <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted">
-            Fiyat düşüşünü ancak aynı ürünü birden fazla kez ölçtüğümüzde
-            söyleyebiliriz. Yeterli ölçüm birikmeden buraya ürün koymak,
-            olmayan bir indirimi varmış gibi göstermek olurdu.
+            {t(locale, 'firsat.bosAciklama')}
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Link
               href="/arama"
               className="rounded-xl press bg-brand-cta px-5 py-2.5 text-sm font-semibold text-white"
             >
-              Ürünleri karşılaştır
+              {t(locale, 'firsat.urunleriKarsilastir')}
             </Link>
             <Link
               href="/fiyat-takip"
               className="rounded-xl border border-line px-5 py-2.5 text-sm font-semibold text-fg transition-colors hover:border-brand"
             >
-              Fiyat takibi nasıl işliyor?
+              {t(locale, 'firsat.fiyatTakibiNasil')}
             </Link>
           </div>
         </section>
@@ -220,21 +258,19 @@ export function DealsView({
 
       {drops.length > 0 && (
         <p className="mt-10 text-xs leading-relaxed text-subtle">
-          Fiyatlar son ölçüm anına aittir ve mağazalar tarafından her an
-          değiştirilebilir. Ürün sayfasında o üründe gördüğümüz bütün fiyat
-          geçmişini ve her mağazanın kargo dahil toplam maliyetini
-          bulabilirsiniz. En düşük fiyat şu an{' '}
-          {formatMoney(
-            Math.min(...drops.map((drop) => drop.currentPriceCents)),
-            /*
-             * Liste TEK para biriminde ise onu kullan; karisiksa hicbirini
-             * secmek dogru olmaz -- en dusuk sayiyi yanlis simgeyle basmak
-             * kullaniciyi yanlis yonlendirir. Karisikta ham kod yazilir.
-             */
-            new Set(drops.map((drop) => drop.currency)).size === 1
-              ? drops[0]?.currency
-              : undefined,
-          )}.
+          {t(locale, 'firsat.altUyari', {
+            fiyat: formatMoney(
+              Math.min(...drops.map((drop) => drop.currentPriceCents)),
+              /*
+               * Liste TEK para biriminde ise onu kullan; karisiksa hicbirini
+               * secmek dogru olmaz -- en dusuk sayiyi yanlis simgeyle basmak
+               * kullaniciyi yanlis yonlendirir. Karisikta ham kod yazilir.
+               */
+              new Set(drops.map((drop) => drop.currency)).size === 1
+                ? drops[0]?.currency
+                : undefined,
+            ),
+          })}
         </p>
       )}
     </div>

@@ -154,6 +154,41 @@ export const EN: Record<keyof typeof TR, string> = {
   'filtre.enAzFiyat': 'Minimum price ({birim})',
   'filtre.enFazlaFiyat': 'Maximum price ({birim})',
 
+  // --- Deals ---
+  'firsat.baslik': 'Products That Got Cheaper',
+  'firsat.kategoriBaslik': '{ad} Deals',
+  'firsat.kategoriSayfaBasligi': '{ad} Deals — Products That Got Cheaper',
+  'firsat.kategoriBulunamadi': 'Deal category not found',
+  'firsat.giris':
+    'We measure the same product day after day. This page lists the ones our own measurements show genuinely got cheaper over the last {gun} days.',
+  'firsat.kategoriGiris':
+    'Products in {ad} that our own measurements show got cheaper over the last {gun} days.',
+  'firsat.metaAciklama':
+    'Products that genuinely got cheaper according to prices we measured ourselves over the last {gun} days. No shop’s struck-through price is used; the drop comes from our own measurements.',
+  'firsat.kategoriMetaAciklama':
+    'Products in {ad} that genuinely got cheaper according to prices we measured ourselves over the last {gun} days. No shop’s struck-through price is used.',
+  'firsat.ogBaslik': 'Products That Got Cheaper · Ohaaaa',
+  'firsat.ogAciklama': 'We measure the drop, not the shop. Real price drops from the last {gun} days.',
+  'firsat.kategoriOgBaslik': '{ad} Deals · Ohaaaa',
+  'firsat.kategoriOgAciklama': 'Measured price drops in {ad}.',
+  'firsat.gosteremiyoruz': 'We can’t show deals right now',
+  'firsat.yontem':
+    'These percentages come from prices {vurgu} over the last {gun} days, not from a shop’s struck-through price. A product only makes this list with at least two separate measurements and a drop above {oran}%.',
+  'firsat.yontemVurgu': 'we measured ourselves',
+  'firsat.kategoriler': 'Deal categories',
+  'firsat.urunAdet': '{adet} products',
+  'firsat.dususOlctuk': 'We measured drops on {urunAdet}',
+  'firsat.enBuyugu': 'the biggest is {oran}%',
+  'firsat.paylasMetni': '{baslik}: we measured drops on {adet} products',
+  'firsat.bosKategori': 'No measured drops in {ad} right now',
+  'firsat.bosGenel': 'No measured price drops right now',
+  'firsat.bosAciklama':
+    'We can only report a price drop once we have measured the same product more than once. Listing products before we have enough measurements would mean showing a discount that does not exist.',
+  'firsat.urunleriKarsilastir': 'Compare products',
+  'firsat.fiyatTakibiNasil': 'How does price tracking work?',
+  'firsat.altUyari':
+    'Prices are from our latest measurement and shops can change them at any time. The product page shows every price we have seen for it and each shop’s total cost with delivery. The lowest price right now is {fiyat}.',
+
   // --- Error states ---
   'hata.veriYok': 'We can’t show prices right now',
 };

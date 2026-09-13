@@ -147,6 +147,41 @@ export const TR = {
   'filtre.enAzFiyat': 'En az fiyat ({birim})',
   'filtre.enFazlaFiyat': 'En fazla fiyat ({birim})',
 
+  // --- Fırsatlar ---
+  'firsat.baslik': 'Fiyatı Düşen Ürünler',
+  'firsat.kategoriBaslik': '{ad} Fırsatları',
+  'firsat.kategoriSayfaBasligi': '{ad} Fırsatları — Fiyatı Düşen Ürünler',
+  'firsat.kategoriBulunamadi': 'Fırsat kategorisi bulunamadı',
+  'firsat.giris':
+    'Aynı ürünü günlerce ölçüyoruz. Bu sayfada, son {gun} günde kendi ölçümlerimizde fiyatı gerçekten düşen ürünler var.',
+  'firsat.kategoriGiris':
+    '{ad} kategorisinde son {gun} günde kendi ölçümlerimizde fiyatı düşen ürünler.',
+  'firsat.metaAciklama':
+    'Son {gun} günde kendi ölçtüğümüz fiyatlara göre gerçekten ucuzlayan ürünler. Mağazanın üstü çizili fiyatı kullanılmaz; düşüş bizim ölçümümüzden çıkar.',
+  'firsat.kategoriMetaAciklama':
+    '{ad} kategorisinde son {gun} günde kendi ölçtüğümüz fiyatlara göre gerçekten ucuzlayan ürünler. Mağazanın üstü çizili fiyatı kullanılmaz.',
+  'firsat.ogBaslik': 'Fiyatı Düşen Ürünler · Ohaaaa',
+  'firsat.ogAciklama': 'Düşüşü mağaza değil, biz ölçüyoruz. Son {gun} günün gerçek fiyat düşüşleri.',
+  'firsat.kategoriOgBaslik': '{ad} Fırsatları · Ohaaaa',
+  'firsat.kategoriOgAciklama': '{ad} kategorisinde ölçülmüş fiyat düşüşleri.',
+  'firsat.gosteremiyoruz': 'Fırsatları şu an gösteremiyoruz',
+  'firsat.yontem':
+    'Buradaki oranlar mağazanın üstü çizili fiyatından değil, son {gun} günde {vurgu} fiyatlardan çıkar. Bir ürünün listeye girmesi için en az iki ayrı fiyat ölçümü ve %{oran} üzerinde düşüş gerekir.',
+  'firsat.yontemVurgu': 'bizim kendi ölçtüğümüz',
+  'firsat.kategoriler': 'Fırsat kategorileri',
+  'firsat.urunAdet': '{adet} üründe',
+  'firsat.dususOlctuk': '{urunAdet} düşüş ölçtük',
+  'firsat.enBuyugu': 'en büyüğü %{oran}',
+  'firsat.paylasMetni': '{baslik}: {adet} üründe düşüş ölçtük',
+  'firsat.bosKategori': '{ad} kategorisinde şu an ölçülmüş bir düşüş yok',
+  'firsat.bosGenel': 'Şu an ölçülmüş bir fiyat düşüşü yok',
+  'firsat.bosAciklama':
+    'Fiyat düşüşünü ancak aynı ürünü birden fazla kez ölçtüğümüzde söyleyebiliriz. Yeterli ölçüm birikmeden buraya ürün koymak, olmayan bir indirimi varmış gibi göstermek olurdu.',
+  'firsat.urunleriKarsilastir': 'Ürünleri karşılaştır',
+  'firsat.fiyatTakibiNasil': 'Fiyat takibi nasıl işliyor?',
+  'firsat.altUyari':
+    'Fiyatlar son ölçüm anına aittir ve mağazalar tarafından her an değiştirilebilir. Ürün sayfasında o üründe gördüğümüz bütün fiyat geçmişini ve her mağazanın kargo dahil toplam maliyetini bulabilirsiniz. En düşük fiyat şu an {fiyat}.',
+
   // --- Hata durumları ---
   'hata.veriYok': 'Fiyatları şu an gösteremiyoruz',
 } as const;
