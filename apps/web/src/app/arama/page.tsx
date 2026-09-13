@@ -343,10 +343,16 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     await recordAgentOutcome(params.karar, {
       success: results.totalCount > 0,
       sonuc_sayisi: results.totalCount,
+      /* Tavana dayandiysa olcum ALT SINIR; analitikte kesinmis gibi durmasin. */
+      sonuc_sayisi_alt_sinir: results.totalCapped,
     });
   }
 
   const totalPages = Math.max(1, Math.ceil(results.totalCount / PAGE_SIZE));
+
+  /* Tavana dayanmis sayi alt sinirdir; kesinmis gibi gosterilmez. */
+  const toplamMetni =
+    formatCount(results.totalCount, contentTag) + (results.totalCapped ? '+' : '');
 
   /** Mevcut filtreleri koruyarak tek parametreyi değiştiren bağlantı üretir. */
   function buildHref(changes: Record<string, string | undefined>): string {
@@ -413,9 +419,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           )}
         </h1>
         <p className="mt-1.5 text-sm text-muted">
-          {t(contentLocale, 'sonuc.kanonikUrun', {
-            adet: formatCount(results.totalCount, contentTag),
-          })}
+          {t(contentLocale, 'sonuc.kanonikUrun', { adet: toplamMetni })}
           {results.results.length > 0 && (
             <>
               {' · '}

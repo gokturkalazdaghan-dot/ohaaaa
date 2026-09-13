@@ -18,6 +18,9 @@ import {
   collectByKeyset,
   eszamanliHaritala,
   listelemeSiralamasi,
+  SAYIM_TAVANI,
+  sayimAraligi,
+  tavanliSayim,
   offerSellerName,
   rankShowcase,
   rpcsizListelenebilir,
@@ -119,7 +122,17 @@ function onbellekle<A extends unknown[], R>(
 export interface SearchPage {
   results: SearchResult[];
   totalCount: number;
+  /**
+   * `totalCount` sayım tavanına dayandı mı?
+   *
+   * true ise gösterilen sayı bir ALT SINIRDIR: gerçek toplam bundan
+   * büyüktür. Arayüz bunu "1.000+" gibi göstermek zorunda -- tavana
+   * dayanmış bir sayıyı kesin sayıymış gibi basmak kullanıcıya yalan
+   * söylemek olurdu.
+   */
+  totalCapped: boolean;
 }
+
 
 /** Filtre seridinin gercek sinirlari (uydurma aralik gostermemek icin). */
 export interface SearchFacets {
@@ -387,10 +400,15 @@ async function listelemeOku(params: SearchParams): Promise<SearchPage> {
   const sayimSorgusu = (() => {
     let q = supabase
       .from('product_groups')
-      .select('id', { count: 'exact', head: true })
+      .select('id')
       .gt('offer_count', 0);
     if (kapsam) q = q.in('category_id', kapsam);
-    return q;
+    /*
+     * `range` üst sınırı DAHİL: en çok TAVAN+1 kayıt döner. TAVAN+1 gelmesi
+     * "tavandan fazlası var" demenin en ucuz yolu; ek bir sorgu gerekmiyor.
+     */
+    const { baslangic, bitis } = sayimAraligi(SAYIM_TAVANI);
+    return q.range(baslangic, bitis);
   })();
 
   const [satirCevabi, sayimCevabi] = await Promise.all([satirSorgusu, sayimSorgusu]);
@@ -408,6 +426,7 @@ async function listelemeOku(params: SearchParams): Promise<SearchPage> {
    * eksiğini göstermek yeğdir -- kullanıcı olmayan bir sayfaya tıklamaz.
    */
   let totalCount = offset + rows.length;
+  let totalCapped = false;
   if (sayimCevabi.error) {
     console.warn(
       JSON.stringify({
@@ -416,8 +435,10 @@ async function listelemeOku(params: SearchParams): Promise<SearchPage> {
         hata: sayimCevabi.error.message,
       }),
     );
-  } else if (typeof sayimCevabi.count === 'number') {
-    totalCount = sayimCevabi.count;
+  } else {
+    const olculen = tavanliSayim((sayimCevabi.data ?? []).length, SAYIM_TAVANI);
+    totalCount = olculen.toplam;
+    totalCapped = olculen.tavanaDayandi;
   }
 
   const teklifKimlikleri = rows
@@ -446,7 +467,7 @@ async function listelemeOku(params: SearchParams): Promise<SearchPage> {
     };
   });
 
-  return { results, totalCount };
+  return { results, totalCount, totalCapped };
 }
 
 // ---------------------------------------------------------------------------
@@ -569,7 +590,8 @@ async function aramaOku(params: SearchParams): Promise<SearchPage> {
       }),
     );
 
-    return { results, totalCount };
+    /* RPC `count(*) over ()` ile KESİN toplam veriyor: tavan uygulanmıyor. */
+    return { results, totalCount, totalCapped: false };
   }
 
   return searchDemo(params);
@@ -765,6 +787,8 @@ function searchDemo(params: SearchParams): SearchPage {
   return {
     results: results.slice(offset, offset + (params.limit ?? 24)).map(toSearchResult),
     totalCount: results.length,
+    /* Demo verisi bellekte: sayım kesin. */
+    totalCapped: false,
   };
 }
 
