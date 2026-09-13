@@ -1,7 +1,10 @@
 import Link from 'next/link';
 import { Fragment } from 'react';
 
+import { t } from '@ohaaaa/shared';
+
 import { getCategoryTree } from '@/data/catalog';
+import { getRequestLocale } from '@/lib/locale';
 
 /**
  * Üst çubuktaki kategori şeridi.
@@ -20,7 +23,10 @@ import { getCategoryTree } from '@/data/catalog';
  *      şeritte durmaları kullanıcıyı ürünsüz bir sayfaya göndermekti.
  */
 export async function CategoryNav() {
-  const tree = await getCategoryTree().catch(() => []);
+  const [tree, { contentLocale }] = await Promise.all([
+    getCategoryTree().catch(() => []),
+    getRequestLocale(),
+  ]);
   if (tree.length === 0) return null;
 
   return (
@@ -32,7 +38,7 @@ export async function CategoryNav() {
       menü, diğeri ana sayfanın kendi listesi.
     */
     <nav
-      aria-label="Kategori menüsü"
+      aria-label={t(contentLocale, 'ev.kategoriler')}
       className="hidden border-t border-line md:block"
     >
       {/*
@@ -50,7 +56,7 @@ export async function CategoryNav() {
             href="/firsatlar"
             className="block rounded-lg px-3 py-1.5 text-sm font-semibold text-brand transition-colors hover:bg-surface-2"
           >
-            Fırsatlar
+            {t(contentLocale, 'ortak.firsatlar')}
           </Link>
         </li>
         {tree.map((node) => (

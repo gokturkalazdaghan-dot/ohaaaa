@@ -12,7 +12,7 @@ import {
 import { VisualSearchButton } from './VisualSearchButton';
 import { VoiceSearchButton } from './VoiceSearchButton';
 
-import { formatMoney } from '@ohaaaa/shared';
+import { formatMoney, t, type Locale } from '@ohaaaa/shared';
 
 /**
  * Arama kutusunun ipuçları.
@@ -44,10 +44,17 @@ export function SearchBar({
   label,
   visualSearchEnabled = false,
   hints,
+  locale = 'tr',
 }: {
   size?: 'hero' | 'compact';
   /** Katalogdan türetilen ipuçları. Verilmezse ipucu şeridi çizilmez. */
   hints?: SearchBarHints;
+  /**
+   * Arayüz dili. Varsayılan 'tr': üst çubuktaki kompakt kutu her sayfada
+   * çiziliyor ve hepsine dil geçirmek yerine varsayılan bırakmak, dilin
+   * geçirildiği yerlerde DOĞRU, geçirilmediği yerlerde ESKİ davranış demek.
+   */
+  locale?: Locale;
   autoFocus?: boolean;
   /**
    * Görme modeli sunucuda yapılandırılmış mı. Sunucudan gelir; fotoğrafla
@@ -174,7 +181,12 @@ export function SearchBar({
       <form
         onSubmit={submit}
         role="search"
-        aria-label={label ?? (size === 'hero' ? 'Ürün ara' : 'Üst çubukta ürün ara')}
+        aria-label={
+        label
+          ?? (size === 'hero'
+            ? t(locale, 'arama.etiket')
+            : t(locale, 'arama.etiketUstCubuk'))
+      }
         className="relative"
       >
         {/* Gradyan çerçeve: odaklandığında parlar. */}
@@ -293,7 +305,7 @@ export function SearchBar({
         */
         hints?.example ? (
           <p className="mt-3 text-xs leading-relaxed text-subtle">
-            Cümleyle de arayabilirsin —{' '}
+            {t(locale, 'arama.cumleIpucu')} —{' '}
             <span className="text-muted">
               “{formatMoney(hints.example.priceCents, hints.example.currency)} altında{' '}
               {hints.example.brand} bul”
@@ -304,7 +316,7 @@ export function SearchBar({
 
       {isHero && (hints?.brands.length ?? 0) > 0 && (
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className="text-xs text-subtle">Çok ürünü olan markalar:</span>
+          <span className="text-xs text-subtle">{t(locale, 'arama.markaSeridi')}</span>
           {(hints?.brands ?? []).map((suggestion) => (
             <button
               key={suggestion}

@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 
 import {
   DEFAULT_LOCALE,
+  isTranslatedLocale,
   localeTag,
   resolveMarket,
   type Locale,
@@ -31,7 +32,18 @@ import {
  * o dil kendiliğinden yayına girer. Liste, "hangi dilleri gerçekten
  * konuşuyoruz" sorusunun tek dürüst cevabıdır.
  */
-const TRANSLATED: readonly Locale[] = ['tr'];
+/*
+ * ÇEVİRİSİ OLAN DİLLER ARTIK SÖZLÜKTEN OKUNUYOR, ELLE YAZILMIYOR.
+ *
+ * Önceki hâli sabit `['tr']` idi. Sabit liste ile gerçek sözlükler ayrı iki
+ * yer olduğu için biri güncellenip diğeri unutulabilirdi: İngilizce sözlük
+ * eklenir ama liste 'tr' kalırsa, çeviri var olduğu hâlde HİÇ gösterilmez --
+ * ve bunu kimse fark etmez.
+ *
+ * `isTranslatedLocale` doğrudan `messages/` altındaki sözlüklerden türüyor,
+ * yani soru "bu dilin metinleri gerçekten var mı" sorusuna veriyle cevap
+ * veriyor.
+ */
 
 export interface RequestLocale extends ResolvedMarket {
   /** Sayfanın GERÇEKTEN sunulduğu dil. */
@@ -44,7 +56,7 @@ export interface RequestLocale extends ResolvedMarket {
 
 /** Bir dilin çevirisi hazır mı? */
 export function isTranslated(locale: Locale): boolean {
-  return TRANSLATED.includes(locale);
+  return isTranslatedLocale(locale);
 }
 
 /**
