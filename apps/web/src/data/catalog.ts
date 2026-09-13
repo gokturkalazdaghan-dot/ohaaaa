@@ -681,7 +681,7 @@ export async function findGroupByGtin(
 // ---------------------------------------------------------------------------
 // Ürün detayı
 // ---------------------------------------------------------------------------
-export async function getProductGroup(slug: string): Promise<ProductGroupWithOffers | null> {
+async function urunGrubunuOku(slug: string): Promise<ProductGroupWithOffers | null> {
   const supabase = createAnonClient();
 
   if (supabase) {
@@ -1467,7 +1467,7 @@ export interface StoreProfile {
  * davranışı, aynı adresin bazen bir mağazayı bazen diğerini göstermesi
  * demek olurdu.
  */
-export async function getStoreBySlug(slug: string): Promise<StoreProfile | null> {
+async function magazayiOku(slug: string): Promise<StoreProfile | null> {
   const tasoron = await getVendorBySlug(slug);
   if (tasoron) {
     return {
@@ -1531,7 +1531,7 @@ export async function getStoreBySlug(slug: string): Promise<StoreProfile | null>
 }
 
 /** Bir mağazanın vitrinindeki ürünler -- taşeron ya da ortak mağaza. */
-export async function getStoreProducts(
+async function magazaVitriniOku(
   store: StoreProfile,
   options: { limit: number; offset: number },
 ): Promise<StorePage> {
@@ -1586,7 +1586,7 @@ export async function getActiveMerchants(): Promise<Array<{ slug: string }>> {
 }
 
 /** Ürün sayfasındaki "Bunlara da bakın" bloğu. */
-export async function getRelatedGroups(
+async function benzerGruplariOku(
   slug: string,
   limit = 4,
   context?: { categoryId: string | null; minPriceCents: number | null },
@@ -1654,7 +1654,7 @@ export async function getRelatedGroups(
  * temelinden çürütür. Demo modunda boş dizi döner ve arayüz bölümü hiç
  * göstermez.
  */
-export async function getPriceHistory(
+async function fiyatGecmisiniOku(
   groupId: string,
   days = 90,
 ): Promise<PricePoint[]> {
@@ -2279,6 +2279,97 @@ export async function getOhaaaaScore(productId: string): Promise<OhaaaaScore | n
 }
 
 
+/**
+ * Arama kutusunun ipuçları -- KATALOGDAN, elle yazılmış listeden değil.
+ *
+ * NEDEN DEĞİŞTİ
+ * Önceki hâl sabit bir liste kullanıyordu: iPhone 15, kulaklık, airfryer,
+ * koşu ayakkabısı, süpürge. Bunların HİÇBİRİ katalogda yok (katalog bugün
+ * %100 bilgisayar donanımı, ölçüldü) -- yani "Popüler" diye sunulan her
+ * öneri tıklanınca BOŞ sonuç veriyordu. Aynı satırda "5.000 TL altında..."
+ * yazıyordu; katalogda tek bir TRY fiyat yok, 35.742 teklifin tamamı GBP.
+ *
+ * Kullanıcıya olmayan ürünü önermek ve olmayan para biriminde fiyat örneği
+ * vermek, sitenin en görünür yerinde yanlış bilgi vermektir.
+ *
+ * Artık ipuçları gerçek katalogdan geliyor: `search_facets` marka sayaçlarını
+ * çoktan azalana doğru döndürüyor, yani en üsttekiler gerçekten en çok ürünü
+ * olan markalar ve hepsi tıklanınca sonuç veriyor.
+ */
+export interface SearchHints {
+  /** Katalogda gerçekten ürünü olan markalar, çoktan aza. */
+  brands: string[];
+  /** Örnek cümle için: katalogun GERÇEK para birimi ve gerçek bir fiyat. */
+  example: { brand: string; currency: string; priceCents: number } | null;
+}
+
+async function aramaIpuclariniOku(limit = 5): Promise<SearchHints> {
+  const supabase = createAnonClient();
+  if (!supabase) return { brands: [], example: null };
+
+  const { data, error } = await supabase.rpc('search_facets', {
+    p_query: null,
+    p_category_id: null,
+  });
+
+  if (error) {
+    /*
+     * İpucu yoksa şerit HİÇ çizilmiyor. Sabit listeye geri düşmek, tam da
+     * kaldırdığımız hatayı geri getirmek olurdu.
+     */
+    console.warn(
+      JSON.stringify({ level: 'warn', msg: 'Arama ipuclari okunamadi', hata: error.message }),
+    );
+    return { brands: [], example: null };
+  }
+
+  const satir = (data ?? {}) as Record<string, unknown>;
+  const markalar = ((satir.brands as Record<string, unknown>[] | null) ?? [])
+    .map((b) => String(b.name))
+    .filter((ad) => ad.trim().length > 0)
+    .slice(0, limit);
+
+  if (markalar.length === 0) return { brands: [], example: null };
+
+  /*
+   * Örnek eşik, O MARKANIN gerçekten var olan en ucuz teklifinden türetiliyor.
+   *
+   * Neden en ucuz: örnek cümle "şu fiyatın altında" diyor ve kullanıcı onu
+   * tıkladığında SONUÇ GÖRMELİ. En ucuz teklifin üstündeki herhangi bir eşik
+   * bunu garanti eder. Uydurma yuvarlak bir sayı yazmak (100, 5000) katalogla
+   * ilgisi olmayan bir eşik önermek olurdu -- tam olarak kaldırdığımız hata.
+   */
+  const ilkMarka = markalar[0] as string;
+  const { data: ornek } = await supabase
+    .from('products')
+    .select('price_cents, currency')
+    .eq('brand', ilkMarka)
+    .eq('status', 'active')
+    .gt('stock', 0)
+    .order('price_cents', { ascending: true })
+    .limit(1);
+
+  const teklif = (ornek ?? [])[0];
+  if (!teklif) return { brands: markalar, example: null };
+
+  /*
+   * En ucuz tekliften bir üst "yuvarlak" basamağa çıkılıyor (10 / 50 / 100 /
+   * 500 / 1.000 birim). Böylece eşik hem okunabilir hem de en az bir ürünü
+   * KESİNLIKLE kapsıyor.
+   */
+  const birim = Math.max(1, Math.ceil(Number(teklif.price_cents) / 100));
+  const basamak = [10, 50, 100, 500, 1000, 5000].find((b) => b > birim) ?? birim * 2;
+
+  return {
+    brands: markalar,
+    example: {
+      brand: ilkMarka,
+      currency: String(teklif.currency).trim(),
+      priceCents: basamak * 100,
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Önbelleğe alınmış katalog okumaları
 // ---------------------------------------------------------------------------
@@ -2308,6 +2399,24 @@ export const getFlashDeals = onbellekle('kampanyalar', kampanyalariOku, ONBELLEK
 
 /** Vitrin basamakları. */
 export const getShowcaseTiers = onbellekle('vitrin', vitriniOku, ONBELLEK.vitrin);
+
+/** Bir kanonik ürünün tam kaydı (teklifleriyle). */
+export const getProductGroup = onbellekle('urun-grubu', urunGrubunuOku, ONBELLEK.listeleme);
+
+/** Adrese göre mağaza -- taşeron ya da ortak mağaza. */
+export const getStoreBySlug = onbellekle('magaza', magazayiOku, ONBELLEK.magazalar);
+
+/** Bir mağazanın vitrinindeki ürünler. */
+export const getStoreProducts = onbellekle('magaza-vitrini', magazaVitriniOku, ONBELLEK.listeleme);
+
+/** Ürün sayfasındaki "Bunlara da bakın" bloğu. */
+export const getRelatedGroups = onbellekle('benzer-urunler', benzerGruplariOku, ONBELLEK.listeleme);
+
+/** Bir grubun fiyat geçmişi. */
+export const getPriceHistory = onbellekle('fiyat-gecmisi', fiyatGecmisiniOku, ONBELLEK.listeleme);
+
+/** Arama kutusunun katalogdan türetilen ipuçları. */
+export const getSearchHints = onbellekle('arama-ipuclari', aramaIpuclariniOku, ONBELLEK.vitrin);
 
 /** Serbest metin ARAMASI OLMAYAN listeleme -- kategori, sıralama, sayfalama. */
 const listelemeOnbellekli = onbellekle('listeleme', aramaOku, ONBELLEK.listeleme);
