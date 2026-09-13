@@ -115,6 +115,26 @@ jobs:
       - name: Birim testleri
         run: npm test
 
+      # Yerellestirme paritesi TIP SISTEMINE GORUNMEZ bir degismezdir:
+      # `MessageKey` anahtar esitligini derleme zamaninda zorluyor ama
+      # metin icindeki `{yerTutucu}` adlarini gormuyor. Turkce `{vurgu}`
+      # yazip Ingilizcede `{highlight}` yazmak DERLENIR ve kullanicıya
+      # ici doldurulmamis metin gosterir. Olculdu: 135 anahtarin 52'si
+      # yer tutucu tasiyor.
+      #
+      # Kontrol bir betik degil, kayitli bir AJAN uzerinden yapiliyor:
+      # ajan -> gercek arac -> bagimsiz dogrulayici -> denetci zinciri
+      # burada gercekten calisiyor.
+      - name: Yerellestirme paritesi (ajan)
+        run: npm run agent:locale
+
+      # Sozlesme dogrulamasi ayni uc kontrolu calistiriyor ama BETIK OLARAK
+      # DEGIL: kayitli bir ajan -> izin listesine alinmis run_check araci ->
+      # bagimsiz dogrulayici -> denetci zinciri uzerinden. Zincirin kendisi
+      # de boylece her derlemede gercekten calisiyor.
+      - name: Sozlesme dogrulamasi (ajan)
+        run: npm run agent:contract
+
       # SQL paketi pgTAP iddialarıyla yazılmıştır ve `postgres:16` imajı bunu
       # İÇERMEZ. Eksikliği sessiz değil, ölümcül: 00_supabase_shim.sql'deki
       # `create extension pgtap` düşer ve tüm SQL adımı ilk saniyede biter.

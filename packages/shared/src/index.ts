@@ -21,3 +21,4 @@ export * from './messages/index.js';
 export * from './concurrency.js';
 export * from './listingSort.js';
 export * from './listingCount.js';
+export * from './governance/index.js';
