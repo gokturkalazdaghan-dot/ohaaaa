@@ -28,12 +28,15 @@
 --   * Site zaten >120 sn yanıt veriyor; kısa kilit, mevcut durumdan iyidir.
 -- lock_timeout kilit kuyruğu oluşturmayı engeller: alamazsa çekilir.
 --
+-- KİLİT SEMANTİĞİ (önceki yorum yanlıştı, düzeltildi)
+-- Düz CREATE INDEX tabloda ACCESS EXCLUSIVE DEĞİL, SHARE kilidi alır:
+-- YAZMALAR (alım hattı) bloke olur, OKUMALAR devam eder. Yani hata veren
+-- katalog SELECT'leri kurulum boyunca çalışmayı sürdürür. ACCESS EXCLUSIVE
+-- DROP INDEX, ALTER TABLE ve CONCURRENTLY olmayan REINDEX'in aldığı kilittir.
+--
 -- statement_timeout NEDEN 3 DAKİKA (15 değil)
 -- İndeks ~3,6 MB; sağlıklı bir örnekte saniyenin altında biter. Tavan,
--- sorunu gizlemek için değil, KİLİDİ BIRAKMAK için var: bu düz CREATE
--- INDEX süresince product_groups üzerinde ACCESS EXCLUSIVE kilit durur ve
--- katalog tamamen bloke olur. 15 dakikalık bir tavan, teşhis değeri
--- katmadan kataloğu 15 dakika kilitli tutabilirdi.
+-- sorunu gizlemek için değil, yazma bloğunu sınırlamak için var.
 -- 3 dakikayı aşması BAŞLI BAŞINA BULGUDUR: 3,6 MB'lık bir yapı bu sürede
 -- bitmiyorsa sorun indeks değildir. O durumda tavanı YÜKSELTME -- DUR ve
 -- bildir.
