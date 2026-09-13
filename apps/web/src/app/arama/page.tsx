@@ -22,6 +22,7 @@ import { Pagination } from '@/components/Pagination';
 import { ProductCard } from '@/components/ProductCard';
 import {
   findGroupByGtin,
+  getCategories,
   getSearchFacets,
   searchProducts,
   type SearchFacets,
@@ -249,27 +250,35 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
   const freeShipping = params.kargo === 'bedava';
 
-  // Filtre seridi ikincildir: alinamazsa arama yine calismali. Bu yuzden
-  // aramadan ayri ve hata firlatmayan bir cagri.
-  const facets: SearchFacets = await getSearchFacets({
-    query: q,
-    categoryId: undefined,
-    brands: selectedBrands,
-    freeShipping,
-  }).catch(() => ({
-    minPriceCents: null,
-    maxPriceCents: null,
-    categories: [],
-    brands: [],
-    freeShippingCount: 0,
-  }));
-
-  const activeCategory = kategori ? facets.categories.find((c) => c.slug === kategori) : undefined;
+  /*
+   * FİLTRE ŞERİDİ VE SONUÇLAR ARTIK AYNI ANDA OKUNUYOR.
+   *
+   * Önceki hâlde önce `getSearchFacets`, sonra `searchProducts` bekleniyordu
+   * -- ikisi de aynı pahalı eşleşme taramasını yapıyor. Ölçüldü (üretim,
+   * /arama?q=laptop): toplam 6,8 saniye; yani süre neredeyse tam olarak
+   * ikiye bölünüyordu.
+   *
+   * Sıralı olmalarının TEK sebebi, `categoryId`'nin şerit sonucundan
+   * okunmasıydı: adresteki `?kategori=<slug>` bir kimliğe çevrilmeliydi.
+   * Ama o eşleme taksonomiden geliyor ve taksonomi ZATEN önbellekli
+   * (`getCategories`, 1 saat) -- yani bağımlılık gerçek değil, tesadüfiydi.
+   *
+   * Kategori listesi okunamazsa şerit yine denenir: adreste kategori yoksa
+   * bağımlılık da yoktur.
+   */
+  const taksonomi = await getCategories().catch(() => []);
+  const activeCategory = kategori
+    ? taksonomi.find((category) => category.slug === kategori)
+    : undefined;
 
   let results: Awaited<ReturnType<typeof searchProducts>>;
+  let facets: SearchFacets;
 
   try {
-    results = await searchProducts({
+    // Filtre seridi ikincildir: alinamazsa arama yine calismali. Bu yuzden
+    // kendi `catch`'i var ve sonuclarin hatasini ETKILEMEZ.
+    const [aramaSonucu, seritSonucu] = await Promise.all([
+      searchProducts({
       query: q,
       categoryId: activeCategory?.id,
       minPriceCents: lowTl === undefined ? undefined : lowTl * 100,
@@ -279,8 +288,23 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       offset: (page - 1) * PAGE_SIZE,
       brands: selectedBrands,
       freeShipping,
-    });
+      }),
+      getSearchFacets({
+        query: q,
+        categoryId: undefined,
+        brands: selectedBrands,
+        freeShipping,
+      }).catch(() => ({
+        minPriceCents: null,
+        maxPriceCents: null,
+        categories: [],
+        brands: [],
+        freeShippingCount: 0,
+      })),
+    ]);
 
+    results = aramaSonucu;
+    facets = seritSonucu;
   } catch (error) {
     console.error(
       JSON.stringify({
