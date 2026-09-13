@@ -39,7 +39,28 @@ import { isAffiliateOnly, siteUrl } from '@/lib/env';
  */
 const MAX_PRODUCTS = 45_000;
 
-export const revalidate = 3600;
+/*
+ * SİTE HARİTASI BUILD ANINDA ÜRETİLMEZ.
+ *
+ * Önceki hâli `revalidate = 3600` idi; bu, Next'in `/sitemap.xml`'i
+ * DERLEME SIRASINDA prerender etmesi demekti. Katalog o an okunamazsa
+ * (üretimde oluyor: `anon` rolünün 3 sn'lik deyim zaman aşımı) aşağıdaki
+ * "eksik harita yayımlama" koruması bir `throw` üretiyor ve prerender
+ * sırasındaki throw BÜTÜN BUILD'i düşürüyordu -- Vercel'de ölçüldü:
+ *
+ *   Error occurred prerendering page "/sitemap.xml"
+ *   Export encountered an error on /sitemap.xml/route, exiting the build.
+ *
+ * Yani istek anı için doğru olan davranış (5xx dön, Google bir önceki
+ * sağlıklı haritayı korusun) derleme anında ölümcül bir hataya dönüşüyordu.
+ *
+ * `force-dynamic` ile harita yalnızca İSTEK ANINDA üretiliyor: koruma
+ * aynen yerinde kalıyor ama artık bir dağıtımı engelleyemiyor.
+ *
+ * BEDELİ: saatlik ISR önbelleği yok, her istekte hesaplanıyor. Site
+ * haritasını çeken taraf arama motoru botları; çağrı sıklığı düşük.
+ */
+export const dynamic = 'force-dynamic';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
