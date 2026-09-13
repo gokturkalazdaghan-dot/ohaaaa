@@ -123,7 +123,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
             İçinde tek ürün olmayan bir sayfayı site haritasıyla taramaya
             davet etmek, tarama bütçesini ince içeriğe harcamaktır. Sayfa
             silinmiyor -- yalnızca davet edilmiyor (ve `noindex` alıyor). */
-    const tree = await getCategoryTree();
+    /*
+     * KATEGORİLER KENDİ HATASINI TAŞIR. Taksonomi okunamazsa ürün
+     * adreslerini de düşürmek için bir sebep yok -- onlar haritanın asıl
+     * değerli kısmı. Boş liste sessiz değil: aşağıda loglanıyor.
+     */
+    const tree = await getCategoryTree().catch((error: unknown) => {
+      console.warn(
+        JSON.stringify({
+          level: 'warn',
+          msg: 'Site haritasi icin kategori agaci okunamadi; kategori adresleri atlandi',
+          hata: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      return [] as Awaited<ReturnType<typeof getCategoryTree>>;
+    });
     const categories = tree.flatMap((node) => [node.category, ...node.children.map((c) => c.category)]);
 
     const categoryPages: MetadataRoute.Sitemap = categories.flatMap((category) => [
@@ -153,7 +167,40 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
        `getSitemapProducts` grupları doğrudan ve keyset sayfalamayla okuyor;
        sayfa maliyeti konumdan bağımsız (~38 ms). */
-    const products = await getSitemapProducts(MAX_PRODUCTS);
+    const { products, complete } = await getSitemapProducts(MAX_PRODUCTS);
+
+    /*
+     * YALAN HARİTA YAYIMLANMAZ.
+     *
+     * Ölçülen arıza: katalog okunamadığında harita 34.531 adresten 11
+     * adrese düşüyor ve HTTP 200 ile yayımlanıyordu. Google için bunun
+     * anlamı "bu sitede 11 sayfa var" -- yani 34.500 adres için kaldırma
+     * sinyali. Sessiz bir 200, hatanın kendisinden daha zararlı.
+     *
+     * AYRIM ÖNEMLİ:
+     *   complete && 0 ürün  → katalog GERÇEKTEN boş, statik harita doğru
+     *   !complete && 0 ürün → okuma düştü, elimizde hiçbir şey yok → 5xx
+     *   !complete && N ürün → elimizdeki N adres doğru, yayımlanır (+ uyarı)
+     *
+     * 5xx, Google'a "sonra tekrar dene" der ve BİR ÖNCEKİ sağlıklı
+     * haritayı yerinde bırakır. Aradığımız güvenli davranış bu.
+     */
+    if (!complete && products.length === 0) {
+      throw new Error(
+        'Site haritasi urun listesi okunamadi ve elde hic adres yok; eksik harita yayimlanmiyor',
+      );
+    }
+
+    if (!complete) {
+      console.warn(
+        JSON.stringify({
+          level: 'warn',
+          msg: 'Site haritasi EKSIK yayimlaniyor',
+          yayimlanan_urun: products.length,
+          ust_sinir: MAX_PRODUCTS,
+        }),
+      );
+    }
 
     const productPages: MetadataRoute.Sitemap = products.map((product) => ({
       url: `${siteUrl}/urun/${product.slug}`,
@@ -167,7 +214,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // --- Mağaza vitrinleri ---------------------------------------------------
     // Sayıları sınırlı ve içerikleri kararlı; "X mağazası fiyatları" gibi
     // gerçek aramalara denk gelirler.
-    const vendors = await getVendors().catch(() => []);
+    const vendors = await getVendors().catch((error: unknown) => {
+      console.warn(
+        JSON.stringify({
+          level: 'warn',
+          msg: 'Site haritasi icin tasoronlar okunamadi',
+          hata: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      return [] as Awaited<ReturnType<typeof getVendors>>;
+    });
 
     /* Ortak mağazalar da aynı rotayı kullanıyor. Eskiden yalnızca taşeronlar
        listeleniyordu ve o tablo üretimde boş: kataloğun tamamını sağlayan
@@ -200,18 +256,44 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.6,
     }));
 
-    return [...staticPages, ...marketplacePages, ...categoryPages, ...vendorPages, ...productPages];
+    const harita = [
+      ...staticPages,
+      ...marketplacePages,
+      ...categoryPages,
+      ...vendorPages,
+      ...productPages,
+    ];
+
+    console.info(
+      JSON.stringify({
+        level: 'info',
+        msg: 'Site haritasi uretildi',
+        toplam_url: harita.length,
+        urun: productPages.length,
+        kategori: categoryPages.length,
+        magaza: vendorPages.length,
+        eksik: !complete,
+      }),
+    );
+
+    return harita;
   } catch (error) {
-    // Katalog okunamazsa BOŞ harita döndürmek, Google'a "sitede sayfa yok"
-    // demektir. Statik sayfalarla dönmek çok daha güvenlidir.
+    /*
+     * BURAYA DÜŞMEK ARTIK YAYIMLAMAK DEĞİL, REDDETMEKTİR.
+     *
+     * Önceki hâl statik sayfalarla 200 dönüyordu; bu, Google'a kataloğun
+     * silindiğini bildiren sessiz bir yalandı (ölçüldü: 34.531 → 11 URL).
+     * Hata yukarı bırakılıyor, Next 5xx üretiyor ve arama motoru bir
+     * önceki sağlıklı haritayı korumaya devam ediyor.
+     */
     console.error(
       JSON.stringify({
         level: 'error',
-        msg: 'Site haritası ürünleri okunamadı; yalnızca statik sayfalar yayımlandı',
+        msg: 'Site haritasi uretilemedi; EKSIK HARITA YAYIMLANMADI (5xx)',
         error: error instanceof Error ? error.message : String(error),
       }),
     );
 
-    return [...staticPages, ...marketplacePages];
+    throw error;
   }
 }

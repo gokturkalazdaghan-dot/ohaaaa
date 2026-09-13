@@ -16,6 +16,7 @@ import { unstable_cache } from 'next/cache';
 import {
   buildCategoryTree,
   collectByKeyset,
+  eszamanliHaritala,
   offerSellerName,
   rankShowcase,
 } from '@ohaaaa/shared';
@@ -1025,37 +1026,35 @@ async function kategoriAgaciniOku(): Promise<CategoryNode<Category>[]> {
   }
 
   const sayimlar = new Map<string, number>();
-  await Promise.all(
-    kategoriler.map(async (kategori) => {
-      const { count, error } = await supabase
-        .from('product_groups')
-        .select('id', { count: 'exact', head: true })
-        .eq('category_id', kategori.id)
-        .gt('offer_count', 0);
+  await eszamanliHaritala(kategoriler, SAYIM_ESZAMANLILIK, async (kategori) => {
+    const { count, error } = await supabase
+      .from('product_groups')
+      .select('id', { count: 'exact', head: true })
+      .eq('category_id', kategori.id)
+      .gt('offer_count', 0);
 
-      if (error) {
-        /*
-         * Sayılamayan kategori SIFIR sayılmaz -- bu, ulaşılamayan bir
-         * kategoriyi "boş" ilan edip menüden düşürmek olurdu. Bilinmeyen
-         * yerine 1 yazmak da uydurma olurdu; kategori listede kalsın diye
-         * gerçek sayının bilinmediği açıkça loglanıyor ve kategori
-         * görünür bırakılıyor.
-         */
-        console.warn(
-          JSON.stringify({
-            level: 'warn',
-            msg: 'Kategori grup sayisi okunamadi',
-            kategori: kategori.slug,
-            hata: error.message,
-          }),
-        );
-        sayimlar.set(kategori.id, 1);
-        return;
-      }
+    if (error) {
+      /*
+       * Sayılamayan kategori SIFIR sayılmaz -- bu, ulaşılamayan bir
+       * kategoriyi "boş" ilan edip menüden düşürmek olurdu. Bilinmeyen
+       * yerine 1 yazmak da uydurma olurdu; kategori listede kalsın diye
+       * gerçek sayının bilinmediği açıkça loglanıyor ve kategori
+       * görünür bırakılıyor.
+       */
+      console.warn(
+        JSON.stringify({
+          level: 'warn',
+          msg: 'Kategori grup sayisi okunamadi',
+          kategori: kategori.slug,
+          hata: error.message,
+        }),
+      );
+      sayimlar.set(kategori.id, 1);
+      return;
+    }
 
-      sayimlar.set(kategori.id, count ?? 0);
-    }),
-  );
+    sayimlar.set(kategori.id, count ?? 0);
+  });
 
   return buildCategoryTree(kategoriler, sayimlar);
 }
@@ -2605,6 +2604,24 @@ export interface SitemapProduct {
 }
 
 /**
+ * Site haritası ürün listesi VE listenin eksiksiz olup olmadığı.
+ *
+ * NEDEN BAYRAK GEREKİYOR
+ * "Boş liste" iki AYRI şeyin sonucu olabilir: katalog gerçekten boştur, ya
+ * da okuma başarısız olmuştur. İkisi aynı değere düşerse çağıran taraf
+ * ayırt edemez -- ve üretimde tam olarak bu oldu: katalog okunamayınca
+ * harita 34.531 adresten 11 adrese düştü ve Google'a HTTP 200 ile
+ * "sitede 11 sayfa var" denildi.
+ *
+ * `complete=false`, "elimdeki kadarı doğru ama TAMAMI bu değil" demektir.
+ */
+export interface SitemapProductPage {
+  products: SitemapProduct[];
+  /** Liste sonuna kadar okunabildi mi? */
+  complete: boolean;
+}
+
+/**
  * Bir okumada kaç grup isteniyor.
  *
  * 1.000 keyset sayfası ~38 ms (ölçüldü, konumdan BAĞIMSIZ). Daha büyük
@@ -2612,6 +2629,19 @@ export interface SitemapProduct {
  * bellek tepe noktasını büyütür; 1.000 ikisinin arasında duruyor.
  */
 const HARITA_SAYFA_BOYUTU = 1000;
+
+/**
+ * Aynı anda açılacak en fazla sayım sorgusu.
+ *
+ * ÖLÇÜLDÜ (üretim): eşzamanlı 2 istekte bozulma yok, eşzamanlı 4 istekte
+ * hepsi birden düşüyor (yanıt yok). Kategori ağacı 9, vitrin ise mağaza
+ * sayısı kadar sayım açıyordu -- ikisi de tavanın çok üstünde.
+ *
+ * Sayımların kendisi kaldırılamıyor: kategori sayıları ana sayfada
+ * KULLANICIYA GÖSTERİLİYOR, vitrin sıralaması da onlara dayanıyor.
+ * Kaldırılabilecek olan, hepsini aynı anda açmak.
+ */
+const SAYIM_ESZAMANLILIK = 2;
 
 /**
  * Site haritası için TÜM ürün adresleri.
@@ -2636,39 +2666,83 @@ const HARITA_SAYFA_BOYUTU = 1000;
  * sayfa sınırında kayıt atlanmaz veya iki kez gelmez. `offer_count` ile
  * sıralamak cazipti ama eşit değerler sayfalar arasında kayar.
  */
-export async function getSitemapProducts(max = 45_000): Promise<SitemapProduct[]> {
+export async function getSitemapProducts(max = 45_000): Promise<SitemapProductPage> {
   const supabase = createAnonClient();
 
   if (!supabase) {
-    return demoProductGroups
-      .filter((grup) => grup.offerCount > 0)
-      .map((grup) => ({ slug: grup.slug, offerCount: grup.offerCount }));
+    return {
+      products: demoProductGroups
+        .filter((grup) => grup.offerCount > 0)
+        .map((grup) => ({ slug: grup.slug, offerCount: grup.offerCount })),
+      complete: true,
+    };
   }
 
-  return collectByKeyset<SitemapProduct>({
+  /*
+   * KISMİ BAŞARISIZLIK LİSTEYİ ÇÖPE ATMAZ.
+   *
+   * Önceki hâl bir sayfa okunamadığında hata fırlatıyordu; `sitemap.ts`
+   * içindeki dış `catch` de ürün/kategori/mağaza adreslerinin TAMAMINI
+   * atıp yalnızca statik sayfaları yayımlıyordu. Tek bir sayfanın zaman
+   * aşımı, 34.500 adresin tamamını düşürüyordu.
+   *
+   * Artık: sayfa bir kez YENİDEN DENENİYOR, yine olmazsa sayfalama
+   * duruyor ve o ana kadar toplanan adresler `complete=false` ile geri
+   * veriliyor. Eksik listeyi yayımlayıp yayımlamama kararı çağırana ait --
+   * o karar `sitemap.ts` içinde ve orada açıkça yazılı.
+   */
+  let eksik = false;
+
+  const products = await collectByKeyset<SitemapProduct>({
     max,
     pageSize: HARITA_SAYFA_BOYUTU,
     key: (urun) => urun.slug,
     fetchPage: async (sonSlug, limit) => {
-      let sorgu = supabase
-        .from('product_groups')
-        .select('slug, offer_count')
-        .gt('offer_count', 0)
-        .order('slug')
-        .limit(limit);
+      /*
+       * SORGU HER DENEMEDE YENİDEN KURULUYOR.
+       *
+       * Aynı PostgREST builder nesnesini ikinci kez `await` etmek güvenli
+       * değil: nesne tek kullanımlık bir istek tanımı, yeniden çalışacağı
+       * garanti edilmiyor. Fabrika biçimi, yeniden denemenin gerçekten
+       * yeni bir istek açmasını garanti ediyor.
+       */
+      const sorguKur = () => {
+        const temel = supabase
+          .from('product_groups')
+          .select('slug, offer_count')
+          .gt('offer_count', 0)
+          .order('slug')
+          .limit(limit);
 
-      if (sonSlug !== null) sorgu = sorgu.gt('slug', sonSlug);
+        return sonSlug === null ? temel : temel.gt('slug', sonSlug);
+      };
 
-      const { data, error } = await sorgu;
+      let { data, error } = await sorguKur();
+
+      /*
+       * TEK YENİDEN DENEME. Ölçülen arıza biçimi anlık: aynı sorgu bir
+       * denemede zaman aşımına uğrayıp sonrakinde dönebiliyor. Sınırsız
+       * yeniden deneme ise yükü artırıp durumu kötüleştirirdi.
+       */
+      if (error) {
+        ({ data, error } = await sorguKur());
+      }
 
       if (error) {
-        /*
-         * YARIM LİSTE SESSİZCE YAYIMLANMAZ. Bir sayfa okunamazsa o ana kadar
-         * toplananı döndürmek, Google'a "kalan ürünler artık yok" demenin
-         * yumuşak hâli olurdu. Hata yukarı çıkıyor ve site haritası kendi
-         * yedeğine (statik sayfalar) düşüyor -- eksik değil, dürüst.
-         */
-        throw new Error(`Site haritasi urunleri okunamadi: ${error.message}`);
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            msg: 'Site haritasi urun sayfasi okunamadi; liste EKSIK kaliyor',
+            sonSlug,
+            toplanan: 'sayfalama durduruldu',
+            hata: error.message,
+          }),
+        );
+
+        // Boş sayfa döndürmek `collectByKeyset` döngüsünü sonlandırır;
+        // bayrak sayesinde bu "liste bitti" ile karışmıyor.
+        eksik = true;
+        return [];
       }
 
       return (data ?? []).map((satir) => ({
@@ -2677,6 +2751,8 @@ export async function getSitemapProducts(max = 45_000): Promise<SitemapProduct[]
       }));
     },
   });
+
+  return { products, complete: !eksik };
 }
 
 // ---------------------------------------------------------------------------
@@ -2846,16 +2922,14 @@ async function vitriniOku(options?: {
    * Görseli olmayan grup vitrine alınmaz: boş bir kare vitrine zarar verir.
    */
   const [sayimlar, grupCevabi] = await Promise.all([
-    Promise.all(
-      magazalar.map(async (magaza) => {
-        const { count } = await supabase
-          .from('products')
-          .select('id', { count: 'exact', head: true })
-          .eq('merchant_id', String(magaza.id))
-          .eq('status', 'active');
-        return { magaza, adet: count ?? 0 };
-      }),
-    ),
+    eszamanliHaritala(magazalar, SAYIM_ESZAMANLILIK, async (magaza) => {
+      const { count } = await supabase
+        .from('products')
+        .select('id', { count: 'exact', head: true })
+        .eq('merchant_id', String(magaza.id))
+        .eq('status', 'active');
+      return { magaza, adet: count ?? 0 };
+    }),
     supabase
       .from('product_groups')
       .select('id, slug, title, brand, image_url, min_price_cents, offer_count')
