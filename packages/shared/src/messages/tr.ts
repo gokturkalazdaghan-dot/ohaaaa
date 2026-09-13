@@ -20,6 +20,7 @@ export const TR = {
   'ortak.tumu': 'Tümü',
   'ortak.firsatlar': 'Fırsatlar',
   'ortak.giris': 'Giriş',
+  'ortak.sayfaYolu': 'Sayfa yolu',
 
   // --- Arama kutusu ---
   'arama.yerTutucuHero': 'Ne arıyorsun?',
@@ -29,6 +30,12 @@ export const TR = {
   'arama.dugme': 'Ara',
   'arama.markaSeridi': 'Çok ürünü olan markalar:',
   'arama.cumleIpucu': 'Cümleyle de arayabilirsin',
+  'arama.sonuclariBaslik': '“{q}” arama sonuçları',
+  'arama.baslikOnek': 'Arama:',
+  'arama.metaAciklamaSorgulu': '{q} için tüm mağazalardaki fiyatları karşılaştırın.',
+  'arama.metaAciklamaGenel':
+    'Ohaaaa’daki tüm ürünleri keşfedin ve mağazalar arası fiyatları karşılaştırın.',
+  'arama.barkodYok': '{barkod} barkodlu ürün henüz katalogda yok. Ürün adını yazarak arayabilirsiniz.',
 
   // --- Ana sayfa ---
   'ev.basligiVurgu': 'OHA!',
@@ -61,6 +68,18 @@ export const TR = {
   'kategori.enCokMagaza': 'En çok mağaza',
   'kategori.artanFiyat': 'Artan fiyat',
   'kategori.azalanFiyat': 'Azalan fiyat',
+  'kategori.fiyatlariSayfa': '{ad} Fiyatları — sayfa {sayfa}',
+  'kategori.metaAciklama':
+    '{ad} kategorisindeki ürünleri onlarca mağazada karşılaştırın. Kargo dahil en iyi toplam fiyatı görün, en ucuz satıcıyı tek bakışta bulun.',
+  'kategori.ogBaslik': '{ad} Fiyatları · Ohaaaa',
+  'kategori.ogAciklama': '{ad} kategorisinde mağaza fiyatlarını karşılaştırın.',
+  'kategori.ozetSayim': '{ad} kategorisinde {urunSayisi} karşılaştırıyoruz{sayfaBilgisi}.',
+  'kategori.urunAdet': '{adet} ürünü',
+  'kategori.sayfaBilgisi': ' (sayfa {sayfa}/{toplam})',
+  'kategori.buSayfada': 'Bu sayfada {teklifSayisi} var.',
+  'kategori.magazaTeklifi': '{adet} mağaza teklifi',
+  'kategori.enDusukFiyat': 'Fiyatlar {fiyat} seviyesinden başlıyor.',
+  'kategori.siralamaAciklama': 'Sıralama kargo dahil toplam maliyete göre yapılır.',
 
   // --- Ürün ---
   'urun.bulunamadi': 'Ürün bulunamadı',
@@ -72,6 +91,17 @@ export const TR = {
   'urun.kargoDahilAciklama':
     'Kargo dahil toplam maliyete göre sıralanmıştır — gerçekte ödeyeceğiniz tutar.',
   'urun.satisinTarafiDegiliz': 'Satışın tarafı değiliz',
+  'urun.metaFiyatEki': ' — {fiyat} seviyesinden başlayan fiyatlarla',
+  'urun.metaAciklama':
+    '{ad}{fiyatEki}. {adet} mağazadaki fiyatları karşılaştırın, kargo dahil en iyi toplam fiyatı görün.',
+  'urun.paylasMetni': '{ad} — {adet} mağazada, kargo dahil en düşük {fiyat}',
+  'urun.kacMagazada': 'Bu ürün {adet} mağazada var',
+  'urun.dogruMagazaSecerek': 'Doğru mağazayı seçerek',
+  'urun.kazanin': '{tutar} kazanın',
+  'urun.kargoDahilSiralamaAciklama':
+    'Teklifler etiket fiyatına değil, kargoyla birlikte ödeyeceğiniz toplama göre sıralanır.',
+  'urun.satisinTarafiDegilizAciklama':
+    'Sözleşme sizinle mağaza arasında kurulur; fatura, garanti ve iade süreçleri mağazaya aittir.',
 
   // --- Mağaza ---
   'magaza.bulunamadi': 'Mağaza bulunamadı',
@@ -79,6 +109,14 @@ export const TR = {
   'magaza.urunYok': 'Bu mağazanın yayında ürünü yok.',
   'magaza.tumUrunlereBak': 'Tüm ürünlere bakın',
   'magaza.fiyatlariVeUrunleri': '{ad} Ürünleri ve Fiyatları',
+  'magaza.sayfaBasligi': '{ad} — sayfa {sayfa}',
+  'magaza.metaAciklama':
+    '{ad} mağazasının Ohaaaa’daki ürünleri. Kargo dahil toplam fiyatı diğer mağazalarla karşılaştırın.',
+  'magaza.ogBaslik': '{ad} · Ohaaaa',
+  'magaza.ogAciklama': '{ad} ürünlerini kargo dahil fiyatla karşılaştırın.',
+  'magaza.puan': '{puan} puan ({adet} değerlendirme)',
+  'magaza.uyari':
+    'Ohaaaa satışın tarafı değildir. Ürünlerin kargo dahil toplam fiyatını diğer mağazalarla karşılaştırmak için ürün sayfalarına bakın.',
 
   // --- Arama sonuçları ---
   'sonuc.tumUrunler': 'Tüm ürünler',
@@ -87,6 +125,27 @@ export const TR = {
   'sonuc.henuzUrunYok': 'Henüz ürün yok',
   'sonuc.calismiyor': 'Arama şu an çalışmıyor',
   'sonuc.ucretsizKargo': 'Ücretsiz kargo',
+  'sonuc.enUygun': 'En uygun',
+  'sonuc.kanonikUrun': '{adet} kanonik ürün',
+  'sonuc.buSayfadaTeklif': '{adet} mağaza teklifi bu sayfada',
+  'sonuc.sayfaBilgisi': 'sayfa {sayfa}/{toplam}',
+  'sonuc.sorguIcinYok': '“{q}” için sonuç yok',
+  'sonuc.yazimIpucu':
+    'Yazımı kontrol edin veya daha genel bir terim deneyin. Türkçe karakter şart değil — “kulaklik” de “kulaklık” sonuçlarını getirir.',
+
+  // --- Filtreler ---
+  'filtre.filtrele': 'Filtrele',
+  'filtre.kategori': 'Kategori',
+  'filtre.kategoriFiltresi': 'Kategori filtresi',
+  'filtre.kargo': 'Kargo',
+  'filtre.kargoFiltresi': 'Kargo filtresi',
+  'filtre.marka': 'Marka',
+  'filtre.markaFiltresi': 'Marka filtresi',
+  'filtre.fiyat': 'Fiyat',
+  'filtre.uygula': 'Uygula',
+  'filtre.temizle': 'Temizle',
+  'filtre.enAzFiyat': 'En az fiyat ({birim})',
+  'filtre.enFazlaFiyat': 'En fazla fiyat ({birim})',
 
   // --- Hata durumları ---
   'hata.veriYok': 'Fiyatları şu an gösteremiyoruz',

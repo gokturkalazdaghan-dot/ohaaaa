@@ -366,3 +366,21 @@ function normalizeLocale(value: string | null | undefined): Locale | null {
   const base = value.trim().toLowerCase().split('-')[0] ?? '';
   return isLocale(base) ? base : null;
 }
+
+/**
+ * Sayıyı OKUYANIN biçimiyle yazar.
+ *
+ * NEDEN GEREKLİ: sayfada "34510 ürünü karşılaştırıyoruz" yazıyordu. Beş
+ * haneden sonra basamak ayracı olmadan sayı okunmuyor.
+ *
+ * NEDEN PAZAR DEĞİL DİL: ayraç okuma alışkanlığıdır, para birimi değil.
+ * Londra'daki Türkçe okuyan ziyaretçi "34.510" bekler; aynı sayfadaki
+ * FİYAT yine sterlin biçiminde kalır (`formatMoney` para birimine bakar).
+ * Bu yüzden çağıran taraf `localeTag(contentLocale, market)` sonucunu --
+ * yani gerçekten sunulan dilin etiketini -- geçirir.
+ */
+export function formatCount(value: number, numberLocale?: string): string {
+  return new Intl.NumberFormat(
+    numberLocale ?? MARKET_CONFIG[DEFAULT_MARKET].numberLocale,
+  ).format(value);
+}

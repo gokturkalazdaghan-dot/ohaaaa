@@ -6,8 +6,12 @@ import { DataUnavailable } from '@/components/DataUnavailable';
 import { JsonLd } from '@/components/JsonLd';
 import { Pagination } from '@/components/Pagination';
 import { ProductCard } from '@/components/ProductCard';
+import { formatCount, t } from '@ohaaaa/shared';
+
 import { getStoreBySlug, getStoreProducts } from '@/data/catalog';
 import { siteUrl } from '@/lib/env';
+import { tRich } from '@/lib/i18n';
+import { getRequestLocale } from '@/lib/locale';
 
 /**
  * Mağaza vitrini.
@@ -44,9 +48,10 @@ export async function generateMetadata({
 }: StorePageProps): Promise<Metadata> {
   const { slug } = await params;
   const page = readPage((await searchParams).sayfa);
+  const { contentLocale } = await getRequestLocale();
 
   const vendor = await getStoreBySlug(slug).catch(() => null);
-  if (!vendor) return { title: 'Mağaza bulunamadı' };
+  if (!vendor) return { title: t(contentLocale, 'magaza.bulunamadi') };
 
   // Sayfa 2+ KENDİNİ kanonik gösterir: hepsini birinci sayfaya kanoniklesek
   // sonraki sayfalardaki ürünler hiçbir kanonik sayfada geçmezdi.
@@ -55,15 +60,13 @@ export async function generateMetadata({
   return {
     title:
       page > 1
-        ? `${vendor.displayName} — sayfa ${page}`
-        : `${vendor.displayName} Ürünleri ve Fiyatları`,
-    description:
-      `${vendor.displayName} mağazasının Ohaaaa'daki ürünleri. Kargo dahil toplam ` +
-      `fiyatı diğer mağazalarla karşılaştırın.`,
+        ? t(contentLocale, 'magaza.sayfaBasligi', { ad: vendor.displayName, sayfa: page })
+        : t(contentLocale, 'magaza.fiyatlariVeUrunleri', { ad: vendor.displayName }),
+    description: t(contentLocale, 'magaza.metaAciklama', { ad: vendor.displayName }),
     alternates: { canonical },
     openGraph: {
-      title: `${vendor.displayName} · Ohaaaa`,
-      description: `${vendor.displayName} ürünlerini kargo dahil fiyatla karşılaştırın.`,
+      title: t(contentLocale, 'magaza.ogBaslik', { ad: vendor.displayName }),
+      description: t(contentLocale, 'magaza.ogAciklama', { ad: vendor.displayName }),
     },
   };
 }
@@ -71,6 +74,7 @@ export async function generateMetadata({
 export default async function StorePage({ params, searchParams }: StorePageProps) {
   const { slug } = await params;
   const page = readPage((await searchParams).sayfa);
+  const { contentLocale, contentTag } = await getRequestLocale();
 
   /*
    * MAĞAZA İKİ KAYNAKTAN GELEBİLİR: taşeron (`vendors`) ya da ortak mağaza
@@ -133,7 +137,12 @@ export default async function StorePage({ params, searchParams }: StorePageProps
             '@context': 'https://schema.org',
             '@type': 'BreadcrumbList',
             itemListElement: [
-              { '@type': 'ListItem', position: 1, name: 'Ana sayfa', item: siteUrl },
+              {
+                '@type': 'ListItem',
+                position: 1,
+                name: t(contentLocale, 'ortak.anaSayfa'),
+                item: siteUrl,
+              },
               {
                 '@type': 'ListItem',
                 position: 2,
@@ -169,9 +178,12 @@ export default async function StorePage({ params, searchParams }: StorePageProps
         ]}
       />
 
-      <nav aria-label="Sayfa yolu" className="mb-6 flex items-center gap-2 text-xs text-muted">
+      <nav
+        aria-label={t(contentLocale, 'ortak.sayfaYolu')}
+        className="mb-6 flex items-center gap-2 text-xs text-muted"
+      >
         <Link href="/" className="transition-colors hover:text-fg">
-          Ana sayfa
+          {t(contentLocale, 'ortak.anaSayfa')}
         </Link>
         <span aria-hidden="true">/</span>
         <span className="text-fg">{vendor.displayName}</span>
@@ -182,7 +194,14 @@ export default async function StorePage({ params, searchParams }: StorePageProps
           aria-hidden="true"
           className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl press bg-brand-cta text-2xl font-black text-[#fffaf5]"
         >
-          {vendor.displayName.slice(0, 1).toLocaleUpperCase('tr')}
+          {/*
+            BÜYÜK HARF KURALI DİLE BAĞLI ve burada sabitlenmişti ('tr').
+            Türkçe'de 'i' → 'İ'; kataloğun tamamı Britanya'da ve orada
+            "iiyama" mağazası rozete "İ" olarak düşüyordu. Okuyanın diline
+            göre büyütmek doğru sonucu verir: Türkçe sayfada 'İ', İngilizce
+            sayfada 'I'.
+          */}
+          {vendor.displayName.slice(0, 1).toLocaleUpperCase(contentTag)}
         </span>
 
         <div className="min-w-0 flex-1">
@@ -193,22 +212,29 @@ export default async function StorePage({ params, searchParams }: StorePageProps
           <p className="mt-2 text-sm text-muted">
             {/* Sayı ancak SAYILABİLDİYSE yazılır; bilinmiyorsa hiç yazılmaz. */}
             {products.totalCount !== null ? (
-              <>
-                <strong className="text-fg">
-                  {products.totalCount.toLocaleString('tr-TR')}
-                </strong>{' '}
-                ürün
-              </>
+              tRich(contentLocale, 'magaza.urunSayisi', {
+                // Basamak ayracı 'tr-TR' olarak SABİTLENMİŞTİ: İngilizce
+                // sayfada "1.234 products" yazıyordu, oysa orada "1,234".
+                adet: (
+                  <strong className="text-fg">
+                    {formatCount(products.totalCount, contentTag)}
+                  </strong>
+                ),
+              })
             ) : (
-              'Ürünler'
+              t(contentLocale, 'ortak.urunler')
             )}
             {/* Puan yalnızca gerçekten oy varsa gösterilir. Sıfır oyla "0,0"
                 yazmak, mağazayı hiç oy almamış değil KÖTÜ göstermek olurdu. */}
             {vendor.ratingCount > 0 && (
               <>
                 {' · '}
-                <span className="tabular">{vendor.rating.toFixed(2)}</span> puan (
-                {vendor.ratingCount} değerlendirme)
+                <span className="tabular">
+                  {t(contentLocale, 'magaza.puan', {
+                    puan: vendor.rating.toFixed(2),
+                    adet: formatCount(vendor.ratingCount, contentTag),
+                  })}
+                </span>
               </>
             )}
           </p>
@@ -221,9 +247,9 @@ export default async function StorePage({ params, searchParams }: StorePageProps
 
       {products.results.length === 0 ? (
         <p className="mt-10 text-muted">
-          Bu mağazanın yayında ürünü yok.{' '}
+          {t(contentLocale, 'magaza.urunYok')}{' '}
           <Link href="/arama" className="text-brand underline-offset-2 hover:underline">
-            Tüm ürünlere bakın
+            {t(contentLocale, 'magaza.tumUrunlereBak')}
           </Link>
           .
         </p>
@@ -236,7 +262,7 @@ export default async function StorePage({ params, searchParams }: StorePageProps
             gizli: sayfada zaten "<kategori> Fiyatları" yazıyor, ikinci bir
             görünür başlık tekrar olurdu.
           */}
-          <h2 className="sr-only">Ürünler</h2>
+          <h2 className="sr-only">{t(contentLocale, 'ortak.urunler')}</h2>
           <ul className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
             {products.results.map((result, index) => (
               <li key={result.groupId}>
@@ -256,8 +282,7 @@ export default async function StorePage({ params, searchParams }: StorePageProps
       {/* Karşılaştırma sitesinin en önemli hatırlatması: bu mağazanın fiyatı
           her zaman en iyisi değildir ve ziyaretçi bunu bilerek gezmelidir. */}
       <p className="mt-16 border-t border-line pt-6 text-sm text-muted">
-        Ohaaaa satışın tarafı değildir. Ürünlerin kargo dahil toplam fiyatını diğer
-        mağazalarla karşılaştırmak için ürün sayfalarına bakın.
+        {t(contentLocale, 'magaza.uyari')}
       </p>
     </div>
   );

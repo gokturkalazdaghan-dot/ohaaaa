@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import { formatMoney, gtinDisplayForm } from '@ohaaaa/shared';
+import { formatCount, formatMoney, gtinDisplayForm, t } from '@ohaaaa/shared';
 
 import { DataUnavailable } from '@/components/DataUnavailable';
 import { ShieldIcon, TruckIcon } from '@/components/Icons';
@@ -27,23 +27,39 @@ import {
   getRelatedGroups,
 } from '@/data/catalog';
 import { siteUrl } from '@/lib/env';
+import { getRequestLocale } from '@/lib/locale';
 
 type ProductPageProps = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
   const { slug } = await params;
+  const { contentLocale, contentTag } = await getRequestLocale();
   const group = await getProductGroup(slug);
 
-  if (!group) return { title: 'Ürün bulunamadı' };
+  if (!group) return { title: t(contentLocale, 'urun.bulunamadi') };
 
-  const priceText =
-    group.minPriceCents !== null ? ` — ${formatMoney(group.minPriceCents, group.currency)}'den başlayan fiyatlarla` : '';
+  /*
+   * FİYAT EKİ AYRI BİR ANAHTAR.
+   *
+   * Önceki hâli "...'den başlayan fiyatlarla" idi ve ek TÜRKÇEYE ÇİVİLİYDİ:
+   * hem başka dilde anlamsızdı hem de Türkçede bile yanlıştı -- ünlü uyumu
+   * sayının okunuşuna göre değişir ("100'den" ama "1000'den" / "6'dan").
+   * Sayıya bakıp ek üretmek yerine eki gerektirmeyen bir cümle kuruldu.
+   */
+  const fiyatEki =
+    group.minPriceCents !== null
+      ? t(contentLocale, 'urun.metaFiyatEki', {
+          fiyat: formatMoney(group.minPriceCents, group.currency),
+        })
+      : '';
 
   return {
     title: group.title,
-    description:
-      `${group.title}${priceText}. ${group.offerCount} mağazadaki fiyatları karşılaştırın, ` +
-      `kargo dahil en iyi toplam fiyatı görün.`,
+    description: t(contentLocale, 'urun.metaAciklama', {
+      ad: group.title,
+      fiyatEki,
+      adet: formatCount(group.offerCount, contentTag),
+    }),
     openGraph: { title: group.title, description: group.description ?? undefined },
     alternates: { canonical: `/urun/${group.slug}` },
   };
@@ -51,6 +67,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { slug } = await params;
+  const { contentLocale, contentTag } = await getRequestLocale();
 
   /*
    * "Ürün yok" ile "veriye ulaşamıyoruz" AYRI durumlardır ve ayrı
@@ -231,7 +248,10 @@ export default async function ProductPage({ params }: ProductPageProps) {
                     : 'https://schema.org/UsedCondition',
               seller: {
                 '@type': 'Organization',
-                name: offer.vendor?.displayName ?? offer.merchant?.displayName ?? 'Mağaza',
+                name:
+                  offer.vendor?.displayName ??
+                  offer.merchant?.displayName ??
+                  t(contentLocale, 'ortak.magaza'),
               },
               // Kargo, karşılaştırmanın merkezinde: şemada da bildirilir.
               shippingDetails: {
@@ -263,7 +283,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
     '@type': 'BreadcrumbList',
     itemListElement: [
       { '@type': 'ListItem', position: 1, name: 'Ana sayfa', item: siteUrl },
-      { '@type': 'ListItem', position: 2, name: 'Ürünler', item: `${siteUrl}/arama` },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: t(contentLocale, 'ortak.urunler'),
+        item: `${siteUrl}/arama`,
+      },
       { '@type': 'ListItem', position: 3, name: group.title, item: productUrl },
     ],
   };
@@ -302,10 +327,17 @@ export default async function ProductPage({ params }: ProductPageProps) {
         priceCents={bestOffer?.priceCents ?? group.minPriceCents}
         currency={bestOffer?.currency ?? group.currency}
       />
-      <nav aria-label="Sayfa yolu" className="mb-6 flex items-center gap-2 text-xs text-muted">
-        <Link href="/" className="hover:text-fg">Ana sayfa</Link>
+      <nav
+        aria-label={t(contentLocale, 'ortak.sayfaYolu')}
+        className="mb-6 flex items-center gap-2 text-xs text-muted"
+      >
+        <Link href="/" className="hover:text-fg">
+          {t(contentLocale, 'ortak.anaSayfa')}
+        </Link>
         <span aria-hidden="true">/</span>
-        <Link href="/arama" className="hover:text-fg">Ürünler</Link>
+        <Link href="/arama" className="hover:text-fg">
+          {t(contentLocale, 'ortak.urunler')}
+        </Link>
         <span aria-hidden="true">/</span>
         <span className="truncate text-fg">{group.title}</span>
       </nav>
@@ -331,7 +363,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
           {Object.keys(group.attributes).length > 0 && (
             <div className="card p-5">
-              <h2 className="text-sm font-semibold">Özellikler</h2>
+              <h2 className="text-sm font-semibold">{t(contentLocale, 'urun.ozellikler')}</h2>
               <dl className="mt-3 space-y-2">
                 {Object.entries(group.attributes).map(([key, value]) => (
                   <div key={key} className="flex justify-between gap-4 text-sm">
@@ -377,7 +409,11 @@ export default async function ProductPage({ params }: ProductPageProps) {
               title={group.title}
               text={
                 group.minPriceCents !== null
-                  ? `${group.title} — ${group.offerCount} mağazada, kargo dahil en düşük ${formatMoney(group.minPriceCents, group.currency)}`
+                  ? t(contentLocale, 'urun.paylasMetni', {
+                      ad: group.title,
+                      adet: formatCount(group.offerCount, contentTag),
+                      fiyat: formatMoney(group.minPriceCents, group.currency),
+                    })
                   : group.title
               }
             />
@@ -386,7 +422,11 @@ export default async function ProductPage({ params }: ProductPageProps) {
           {/* Agregasyonun değerini tek cümlede özetleyen şerit. */}
           <div className="mt-6 flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-surface p-4">
             <div>
-              <p className="text-xs text-muted">Bu ürün {group.offerCount} mağazada var</p>
+              <p className="text-xs text-muted">
+                {t(contentLocale, 'urun.kacMagazada', {
+                  adet: formatCount(group.offerCount, contentTag),
+                })}
+              </p>
               <p className="tabular mt-0.5 text-xl font-black">
                 {group.minPriceCents !== null ? formatMoney(group.minPriceCents, group.currency) : '—'}
                 {group.maxPriceCents !== null && group.maxPriceCents !== group.minPriceCents && (
@@ -399,9 +439,13 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
             {savingsCents > 0 && (
               <div className="ml-auto rounded-xl bg-success/12 px-4 py-2.5 text-right">
-                <p className="text-2xs text-success/85">Doğru mağazayı seçerek</p>
+                <p className="text-2xs text-success/85">
+                  {t(contentLocale, 'urun.dogruMagazaSecerek')}
+                </p>
                 <p className="tabular text-lg font-black text-success">
-                  {formatMoney(savingsCents, group.currency)} kazanın
+                  {t(contentLocale, 'urun.kazanin', {
+                    tutar: formatMoney(savingsCents, group.currency),
+                  })}
                 </p>
               </div>
             )}
@@ -416,9 +460,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
           {score && <OhaaaaScorePanel score={score} />}
 
           <div className="mt-8">
-            <h2 className="text-lg font-bold">Mağaza fiyatları</h2>
+            <h2 className="text-lg font-bold">{t(contentLocale, 'urun.magazaFiyatlari')}</h2>
             <p className="mt-1 text-xs text-muted">
-              Kargo dahil toplam maliyete göre sıralanmıştır — gerçekte ödeyeceğiniz tutar.
+              {t(contentLocale, 'urun.kargoDahilAciklama')}
             </p>
 
             <ul className="mt-5 space-y-3">
@@ -434,7 +478,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
             {group.offers.length === 0 && (
               <p className="mt-4 rounded-xl border border-line bg-surface p-5 text-sm text-muted">
-                Bu ürün şu anda hiçbir mağazada stokta değil.
+                {t(contentLocale, 'urun.stokYok')}
               </p>
             )}
           </div>
@@ -455,13 +499,13 @@ export default async function ProductPage({ params }: ProductPageProps) {
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <Guarantee
               icon={<TruckIcon className="h-5 w-5 text-brand" />}
-              title="Kargo dahil sıralama"
-              description="Teklifler etiket fiyatına değil, kargoyla birlikte ödeyeceğiniz toplama göre sıralanır."
+              title={t(contentLocale, 'urun.kargoDahilSiralama')}
+              description={t(contentLocale, 'urun.kargoDahilSiralamaAciklama')}
             />
             <Guarantee
               icon={<ShieldIcon className="h-5 w-5 text-success" />}
-              title="Satışın tarafı değiliz"
-              description="Sözleşme sizinle mağaza arasında kurulur; fatura, garanti ve iade süreçleri mağazaya aittir."
+              title={t(contentLocale, 'urun.satisinTarafiDegiliz')}
+              description={t(contentLocale, 'urun.satisinTarafiDegilizAciklama')}
             />
           </div>
         </div>
@@ -487,7 +531,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
       {related.length > 0 && (
         <section className="mt-20">
-          <h2 className="text-xl font-black tracking-tight">Bunlara da bakın</h2>
+          <h2 className="text-xl font-black tracking-tight">
+            {t(contentLocale, 'urun.bunlaraDaBakin')}
+          </h2>
           <div className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
             {related.map((result) => (
               <ProductCard key={result.groupId} result={result} />

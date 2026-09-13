@@ -2,8 +2,17 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 
-import { formatMoney, intentToSearchParams, looksLikeNaturalLanguage } from '@ohaaaa/shared';
+import {
+  formatCount,
+  formatMoney,
+  intentToSearchParams,
+  looksLikeNaturalLanguage,
+  t,
+  type Locale,
+} from '@ohaaaa/shared';
 
+import { tRich } from '@/lib/i18n';
+import { getRequestLocale } from '@/lib/locale';
 import { tuketButce } from '@/lib/rateBudget';
 import { logAgentDecision, recordAgentOutcome } from '@/lib/agentLog';
 import { MODEL, PROMPT_VERSION, parseSearchIntent } from '@/lib/searchIntent';
@@ -24,12 +33,22 @@ export const revalidate = 120;
 /** Sayfa basina sonuc. SQL tarafi 100'de sinirlar; bunun altinda kalinmali. */
 const PAGE_SIZE = 24;
 
-const SORT_OPTIONS: Array<{ value: SortOption; label: string }> = [
-  { value: 'relevance', label: 'En uygun' },
-  { value: 'price_asc', label: 'Artan fiyat' },
-  { value: 'price_desc', label: 'Azalan fiyat' },
-  { value: 'offers', label: 'En çok mağaza' },
-];
+/**
+ * Sıralama seçenekleri DİLE GÖRE üretiliyor; `value` alanları URL'de
+ * göründüğü için sabit kalır -- paylaşılan bir bağlantı her dilde aynı
+ * sonucu vermelidir.
+ */
+function sortOptions(locale: Locale): Array<{ value: SortOption; label: string }> {
+  return [
+    { value: 'relevance', label: t(locale, 'sonuc.enUygun') },
+    { value: 'price_asc', label: t(locale, 'kategori.artanFiyat') },
+    { value: 'price_desc', label: t(locale, 'kategori.azalanFiyat') },
+    { value: 'offers', label: t(locale, 'kategori.enCokMagaza') },
+  ];
+}
+
+/** Geçerli sıralama değerleri -- dilden BAĞIMSIZ. */
+const SORT_VALUES: readonly SortOption[] = ['relevance', 'price_asc', 'price_desc', 'offers'];
 
 type SearchPageProps = {
   searchParams: Promise<{
@@ -66,12 +85,15 @@ function readGtin(raw: string | undefined): string | null {
 
 export async function generateMetadata({ searchParams }: SearchPageProps): Promise<Metadata> {
   const { q } = await searchParams;
+  const { contentLocale } = await getRequestLocale();
 
   return {
-    title: q ? `"${q}" arama sonuçları` : 'Tüm ürünler',
+    title: q
+      ? t(contentLocale, 'arama.sonuclariBaslik', { q })
+      : t(contentLocale, 'sonuc.tumUrunler'),
     description: q
-      ? `${q} için tüm mağazalardaki fiyatları karşılaştırın.`
-      : 'Ohaaaa’daki tüm ürünleri keşfedin ve mağazalar arası fiyatları karşılaştırın.',
+      ? t(contentLocale, 'arama.metaAciklamaSorgulu', { q })
+      : t(contentLocale, 'arama.metaAciklamaGenel'),
     // Arama sonuç sayfaları taranmamalı: sonsuz sayıda varyantı olabilir
     // ve tarama bütçesini tüketir.
     robots: { index: false, follow: true },
@@ -97,6 +119,7 @@ function readPositiveInt(raw: string | undefined, max: number): number | undefin
 export default async function SearchPage({ searchParams }: SearchPageProps) {
   const params = await searchParams;
   const { q, kategori, sirala } = params;
+  const { contentLocale, contentTag } = await getRequestLocale();
 
   /*
    * Barkod yolu.
@@ -196,9 +219,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     barcodeMiss = gtin;
   }
 
-  const sort = SORT_OPTIONS.some((option) => option.value === sirala)
-    ? (sirala as SortOption)
-    : 'relevance';
+  const sort = SORT_VALUES.includes(sirala as SortOption) ? (sirala as SortOption) : 'relevance';
 
   // Fiyatlar arayuzde TL, veritabaninda kurustur. Donusum tek yerde yapilir.
   const minTl = readPositiveInt(params.min, 100_000_000);
@@ -269,7 +290,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         error: error instanceof Error ? error.message : String(error),
       }),
     );
-    return <DataUnavailable title="Arama şu an çalışmıyor" />;
+    return <DataUnavailable title={t(contentLocale, 'sonuc.calismiyor')} />;
   }
 
   /*
@@ -349,8 +370,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           role="status"
           className="mb-6 rounded-xl border border-line bg-surface px-4 py-3 text-sm text-muted"
         >
-          <strong className="text-fg">{barcodeMiss}</strong> barkodlu ürün henüz katalogda
-          yok. Ürün adını yazarak arayabilirsiniz.
+          {tRich(contentLocale, 'arama.barkodYok', {
+            barkod: <strong className="text-fg">{barcodeMiss}</strong>,
+          })}
         </p>
       )}
 
@@ -358,23 +380,33 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         <h1 className="text-2xl font-bold tracking-tight text-fg">
           {q ? (
             <>
-              <span className="text-muted">Arama:</span> {q}
+              <span className="text-muted">{t(contentLocale, 'arama.baslikOnek')}</span> {q}
             </>
           ) : activeCategory ? (
             activeCategory.name
           ) : (
-            'Tüm ürünler'
+            t(contentLocale, 'sonuc.tumUrunler')
           )}
         </h1>
         <p className="mt-1.5 text-sm text-muted">
-          {results.totalCount} kanonik ürün
+          {t(contentLocale, 'sonuc.kanonikUrun', {
+            adet: formatCount(results.totalCount, contentTag),
+          })}
           {results.results.length > 0 && (
-            <> · {results.results.reduce((sum, r) => sum + r.offerCount, 0)} mağaza teklifi bu sayfada</>
+            <>
+              {' · '}
+              {t(contentLocale, 'sonuc.buSayfadaTeklif', {
+                adet: formatCount(
+                  results.results.reduce((sum, r) => sum + r.offerCount, 0),
+                  contentTag,
+                ),
+              })}
+            </>
           )}
           {totalPages > 1 && (
             <>
-              {' '}
-              · sayfa {page}/{totalPages}
+              {' · '}
+              {t(contentLocale, 'sonuc.sayfaBilgisi', { sayfa: page, toplam: totalPages })}
             </>
           )}
         </p>
@@ -400,7 +432,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           */}
           <details className="lg:hidden">
             <summary className="flex cursor-pointer items-center justify-between rounded-xl border border-line bg-surface px-4 py-3 text-sm font-semibold text-fg marker:content-none [&::-webkit-details-marker]:hidden">
-              <span>Filtrele{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</span>
+              <span>
+                {t(contentLocale, 'filtre.filtrele')}
+                {activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+              </span>
               <span aria-hidden="true" className="text-muted">
                 ▾
               </span>
@@ -408,6 +443,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
             <div className="mt-4 space-y-8">
               <FilterPanel
+                locale={contentLocale}
                 idPrefix="mobil"
                 facets={facets}
                 paraBirimi={paraBirimi}
@@ -427,6 +463,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
           <div className="hidden space-y-8 lg:block">
             <FilterPanel
+              locale={contentLocale}
               idPrefix="masaustu"
               facets={facets}
               paraBirimi={paraBirimi}
@@ -455,11 +492,13 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             bir seçenek, kaydırılabileceğinin en iyi işaretidir.
           */}
           <nav
-            aria-label="Sıralama"
+            aria-label={t(contentLocale, 'ortak.siralama')}
             className="-mx-4 flex items-center gap-3 overflow-x-auto whitespace-nowrap border-b border-line px-4 pb-3 sm:mx-0 sm:flex-wrap sm:px-0"
           >
-            <span className="shrink-0 text-xs text-subtle">Sırala:</span>
-            {SORT_OPTIONS.map((option) => (
+            <span className="shrink-0 text-xs text-subtle">
+              {t(contentLocale, 'ortak.sirala')}:
+            </span>
+            {sortOptions(contentLocale).map((option) => (
               <Link
                 key={option.value}
                 href={buildHref({ sirala: option.value })}
@@ -474,7 +513,11 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           </nav>
 
           {results.results.length === 0 ? (
-            <EmptyState query={q} filtered={hasPriceFilter || Boolean(activeCategory)} />
+            <EmptyState
+              locale={contentLocale}
+              query={q}
+              filtered={hasPriceFilter || Boolean(activeCategory)}
+            />
           ) : (
             <>
               <ul className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-3">
@@ -503,6 +546,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
  * okur.
  */
 function FilterPanel({
+  locale,
   idPrefix,
   facets,
   paraBirimi,
@@ -517,6 +561,7 @@ function FilterPanel({
   selectedBrands,
   freeShipping,
 }: {
+  locale: Locale;
   idPrefix: string;
   facets: SearchFacets;
   activeCategoryId?: string;
@@ -546,10 +591,12 @@ function FilterPanel({
   return (
     <>
       <section>
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">Kategori</h2>
-        <nav aria-label="Kategori filtresi" className="mt-3 space-y-1.5">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">
+          {t(locale, 'filtre.kategori')}
+        </h2>
+        <nav aria-label={t(locale, 'filtre.kategoriFiltresi')} className="mt-3 space-y-1.5">
           <FilterRow href={buildHref({ kategori: undefined })} active={!activeCategoryId}>
-            Tümü
+            {t(locale, 'ortak.tumu')}
           </FilterRow>
           {facets.categories
             .filter((category) => category.count > 0 || category.slug === kategori)
@@ -567,6 +614,7 @@ function FilterPanel({
       </section>
 
       <PriceFilter
+        locale={locale}
         idPrefix={idPrefix}
         facets={facets}
         paraBirimi={paraBirimi}
@@ -589,14 +637,16 @@ function FilterPanel({
       */}
       {(facets.freeShippingCount > 0 || freeShipping) && (
         <section className="mt-6">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">Kargo</h2>
-          <nav aria-label="Kargo filtresi" className="mt-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">
+            {t(locale, 'filtre.kargo')}
+          </h2>
+          <nav aria-label={t(locale, 'filtre.kargoFiltresi')} className="mt-3">
             <FilterRow
               href={buildHref({ kargo: freeShipping ? undefined : 'bedava' })}
               active={freeShipping}
               count={facets.freeShippingCount}
             >
-              Ücretsiz kargo
+              {t(locale, 'sonuc.ucretsizKargo')}
             </FilterRow>
           </nav>
         </section>
@@ -614,17 +664,22 @@ function FilterPanel({
       {facets.brands.length > 0 && (
         <section className="mt-6">
           <div className="flex items-baseline justify-between gap-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">Marka</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">
+              {t(locale, 'filtre.marka')}
+            </h2>
             {selectedBrands.length > 0 && (
               <Link
                 href={buildHref({ marka: undefined })}
                 className="text-2xs font-medium text-brand hover:underline"
               >
-                Temizle
+                {t(locale, 'filtre.temizle')}
               </Link>
             )}
           </div>
-          <nav aria-label="Marka filtresi" className="mt-3 max-h-72 space-y-1.5 overflow-y-auto">
+          <nav
+            aria-label={t(locale, 'filtre.markaFiltresi')}
+            className="mt-3 max-h-72 space-y-1.5 overflow-y-auto"
+          >
             {facets.brands
               .filter((brand) => brand.count > 0 || selectedBrands.includes(brand.name))
               .map((brand) => (
@@ -678,6 +733,7 @@ function FilterRow({
  * kontrolden kotudur.
  */
 function PriceFilter({
+  locale,
   paraBirimi,
   idPrefix,
   facets,
@@ -691,6 +747,7 @@ function PriceFilter({
   selectedBrands,
   freeShipping,
 }: {
+  locale: Locale;
   idPrefix: string;
   facets: SearchFacets;
   q?: string;
@@ -718,7 +775,9 @@ function PriceFilter({
 
   return (
     <section>
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">Fiyat</h2>
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">
+        {t(locale, 'filtre.fiyat')}
+      </h2>
       <p className="mt-2 text-xs text-subtle">
         {formatMoney(facets.minPriceCents, paraBirimi)} – {formatMoney(facets.maxPriceCents, paraBirimi)}
       </p>
@@ -741,7 +800,7 @@ function PriceFilter({
 
         <div className="flex items-center gap-2">
           <label className="sr-only" htmlFor={`${idPrefix}-fiyat-min`}>
-            En az fiyat ({paraBirimi ?? 'TRY'})
+            {t(locale, 'filtre.enAzFiyat', { birim: paraBirimi ?? 'TRY' })}
           </label>
           <input
             id={`${idPrefix}-fiyat-min`}
@@ -759,7 +818,7 @@ function PriceFilter({
             –
           </span>
           <label className="sr-only" htmlFor={`${idPrefix}-fiyat-max`}>
-            En fazla fiyat ({paraBirimi ?? 'TRY'})
+            {t(locale, 'filtre.enFazlaFiyat', { birim: paraBirimi ?? 'TRY' })}
           </label>
           <input
             id={`${idPrefix}-fiyat-max`}
@@ -780,11 +839,11 @@ function PriceFilter({
             type="submit"
             className="rounded-lg press bg-brand-cta px-3 py-2 text-sm font-semibold text-[#fffaf5] transition-colors hover:bg-brand-strong"
           >
-            Uygula
+            {t(locale, 'filtre.uygula')}
           </button>
           {active && (
             <Link href={clearHref} className="text-sm text-muted hover:text-fg">
-              Temizle
+              {t(locale, 'filtre.temizle')}
             </Link>
           )}
         </div>
@@ -793,20 +852,30 @@ function PriceFilter({
   );
 }
 
-function EmptyState({ query, filtered }: { query?: string; filtered: boolean }) {
+function EmptyState({
+  locale,
+  query,
+  filtered,
+}: {
+  locale: Locale;
+  query?: string;
+  filtered: boolean;
+}) {
   return (
     <div className="mt-10 text-left">
       <p className="font-semibold text-fg">
-        {query ? `"${query}" için sonuç yok` : filtered ? 'Bu filtrelerle sonuç yok' : 'Henüz ürün yok'}
+        {query
+          ? t(locale, 'sonuc.sorguIcinYok', { q: query })
+          : filtered
+            ? t(locale, 'sonuc.filtreyleSonucYok')
+            : t(locale, 'sonuc.henuzUrunYok')}
       </p>
       <p className="mt-2 max-w-xl text-sm text-muted">
-        {filtered
-          ? 'Fiyat aralığını genişletin ya da kategori seçimini kaldırın.'
-          : 'Yazımı kontrol edin veya daha genel bir terim deneyin. Türkçe karakter şart değil — “kulaklik” de “kulaklık” sonuçlarını getirir.'}
+        {filtered ? t(locale, 'sonuc.filtreyiGenislet') : t(locale, 'sonuc.yazimIpucu')}
       </p>
       <p className="mt-4 text-sm">
         <Link href="/arama" className="text-brand underline-offset-2 hover:underline">
-          Tüm ürünler
+          {t(locale, 'sonuc.tumUrunler')}
         </Link>
       </p>
     </div>

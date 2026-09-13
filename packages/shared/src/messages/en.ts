@@ -22,6 +22,7 @@ export const EN: Record<keyof typeof TR, string> = {
   'ortak.tumu': 'All',
   'ortak.firsatlar': 'Deals',
   'ortak.giris': 'Sign in',
+  'ortak.sayfaYolu': 'Breadcrumb',
 
   // --- Search box ---
   'arama.yerTutucuHero': 'What are you looking for?',
@@ -31,6 +32,12 @@ export const EN: Record<keyof typeof TR, string> = {
   'arama.dugme': 'Search',
   'arama.markaSeridi': 'Brands with the most products:',
   'arama.cumleIpucu': 'You can also search in plain language',
+  'arama.sonuclariBaslik': 'Search results for “{q}”',
+  'arama.baslikOnek': 'Search:',
+  'arama.metaAciklamaSorgulu': 'Compare {q} prices across every shop.',
+  'arama.metaAciklamaGenel':
+    'Browse everything on Ohaaaa and compare prices across shops.',
+  'arama.barkodYok': 'No product with barcode {barkod} in the catalogue yet. Try searching by name.',
 
   // --- Home ---
   'ev.basligiVurgu': 'OHA!',
@@ -63,6 +70,18 @@ export const EN: Record<keyof typeof TR, string> = {
   'kategori.enCokMagaza': 'Most shops',
   'kategori.artanFiyat': 'Price: low to high',
   'kategori.azalanFiyat': 'Price: high to low',
+  'kategori.fiyatlariSayfa': '{ad} Prices — page {sayfa}',
+  'kategori.metaAciklama':
+    'Compare {ad} across dozens of shops. See the best total price with delivery included and spot the cheapest seller at a glance.',
+  'kategori.ogBaslik': '{ad} Prices · Ohaaaa',
+  'kategori.ogAciklama': 'Compare shop prices in {ad}.',
+  'kategori.ozetSayim': 'We compare {urunSayisi} in {ad}{sayfaBilgisi}.',
+  'kategori.urunAdet': '{adet} products',
+  'kategori.sayfaBilgisi': ' (page {sayfa} of {toplam})',
+  'kategori.buSayfada': 'This page shows {teklifSayisi}.',
+  'kategori.magazaTeklifi': '{adet} shop offers',
+  'kategori.enDusukFiyat': 'Prices start at {fiyat}.',
+  'kategori.siralamaAciklama': 'Ranked by total cost with delivery included.',
 
   // --- Product ---
   'urun.bulunamadi': 'Product not found',
@@ -74,6 +93,17 @@ export const EN: Record<keyof typeof TR, string> = {
   'urun.kargoDahilAciklama':
     'Sorted by total cost including delivery — what you will actually pay.',
   'urun.satisinTarafiDegiliz': 'We are not the seller',
+  'urun.metaFiyatEki': ' — from {fiyat}',
+  'urun.metaAciklama':
+    '{ad}{fiyatEki}. Compare prices across {adet} shops and see the best total with delivery included.',
+  'urun.paylasMetni': '{ad} — in {adet} shops, from {fiyat} with delivery included',
+  'urun.kacMagazada': 'Available in {adet} shops',
+  'urun.dogruMagazaSecerek': 'By picking the right shop',
+  'urun.kazanin': 'save {tutar}',
+  'urun.kargoDahilSiralamaAciklama':
+    'Offers are ranked by what you actually pay with delivery, not by the sticker price.',
+  'urun.satisinTarafiDegilizAciklama':
+    'The contract is between you and the shop; invoicing, warranty and returns are handled by them.',
 
   // --- Shop ---
   'magaza.bulunamadi': 'Shop not found',
@@ -81,6 +111,14 @@ export const EN: Record<keyof typeof TR, string> = {
   'magaza.urunYok': 'This shop has no products listed.',
   'magaza.tumUrunlereBak': 'Browse all products',
   'magaza.fiyatlariVeUrunleri': '{ad} Products and Prices',
+  'magaza.sayfaBasligi': '{ad} — page {sayfa}',
+  'magaza.metaAciklama':
+    'Products from {ad} on Ohaaaa. Compare the total price with delivery against every other shop.',
+  'magaza.ogBaslik': '{ad} · Ohaaaa',
+  'magaza.ogAciklama': 'Compare {ad} products at their total price with delivery.',
+  'magaza.puan': '{puan} out of 5 ({adet} reviews)',
+  'magaza.uyari':
+    'Ohaaaa is not the seller. Open a product page to compare its total price with delivery across shops.',
 
   // --- Search results ---
   'sonuc.tumUrunler': 'All products',
@@ -89,6 +127,32 @@ export const EN: Record<keyof typeof TR, string> = {
   'sonuc.henuzUrunYok': 'No products yet',
   'sonuc.calismiyor': 'Search is not working right now',
   'sonuc.ucretsizKargo': 'Free delivery',
+  'sonuc.enUygun': 'Best match',
+  'sonuc.kanonikUrun': '{adet} products',
+  'sonuc.buSayfadaTeklif': '{adet} shop offers on this page',
+  'sonuc.sayfaBilgisi': 'page {sayfa} of {toplam}',
+  'sonuc.sorguIcinYok': 'No results for “{q}”',
+  /*
+   * Türkçe sürüm "Türkçe karakter şart değil" diye devam ediyor -- o ipucu
+   * yalnızca Türkçe klavyesi olmayan kullanıcı için anlamlı. İngilizce
+   * okuyucuya aynı cümleyi çevirmek anlamsız bir öğüt olurdu; çeviri
+   * BİREBİR değil, aynı işi gören metin.
+   */
+  'sonuc.yazimIpucu': 'Check the spelling or try a more general term.',
+
+  // --- Filters ---
+  'filtre.filtrele': 'Filter',
+  'filtre.kategori': 'Category',
+  'filtre.kategoriFiltresi': 'Category filter',
+  'filtre.kargo': 'Delivery',
+  'filtre.kargoFiltresi': 'Delivery filter',
+  'filtre.marka': 'Brand',
+  'filtre.markaFiltresi': 'Brand filter',
+  'filtre.fiyat': 'Price',
+  'filtre.uygula': 'Apply',
+  'filtre.temizle': 'Clear',
+  'filtre.enAzFiyat': 'Minimum price ({birim})',
+  'filtre.enFazlaFiyat': 'Maximum price ({birim})',
 
   // --- Error states ---
   'hata.veriYok': 'We can’t show prices right now',
