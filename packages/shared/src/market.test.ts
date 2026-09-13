@@ -4,11 +4,13 @@ import { test } from 'node:test';
 import {
   DEFAULT_LOCALE,
   DEFAULT_MARKET,
+  MARKETS,
   MARKET_CONFIG,
   currencyOf,
   isLocale,
   isMarket,
   localeTag,
+  marketForCountry,
   parseAcceptLanguage,
   resolveMarket,
 } from './market.js';
@@ -60,15 +62,15 @@ test('sinyal yoksa güvenli varsayılana düşer', () => {
 });
 
 test('açık seçim IP ülkesini EZER', () => {
-  const r = resolveMarket({ explicitMarket: 'DE', ipCountry: 'US' });
-  assert.equal(r.market, 'DE');
+  const r = resolveMarket({ explicitMarket: 'EU', ipCountry: 'US' });
+  assert.equal(r.market, 'EU');
   assert.equal(r.currency, 'EUR');
   assert.equal(r.marketSource, 'explicit');
 });
 
 test('hesap tercihi IP ülkesini ezer ama açık seçimi ezemez', () => {
-  assert.equal(resolveMarket({ accountMarket: 'DE', ipCountry: 'US' }).market, 'DE');
-  assert.equal(resolveMarket({ explicitMarket: 'US', accountMarket: 'DE' }).market, 'US');
+  assert.equal(resolveMarket({ accountMarket: 'EU', ipCountry: 'US' }).market, 'EU');
+  assert.equal(resolveMarket({ explicitMarket: 'US', accountMarket: 'EU' }).market, 'US');
 });
 
 test('başka sinyal yoksa IP ülkesi kullanılır', () => {
@@ -79,9 +81,58 @@ test('başka sinyal yoksa IP ülkesi kullanılır', () => {
 });
 
 test('desteklenmeyen ülke varsayılan pazara düşer, uydurma pazar açılmaz', () => {
-  const r = resolveMarket({ ipCountry: 'FR' });
+  // Japonya için pazarımız yok.
+  const r = resolveMarket({ ipCountry: 'JP' });
   assert.equal(r.market, DEFAULT_MARKET);
   assert.equal(r.marketSource, 'fallback');
+});
+
+// --- Ülke → pazar eşlemesi ------------------------------------------------
+
+test('ÜLKE KODU İLE PAZAR KODU AYNI ŞEY DEĞİL', () => {
+  // Britanya'nın ülke kodu GB, veritabanındaki pazar kodu UK. Eskiden IP
+  // ülkesi doğrudan pazar sayılıyordu ve bu yüzden 'GB' diye var olmayan
+  // bir pazar üretiliyordu.
+  assert.equal(marketForCountry('GB'), 'UK');
+  assert.equal(marketForCountry('DE'), 'EU');
+  assert.equal(marketForCountry('TR'), 'TR');
+  assert.equal(marketForCountry('US'), 'US');
+  assert.equal(marketForCountry('CA'), 'CA');
+});
+
+test('euro bölgesi EU pazarına eşlenir', () => {
+  for (const ulke of ['FR', 'IT', 'ES', 'PT', 'NL', 'IE', 'AT', 'FI', 'GR']) {
+    assert.equal(marketForCountry(ulke), 'EU', `${ulke} euro bölgesinde`);
+  }
+});
+
+test('EURO KULLANMAYAN AB ÜYESİ EU pazarına eşlenmez', () => {
+  /*
+   * İsveç SEK, Polonya PLN, Danimarka DKK kullanır. EU pazarının para birimi
+   * EUR; onları oraya eşlemek euro fiyat göstermek olurdu. Kendi pazarları
+   * açılana kadar varsayılana düşerler.
+   */
+  for (const ulke of ['SE', 'PL', 'DK', 'CZ', 'HU', 'RO', 'BG']) {
+    assert.equal(marketForCountry(ulke), null, `${ulke} euro kullanmıyor`);
+  }
+});
+
+test('tanınmayan, boş ve bozuk ülke kodu null döner', () => {
+  for (const bad of ['', '  ', 'XX', 'TÜRKİYE', 'GBR', null, undefined]) {
+    assert.equal(marketForCountry(bad), null);
+  }
+});
+
+test('her pazar kodu veritabanındaki markets tablosunda VAR', () => {
+  /*
+   * Ölçülen tablo: ANZ · CA · EU · GCC · NORDICS · TR · UK · US
+   * Uygulama bunun alt kümesini kullanır (para birimi NULL olanlar hariç).
+   * Bu testin amacı sözlüğün tekrar veriden UZAKLAŞMASINI engellemek.
+   */
+  const veritabanindakiler = ['ANZ', 'CA', 'EU', 'GCC', 'NORDICS', 'TR', 'UK', 'US'];
+  for (const m of MARKETS) {
+    assert.ok(veritabanindakiler.includes(m), `${m} markets tablosunda yok`);
+  }
 });
 
 test('geçersiz/boş sinyaller sessizce yok sayılır', () => {
@@ -92,11 +143,11 @@ test('geçersiz/boş sinyaller sessizce yok sayılır', () => {
 
 // --- Dil çözümlemesi ------------------------------------------------------
 
-test('Almanya pazarında Türkçe tarayıcı Türkçe arayüz alır', () => {
-  const r = resolveMarket({ explicitMarket: 'DE', acceptLanguage: 'tr-TR,tr;q=0.9' });
-  assert.equal(r.market, 'DE');
+test('Avrupa pazarında Türkçe tarayıcı Türkçe arayüz alır', () => {
+  const r = resolveMarket({ explicitMarket: 'EU', acceptLanguage: 'tr-TR,tr;q=0.9' });
+  assert.equal(r.market, 'EU');
   assert.equal(r.locale, 'tr');
-  // Dil Türkçe ama para birimi PAZARIN: Almanya'ya kargo euro ile ödenir.
+  // Dil Türkçe ama para birimi PAZARIN: Avrupa'ya kargo euro ile ödenir.
   assert.equal(r.currency, 'EUR');
   assert.equal(r.localeSource, 'accept-language');
 });
@@ -132,8 +183,8 @@ test('dil seçmek pazarı DEĞİŞTİRMEZ', () => {
 });
 
 test('pazar seçmek dili zorla değiştirmez: tarayıcı dili hâlâ dinlenir', () => {
-  const r = resolveMarket({ explicitMarket: 'DE', acceptLanguage: 'tr' });
-  assert.equal(r.market, 'DE');
+  const r = resolveMarket({ explicitMarket: 'EU', acceptLanguage: 'tr' });
+  assert.equal(r.market, 'EU');
   assert.equal(r.locale, 'tr');
 });
 
@@ -153,10 +204,11 @@ test('tanınmayan dil sinyali yok sayılır, çökmez', () => {
 
 test('localeTag bölgeli BCP-47 üretir', () => {
   assert.equal(localeTag('tr', 'TR'), 'tr-TR');
-  assert.equal(localeTag('de', 'DE'), 'de-DE');
+  assert.equal(localeTag('de', 'EU'), 'de-DE');
   assert.equal(localeTag('en', 'US'), 'en-US');
-  // İngilizce ABD dışında İngiliz varyantına düşer.
-  assert.equal(localeTag('en', 'DE'), 'en-GB');
+  assert.equal(localeTag('en', 'UK'), 'en-GB');
+  // Euro bölgesinde İngilizce, euro biçimi kullanan İrlanda varyantına düşer.
+  assert.equal(localeTag('en', 'EU'), 'en-IE');
 });
 
 test('her pazarın para birimi ve varsayılan dili tanımlı', () => {
@@ -170,6 +222,7 @@ test('her pazarın para birimi ve varsayılan dili tanımlı', () => {
 test('tip korumaları yalnızca bilinen değerleri kabul eder', () => {
   assert.ok(isLocale('tr') && isLocale('de') && isLocale('en'));
   assert.ok(!isLocale('fr') && !isLocale('TR') && !isLocale(42));
-  assert.ok(isMarket('TR') && isMarket('DE') && isMarket('US'));
-  assert.ok(!isMarket('tr') && !isMarket('FR') && !isMarket(null));
+  assert.ok(isMarket('TR') && isMarket('EU') && isMarket('US') && isMarket('UK'));
+  // 'DE' ve 'GB' artık PAZAR DEĞİL -- ikisi de ülke kodu.
+  assert.ok(!isMarket('tr') && !isMarket('DE') && !isMarket('GB') && !isMarket(null));
 });
