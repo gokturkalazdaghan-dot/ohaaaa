@@ -18,6 +18,9 @@ import {
   collectByKeyset,
   eszamanliHaritala,
   listelemeSiralamasi,
+  SAYIM_TAVANI,
+  sayimAraligi,
+  tavanliSayim,
   offerSellerName,
   rankShowcase,
   rpcsizListelenebilir,
@@ -119,7 +122,17 @@ function onbellekle<A extends unknown[], R>(
 export interface SearchPage {
   results: SearchResult[];
   totalCount: number;
+  /**
+   * `totalCount` sayım tavanına dayandı mı?
+   *
+   * true ise gösterilen sayı bir ALT SINIRDIR: gerçek toplam bundan
+   * büyüktür. Arayüz bunu "1.000+" gibi göstermek zorunda -- tavana
+   * dayanmış bir sayıyı kesin sayıymış gibi basmak kullanıcıya yalan
+   * söylemek olurdu.
+   */
+  totalCapped: boolean;
 }
+
 
 /** Filtre seridinin gercek sinirlari (uydurma aralik gostermemek icin). */
 export interface SearchFacets {
@@ -387,10 +400,15 @@ async function listelemeOku(params: SearchParams): Promise<SearchPage> {
   const sayimSorgusu = (() => {
     let q = supabase
       .from('product_groups')
-      .select('id', { count: 'exact', head: true })
+      .select('id')
       .gt('offer_count', 0);
     if (kapsam) q = q.in('category_id', kapsam);
-    return q;
+    /*
+     * `range` üst sınırı DAHİL: en çok TAVAN+1 kayıt döner. TAVAN+1 gelmesi
+     * "tavandan fazlası var" demenin en ucuz yolu; ek bir sorgu gerekmiyor.
+     */
+    const { baslangic, bitis } = sayimAraligi(SAYIM_TAVANI);
+    return q.range(baslangic, bitis);
   })();
 
   const [satirCevabi, sayimCevabi] = await Promise.all([satirSorgusu, sayimSorgusu]);
@@ -408,6 +426,7 @@ async function listelemeOku(params: SearchParams): Promise<SearchPage> {
    * eksiğini göstermek yeğdir -- kullanıcı olmayan bir sayfaya tıklamaz.
    */
   let totalCount = offset + rows.length;
+  let totalCapped = false;
   if (sayimCevabi.error) {
     console.warn(
       JSON.stringify({
@@ -416,8 +435,10 @@ async function listelemeOku(params: SearchParams): Promise<SearchPage> {
         hata: sayimCevabi.error.message,
       }),
     );
-  } else if (typeof sayimCevabi.count === 'number') {
-    totalCount = sayimCevabi.count;
+  } else {
+    const olculen = tavanliSayim((sayimCevabi.data ?? []).length, SAYIM_TAVANI);
+    totalCount = olculen.toplam;
+    totalCapped = olculen.tavanaDayandi;
   }
 
   const teklifKimlikleri = rows
@@ -446,7 +467,7 @@ async function listelemeOku(params: SearchParams): Promise<SearchPage> {
     };
   });
 
-  return { results, totalCount };
+  return { results, totalCount, totalCapped };
 }
 
 // ---------------------------------------------------------------------------
@@ -569,7 +590,8 @@ async function aramaOku(params: SearchParams): Promise<SearchPage> {
       }),
     );
 
-    return { results, totalCount };
+    /* RPC `count(*) over ()` ile KESİN toplam veriyor: tavan uygulanmıyor. */
+    return { results, totalCount, totalCapped: false };
   }
 
   return searchDemo(params);
@@ -765,6 +787,8 @@ function searchDemo(params: SearchParams): SearchPage {
   return {
     results: results.slice(offset, offset + (params.limit ?? 24)).map(toSearchResult),
     totalCount: results.length,
+    /* Demo verisi bellekte: sayım kesin. */
+    totalCapped: false,
   };
 }
 
@@ -1968,7 +1992,6 @@ export async function getProductReviews(
     .from('reviews')
     .select(
       `id, product_rating, vendor_rating, title, body, created_at,
-       author:users!inner ( email ),
        vendor:vendors ( display_name )`,
     )
     .eq('group_id', groupId)
@@ -1984,18 +2007,7 @@ export async function getProductReviews(
   }
 
   return (data ?? []).map((row: Record<string, unknown>): ProductReview => {
-    const author = unwrapRelation(row.author);
     const vendor = unwrapRelation(row.vendor);
-
-    /*
-     * Yazar adı olarak e-postanın YALNIZCA ilk harfi ve alan adı öncesi
-     * kısaltması gösterilir ("a***@"). Tam e-posta göstermek, yorum yazan
-     * her müşterinin adresini herkese açık hale getirirdi — hem KVKK
-     * açısından savunulamaz hem de spam toplayıcılara davetiye.
-     */
-    const email = String(author?.email ?? '');
-    const local = email.split('@')[0] ?? '';
-    const authorLabel = local.length > 0 ? `${local[0]}${'*'.repeat(Math.min(local.length - 1, 4))}` : 'Müşteri';
 
     return {
       id: String(row.id),
@@ -2004,7 +2016,7 @@ export async function getProductReviews(
       title: row.title ? String(row.title) : null,
       body: row.body ? String(row.body) : null,
       createdAt: String(row.created_at),
-      authorLabel,
+      authorLabel: ANONIM_YAZAR,
       vendorName: vendor?.display_name ? String(vendor.display_name) : null,
     };
   });
@@ -2302,7 +2314,6 @@ export async function getProductQuestions(groupId: string): Promise<ProductQuest
     .from('product_questions')
     .select(
       `id, body, created_at, answer, answered_at,
-       asker:users!user_id ( full_name ),
        vendor:vendors!answer_vendor_id ( display_name )`,
     )
     .eq('group_id', groupId)
@@ -2313,16 +2324,12 @@ export async function getProductQuestions(groupId: string): Promise<ProductQuest
   if (error || !data) return [];
 
   return data.map((row: Record<string, unknown>) => {
-    const asker = unwrapRelation(row.asker);
     const vendor = unwrapRelation(row.vendor);
 
     return {
       id: String(row.id),
       body: String(row.body),
-      // Soru soranın TAM ADI gösterilmez: alışveriş alışkanlığı kişisel bir
-      // veri ve soru herkese açık. Baş harf kimliği taşımadan sorular
-      // birbirinden ayırt edilebilsin diye yeter.
-      askerName: maskName(asker?.full_name ? String(asker.full_name) : null),
+      askerName: ANONIM_YAZAR,
       createdAt: String(row.created_at),
       answer: row.answer ? String(row.answer) : null,
       answerVendorName: vendor?.display_name ? String(vendor.display_name) : null,
@@ -2331,18 +2338,31 @@ export async function getProductQuestions(groupId: string): Promise<ProductQuest
   });
 }
 
-function maskName(fullName: string | null): string {
-  if (!fullName) return 'Ohaaaa kullanıcısı';
-  return fullName
-    .trim()
-    .split(/\s+/)
-    .map((part) => {
-      const ilk = part.charAt(0);
-      return ilk ? `${ilk.toLocaleUpperCase('tr-TR')}**` : '';
-    })
-    .join(' ')
-    .trim();
-}
+/**
+ * Herkese açık içerikte yazar etiketi.
+ *
+ * NEDEN İSİM YOK, NEDEN MASKELEME YOK
+ * Yorum ve soru listeleri herkese açık sayfalarda duruyor ve bu istekler
+ * veritabanına `anon` rolüyle gidiyor. `public.users` tablosunda `email` ve
+ * `phone` var; `anon` rolünün o tabloda SELECT yetkisi YOK ve OLMAMALI.
+ *
+ * Eskiden bu listeler yazar adını `users` tablosundan embed ile çekiyordu.
+ * Üretimde ölçüldü: bu istekler `42501 permission denied for table users`
+ * ile düşüyordu (bir saatte ~400 kez) ve çağıran taraf hatayı yutup boş
+ * liste döndürdüğü için yorum/soru bölümü SESSİZCE kayboluyordu.
+ *
+ * Yetki vermek çözüm DEĞİL: `anon`a SELECT açmak bütün kullanıcıların
+ * e-posta ve telefonunu herkese açardı. Embed'i kaldırmak da bir kayıp
+ * değil, çünkü zaten çalışmıyordu -- `users_select_self` politikası
+ * `(id = auth.uid()) OR is_admin()` diyor, yani oturum açmış bir kullanıcı
+ * bile BAŞKASININ satırını okuyamıyor. Yorumlardaki `!inner` join bunu
+ * daha da kötüleştiriyordu: satır görünmeyince yorumun KENDİSİ düşüyordu.
+ *
+ * Gerçek bir takma ad isteniyorsa doğru yer veritabanı: `reviews` ve
+ * `product_questions` üzerinde denormalize, maskelenmiş bir ad sütunu.
+ * O bir şema değişikliği olduğu için ayrı onaya bırakıldı.
+ */
+const ANONIM_YAZAR = 'Ohaaaa kullanıcısı';
 
 /**
  * Oturum açmış kullanıcı bu ürünü satan onaylı bir mağazanın sahibi mi?
