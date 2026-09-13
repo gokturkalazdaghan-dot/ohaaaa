@@ -15,20 +15,49 @@
 
 import type { Market } from '../market.js';
 
-/** 12 Süpervizör. Ajanlar bunlardan birine ait olmak zorunda. */
+/**
+ * ALAN SÜPERVİZÖRLERİ. Her ajan bunlardan birine ait olmak zorunda.
+ *
+ * LİSTE SİSTEMDEN TÜRETİLDİ, İLERİYE DÖNÜK YAZILMADI.
+ *
+ * Önceki hâli on iki ad sayıyordu: `ai_brain`, `global_governor`, `seo`,
+ * `ads`, `marketing`, `revenue`, `commerce`, `automotive`, `travel_local`,
+ * `merchant`, `intelligence`, `risk_quality`.
+ *
+ * Görev haritası çıkarılırken ölçüldü: `automotive`, `travel_local`, `ads`
+ * ve `marketing` için üretimde TEK BİR TABLO ve depoda tek bir kod yolu
+ * yok. Buna karşılık en çok kodun bulunduğu dört alanın -- alım hattı,
+ * arama, mühendislik/QA, veri altyapısı -- hiç süpervizörü yoktu.
+ *
+ * Boş bir alan zararsız görünür ama değildir: bir ajanı nereye koyacağını
+ * bilmeyen geliştirici onu en yakın adı taşıyan kutuya atar ve sahiplik
+ * sessizce kaybolur. Aşağıdaki on alanın her biri, depoda çalışan kod VE
+ * üretimde veri tutan tablolarla eşleşiyor.
+ *
+ * Sayı sabit değil: ihtiyaç çıkarsa alan eklenir ya da birleştirilir.
+ * Değişmeyen kural, her alanın gerçek bir sorumluluğa karşılık gelmesi.
+ */
 export const SUPERVISORS = [
-  'ai_brain',
-  'global_governor',
-  'seo',
-  'ads',
-  'marketing',
-  'revenue',
-  'commerce',
-  'automotive',
-  'travel_local',
+  /** Alım hattı, normalizasyon, eşleştirme, katalog kalitesi. */
+  'catalog',
+  /** Fiyat doğrulama, geçmiş, anomali, fırsat, kur, toplam maliyet. */
+  'pricing',
+  /** Mağaza kalitesi, ortaklık programı, tıklama ve ödeme mutabakatı. */
   'merchant',
+  /** Sorgu niyeti, isabet, öneri, görsel arama, kişiselleştirme. */
+  'search',
+  /** SEO, içerik, yerelleştirme, pazar açılışı. */
+  'growth',
+  /** Kod değişikliği, test, derleme, diff denetimi, güvenlik taraması. */
+  'engineering',
+  /** Veritabanı sağlığı, sorgu performansı, kuyruk, hata, olay müdahale. */
+  'infra',
+  /** Sipariş, kargo, satıcı siparişi, destek, yorum moderasyonu. */
+  'commerce',
+  /** Listeleme riski, dolandırıcılık, yasal uyum. */
+  'risk',
+  /** İş zekâsı, rakip analizi, fırsat keşfi, raporlama, deney. */
   'intelligence',
-  'risk_quality',
 ] as const;
 
 export type SupervisorId = (typeof SUPERVISORS)[number];
@@ -40,15 +69,54 @@ export type SupervisorId = (typeof SUPERVISORS)[number];
  * genişletemez: `AgentContext` yalnızca burada yazan araçları taşır.
  * Bir sıralama ajanının ödeme aracına erişmesi için önce kaydının
  * değişmesi gerekir -- çalışma anında yetki yükseltmesi mümkün değil.
+ *
+ * ARAÇLAR TABLOYA DEĞİL YETENEĞE GÖRE BÖLÜNDÜ.
+ *
+ * Her tablo için ayrı bir araç tanımlamak (`read_products`, `read_vendors`,
+ * `read_carriers`...) listeyi kırk kaleme çıkarır ve hiçbir şey kazandırmaz:
+ * katalog okuyan bir ajan zaten hepsini ister. Bölme çizgisi, izin kararının
+ * gerçekten değiştiği yerde: okuma/yazma, kullanıcı verisi, para, kod,
+ * şema. Yirmi beş araç bu çizgilerin sonucudur.
  */
 export type ToolName =
+  // --- Okuma ---
   | 'read_catalog'
   | 'read_price_history'
   | 'read_merchant'
   | 'read_market_config'
   | 'read_revenue'
+  | 'read_orders'
+  /** Oturum sahibinin KENDİ verisi. Ajan başkasının verisini isteyemez. */
+  | 'read_user_scoped'
+  | 'read_analytics'
+  /** Alım çalıştırmaları, kuyruk, devre kesici, API kayıtları. */
+  | 'read_ops'
+  /** Şema ve plan incelemesi. Veri değil, yapı okur. */
+  | 'read_db'
+  // --- Yazma ---
+  | 'write_catalog'
+  | 'write_price'
+  | 'write_risk_flag'
+  | 'write_moderation'
+  | 'write_content'
+  | 'write_ops'
   | 'write_agent_decision'
-  | 'call_model';
+  /**
+   * Şema değişikliği ÖNERİR, uygulamaz.
+   *
+   * Adı bilerek `apply_ddl` değil: bu aracı taşıyan ajan bir plan, risk
+   * analizi ve geri alma metni üretir. Uygulamayı insan onayı yapar.
+   */
+  | 'propose_ddl'
+  // --- Dış dünya ve mühendislik ---
+  | 'call_model'
+  | 'http_fetch'
+  | 'browser'
+  | 'read_repo'
+  | 'write_repo'
+  /** typecheck, lint, test, build. */
+  | 'run_check'
+  | 'read_ci';
 
 export interface AgentContext {
   /** Bu görevin pazarı. Ajan başka pazarın verisini istememeli. */
