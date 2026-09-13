@@ -2145,7 +2145,85 @@ export async function getAnswerVendorId(groupId: string): Promise<string | null>
  * bütün varlık nedenine aykırı. Boş liste, sayfanın dürüst boş durumunu
  * gösterir.
  */
-export async function getPriceDrops(options?: {
+/**
+ * Pencerede İKİ KEZ ölçülmüş bir ürün var mı?
+ *
+ * ÖLÇÜLDÜ (üretim, 2026-09-13): 35.762 ürünün TAMAMI tek ölçüme sahip;
+ * ikisi olan YOK. Yani `price_drops` bugün hiçbir koşulda satır
+ * döndüremez -- çünkü fonksiyonun kendi koşulu `olcum_sayisi >= 2`.
+ *
+ * Buna rağmen sayfa o fonksiyonu her istekte çağırıyordu ve fonksiyon,
+ * cevabı "boş" olduğu hâlde 149 MB'lık `products` tablosunu baştan sona
+ * tarıyordu (plan ölçüldü: Seq Scan on products). Sonuç: /firsatlar 7
+ * saniye sürüyor ve çoğu zaman deyim zaman aşımına uğrayıp "Fırsatları şu
+ * an gösteremiyoruz" hatasını gösteriyordu -- ölçülmüş.
+ *
+ * Bu ön koşul, cevabı ÖNCEDEN bilinen pahalı sorguyu hiç çalıştırmıyor.
+ * 8 MB'lık `price_points` tablosundan yalnızca `product_id` okunuyor;
+ * anahtara göre sıralı geldiği için AYNI ürünün iki kaydı yan yana düşer
+ * ve ilk tekrarda döngü biter.
+ *
+ * KALICI ÇÖZÜM BU DEĞİL: asıl sorun, fiyat anlık görüntüsünün yalnızca bir
+ * kez alınmış olması. İkinci ölçüm biriktiği anda bu kontrol kendiliğinden
+ * geçer ve sayfa gerçek fırsatları göstermeye başlar -- ama o noktada
+ * `price_drops` fonksiyonunun kendisi de hızlandırılmalı (bkz. PR notu).
+ */
+async function olculmusDususVarMi(
+  supabase: NonNullable<ReturnType<typeof createAnonClient>>,
+  days: number,
+): Promise<boolean> {
+  const esik = new Date(Date.now() - days * 86_400_000).toISOString();
+  let oncekiUrun: string | null = null;
+  let tekrarVar = false;
+
+  await collectByKeyset<{ product_id: string }>({
+    // Tablo bugün 33.700 satır. Üst sınır, tablo beklenmedik biçimde
+    // büyürse isteğin sınırsız uzamasını engelliyor; sınıra dayanmak
+    // "tekrar yok" demek DEĞİL, yalnızca "burada bulamadık" demek --
+    // ve bu durumda pahalı sorgu yine çalışır, yani hata güvenli tarafta.
+    max: 200_000,
+    pageSize: 1000,
+    key: (satir) => satir.product_id,
+    fetchPage: async (after, limit) => {
+      if (tekrarVar) return [];
+
+      let sorgu = supabase
+        .from('price_points')
+        .select('product_id')
+        .gt('observed_at', esik)
+        .order('product_id', { ascending: true })
+        .limit(limit);
+
+      if (after !== null) sorgu = sorgu.gt('product_id', after);
+
+      const { data, error } = await sorgu;
+      if (error) throw new Error(`Fiyat ölçümleri okunamadı: ${error.message}`);
+
+      const satirlar = (data ?? []) as Array<{ product_id: string }>;
+
+      /*
+       * TEKRAR ARANIYOR, SAYIM DEĞİL. `product_id`'ye göre sıralı geldiği
+       * için aynı ürünün ikinci kaydı hep bir öncekinin yanındadır.
+       * Sayfa sınırında da doğru çalışsın diye son değer sayfalar arasında
+       * taşınıyor -- ama keyset `>` kullandığı için sınırda aynı değer bir
+       * daha gelmez; bu yüzden tekrar YALNIZCA sayfa içinde görünür.
+       */
+      for (const satir of satirlar) {
+        if (satir.product_id === oncekiUrun) {
+          tekrarVar = true;
+          return [];
+        }
+        oncekiUrun = satir.product_id;
+      }
+
+      return satirlar;
+    },
+  });
+
+  return tekrarVar;
+}
+
+async function fiyatiDusenleriOku(options?: {
   days?: number;
   minDropRatio?: number;
   categoryId?: string | null;
@@ -2154,8 +2232,13 @@ export async function getPriceDrops(options?: {
   const supabase = createAnonClient();
   if (!supabase) return [];
 
+  const gunler = options?.days ?? 30;
+
+  // Cevabı boş olacak pahalı sorguyu hiç çalıştırma.
+  if (!(await olculmusDususVarMi(supabase, gunler))) return [];
+
   const { data, error } = await supabase.rpc('price_drops', {
-    p_days: options?.days ?? 30,
+    p_days: gunler,
     p_min_drop_ratio: options?.minDropRatio ?? 0.05,
     p_category_id: options?.categoryId ?? null,
     p_limit: options?.limit ?? 24,
@@ -2417,6 +2500,15 @@ export const getPriceHistory = onbellekle('fiyat-gecmisi', fiyatGecmisiniOku, ON
 
 /** Arama kutusunun katalogdan türetilen ipuçları. */
 export const getSearchHints = onbellekle('arama-ipuclari', aramaIpuclariniOku, ONBELLEK.vitrin);
+
+/*
+ * FIRSATLAR ÖNBELLEĞE ALINDI.
+ *
+ * Sayfa `revalidate = 900` ilan ediyordu ama kök yerleşim `force-dynamic`
+ * olduğu için o değer HİÇ uygulanmıyordu: her ziyaret sorguyu baştan
+ * çalıştırıyordu. Ölçülen sonuç 4-8 saniyeydi.
+ */
+export const getPriceDrops = onbellekle('fiyat-dusenler', fiyatiDusenleriOku, ONBELLEK.vitrin);
 
 /** Serbest metin ARAMASI OLMAYAN listeleme -- kategori, sıralama, sayfalama. */
 const listelemeOnbellekli = onbellekle('listeleme', aramaOku, ONBELLEK.listeleme);
