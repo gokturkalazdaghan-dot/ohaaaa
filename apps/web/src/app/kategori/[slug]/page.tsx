@@ -191,6 +191,13 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   const totalOffers = results.results.reduce((sum, result) => sum + result.offerCount, 0);
   const totalPages = Math.max(1, Math.ceil(results.totalCount / PAGE_SIZE));
 
+  /*
+   * Tavana dayanmis sayi KESIN DEGIL, alt sinirdir. "1.000" yazmak
+   * kullaniciya yanlis bir kesinlik vaat ederdi; "1.000+" dogruyu soyler.
+   */
+  const toplamMetni =
+    formatCount(results.totalCount, contentTag) + (results.totalCapped ? '+' : '');
+
   /** Siralamayi koruyarak sayfa degistiren bag uretir. */
   function categoryHref(changes: { sirala?: string; sayfa?: string }): string {
     const merged = { sirala: sort, sayfa: String(page), ...changes };
@@ -291,9 +298,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
                 ad: category.name,
                 urunSayisi: (
                   <strong className="text-fg">
-                    {t(contentLocale, 'kategori.urunAdet', {
-                      adet: formatCount(results.totalCount, contentTag),
-                    })}
+                    {t(contentLocale, 'kategori.urunAdet', { adet: toplamMetni })}
                   </strong>
                 ),
                 // Tek sayfalık kategoride "(sayfa 1/1)" yazmak gürültüdür.
