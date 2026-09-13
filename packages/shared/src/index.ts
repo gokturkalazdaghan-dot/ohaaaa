@@ -18,3 +18,4 @@ export * from './categoryTree.js';
 export * from './keyset.js';
 export * from './gtin.js';
 export * from './messages/index.js';
+export * from './concurrency.js';
