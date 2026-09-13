@@ -6,6 +6,9 @@ import { DataUnavailable } from '@/components/DataUnavailable';
 import { FlashDeals } from '@/components/FlashDeals';
 import { categoryIcon } from '@/components/Icons';
 import { SearchBar } from '@/components/SearchBar';
+import { getRequestLocale } from '@/lib/locale';
+import { t, type Locale } from '@ohaaaa/shared';
+
 import { isVisualSearchConfigured } from '@/lib/visualSearch';
 import { ProductCard } from '@/components/ProductCard';
 import { RecentlyViewed } from '@/components/RecentlyViewed';
@@ -66,6 +69,11 @@ async function fetched<T>(what: string, promise: Promise<T>): Promise<Fetched<T>
 }
 
 export default async function HomePage() {
+  /*
+   * SAYFA DİLİ. `getRequestLocale` çevirisi GERÇEKTEN olan bir dil döndürür
+   * (sözlükten türetiliyor), dolayısıyla burada ayrıca kontrol gerekmiyor.
+   */
+  const { contentLocale } = await getRequestLocale();
   /*
    * ANA SAYFA ARTIK KESİNTİDE ÇÖKMÜYOR.
    *
@@ -141,7 +149,8 @@ export default async function HomePage() {
           burada acikca soylenir; fiyat karsilastirmada asil fark budur. */}
       <section className="py-10 sm:py-14">
         <h1 className="max-w-3xl text-4xl font-extrabold leading-[1.1] tracking-tight text-fg sm:text-5xl">
-          <span className="text-brand">OHA!</span> Aradığını bulduk
+          <span className="text-brand">{t(contentLocale, 'ev.basligiVurgu')}</span>{' '}
+          {t(contentLocale, 'ev.basligi')}
         </h1>
         {/*
           Alt metin ne yaptığımızı SÖYLER, başlık dikkati çeker. Başlığın
@@ -149,10 +158,23 @@ export default async function HomePage() {
           yazıyor. Ama alt metin de kaybolmamalı: "kargo dahil" bu sitenin
           rakiplerinden ayrıldığı tek cümle.
         */}
+        {/*
+          Vurgulu parça metnin İÇİNDE bir değişken: "{vurgu}". Cümleyi üç
+          parçaya bölüp ortadakini kalın yazmak, İngilizcede sözcük sırası
+          farklı olduğu için çalışmazdı -- vurgu cümlenin başka yerine düşer.
+        */}
         <p className="mt-4 max-w-xl text-base text-muted sm:text-lg">
-          Ne aradığını yaz — mağazaların kargo ve indirimlerini hesaba katıp
-          <strong className="font-semibold text-fg"> kargo dahil toplam tutarı</strong>{' '}
-          karşılaştıralım. En düşük toplam üstte durur.
+          {(() => {
+            const vurgu = t(contentLocale, 'ev.altBaslikVurgu');
+            const [once, ...sonra] = t(contentLocale, 'ev.altBaslik', { vurgu: '\u0000' }).split('\u0000');
+            return (
+              <>
+                {once}
+                <strong className="font-semibold text-fg">{vurgu}</strong>
+                {sonra.join('')}
+              </>
+            );
+          })()}
         </p>
 
         {/*
@@ -176,6 +198,7 @@ export default async function HomePage() {
               label="Ürün, marka veya model ara"
               visualSearchEnabled={isVisualSearchConfigured()}
               hints={ipuclari}
+              locale={contentLocale}
             />
           </Suspense>
         </div>
@@ -194,7 +217,7 @@ export default async function HomePage() {
           yalnızca metinle çizilir.
         */}
         {categories.length > 0 && (
-          <nav aria-label="Kategoriler" className="mt-6">
+          <nav aria-label={t(contentLocale, 'ev.kategoriler')} className="mt-6">
             <ul className="flex flex-wrap gap-2">
               {/*
                 Üst kategori ve alt kategorileri BİRLİKTE. Kataloğun
@@ -235,11 +258,11 @@ export default async function HomePage() {
 
       {catalogUnavailable && (
         <DataUnavailable
-          title="Ürünleri şu an listeleyemiyoruz"
+          title={t(contentLocale, 'ev.listelenemiyor')}
           description="Veri kaynağımıza geçici olarak ulaşamıyoruz. Size eski veya yanlış bir fiyat göstermektense hiç göstermemeyi tercih ediyoruz. Arama kutusu çalışmaya devam ediyor."
         />
       )}
-      {catalogEmpty && <LaunchState />}
+      {catalogEmpty && <LaunchState locale={contentLocale} />}
 
       {/* --- Firsatlar -----------------------------------------------------
           Ana sayfa bu bloğu KENDİ işaretlemesiyle çiziyordu; FlashDeals
@@ -264,14 +287,18 @@ export default async function HomePage() {
       */}
       {vitrin.length > 0 && (
         <section className="mt-12">
-          <ShowcaseTiers tiers={vitrin} />
+          <ShowcaseTiers tiers={vitrin} locale={contentLocale} />
         </section>
       )}
 
       {/* --- Urunler -------------------------------------------------------- */}
       {trending.length > 0 && (
         <section className="mt-12">
-          <SectionHead title="Çok karşılaştırılanlar" href="/arama" linkLabel="Tümü" />
+          <SectionHead
+            title={t(contentLocale, 'ev.cokKarsilastirilanlar')}
+            href="/arama"
+            linkLabel={t(contentLocale, 'ortak.tumu')}
+          />
           <ul className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
             {trending.map((result) => (
               <li key={result.groupId}>
@@ -285,7 +312,7 @@ export default async function HomePage() {
       {/* --- Magazalar ------------------------------------------------------ */}
       {vendors.length > 0 && (
         <section className="mt-12">
-          <SectionHead title="Karşılaştırdığımız mağazalar" />
+          <SectionHead title={t(contentLocale, 'ev.karsilastirdigimizMagazalar')} />
           {/* Mağaza adları artık kendi vitrinlerine bağlanıyor. Tıklanamayan
               bir isim, ziyaretçiye o mağaza hakkında hiçbir şey vermiyordu. */}
           <ul className="mt-4 flex flex-wrap gap-2">
@@ -342,13 +369,13 @@ function SectionHead({
  * saticiyi - basvuruya goturmek. Katalog magazalardan gelir; bu yuzden bos
  * bir ana sayfanin en degerli kullanimi satici kazanmaktir.
  */
-function LaunchState() {
+function LaunchState({ locale }: { locale: Locale }) {
   return (
     <section className="mt-2" aria-labelledby="lansman">
       <div className="rounded-2xl border border-line bg-surface p-6 sm:p-8">
         <p className="text-sm font-semibold uppercase tracking-wide text-brand">Yeni açıldı</p>
         <h2 id="lansman" className="mt-3 text-2xl font-extrabold tracking-tight text-fg sm:text-3xl">
-          Katalog satıcılarla birlikte dolacak
+          {t(locale, 'ev.katalogBos')}
         </h2>
         <p className="mt-4 max-w-2xl leading-relaxed text-muted">
           Şu anda yayında ürün yok. Gerçek satıcıdan gelmeyen hiçbir fiyatı

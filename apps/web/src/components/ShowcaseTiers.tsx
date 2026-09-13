@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import { formatMoney, scoredCount } from '@ohaaaa/shared';
+import { formatMoney, scoredCount, t, type Locale } from '@ohaaaa/shared';
 
 import type { ShowcaseTier } from '@/data/catalog';
 import { ProductPlaceholder } from './ProductPlaceholder';
@@ -24,22 +24,20 @@ import { resolveProductImage } from './ProductCard';
  * çelişkiliydi. Sunucuda çizilince ana sayfaya framer-motion yükü binmiyor
  * ve kareler ilk boyamada görünür oluyor.
  */
-export function ShowcaseTiers({ tiers }: { tiers: ShowcaseTier[] }) {
+export function ShowcaseTiers({ tiers, locale }: { tiers: ShowcaseTier[]; locale: Locale }) {
   if (tiers.length === 0) return null;
 
   return (
     <section aria-labelledby="vitrin-basligi">
       <h2 id="vitrin-basligi" className="text-2xl font-extrabold tracking-tight text-fg sm:text-3xl">
-        Vitrin
+        {t(locale, 'vitrin.baslik')}
       </h2>
-      <p className="mt-2 text-sm text-muted">
-        En çok teklif veren mağazadan başlayarak, her basamakta o mağazanın öne çıkan beş ürünü.
-      </p>
+      <p className="mt-2 text-sm text-muted">{t(locale, 'vitrin.aciklama')}</p>
 
       <ol className="mt-6 space-y-8">
         {tiers.map((tier, sira) => (
           <li key={tier.merchantSlug}>
-            <TierHead tier={tier} basamak={sira + 1} />
+            <TierHead tier={tier} basamak={sira + 1} locale={locale} />
 
             {/*
               KARE IZGARA.
@@ -118,7 +116,9 @@ export function ShowcaseTiers({ tiers }: { tiers: ShowcaseTier[] }) {
                             </p>
                           )}
                           {urun.offerCount > 1 && (
-                            <p className="mt-1 text-xs text-muted">{urun.offerCount} teklif</p>
+                            <p className="mt-1 text-xs text-muted">
+                              {t(locale, 'vitrin.teklif', { adet: urun.offerCount })}
+                            </p>
                           )}
                         </div>
                       </div>
@@ -142,14 +142,22 @@ export function ShowcaseTiers({ tiers }: { tiers: ShowcaseTier[] }) {
  * ağırlığın yarısı). "En yüksek puanlı ürünler" yazıp altına puansız beş
  * ürün dizmek, ölçmediğimiz bir sıralamayı ölçülmüş gibi sunmak olurdu.
  */
-function TierHead({ tier, basamak }: { tier: ShowcaseTier; basamak: number }) {
+function TierHead({
+  tier,
+  basamak,
+  locale,
+}: {
+  tier: ShowcaseTier;
+  basamak: number;
+  locale: Locale;
+}) {
   const puanli = scoredCount(tier.products);
   const olcut =
     puanli === tier.products.length
-      ? 'Ohaaaa puanına göre'
+      ? t(locale, 'vitrin.olcutPuan')
       : puanli > 0
-        ? `${puanli} üründe Ohaaaa puanı ölçüldü, onlar önde`
-        : 'Ohaaaa puanı henüz ölçülemedi — en çok teklifle karşılaştırılanlar';
+        ? t(locale, 'vitrin.olcutPuanKismi', { adet: puanli })
+        : t(locale, 'vitrin.olcutTeklif');
 
   return (
     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -157,7 +165,9 @@ function TierHead({ tier, basamak }: { tier: ShowcaseTier; basamak: number }) {
       <Link href={`/magaza/${tier.merchantSlug}`} className="text-lg font-bold text-fg hover:text-brand">
         {tier.merchantName}
       </Link>
-      <span className="tabular text-xs text-muted">{tier.offerCount.toLocaleString('tr-TR')} teklif</span>
+      <span className="tabular text-xs text-muted">
+        {t(locale, 'vitrin.teklif', { adet: tier.offerCount.toLocaleString('tr-TR') })}
+      </span>
       <span className="text-xs text-subtle">· {olcut}</span>
     </div>
   );
