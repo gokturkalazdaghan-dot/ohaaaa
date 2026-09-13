@@ -120,7 +120,7 @@ test('aynı kimlikle ikinci kayıt reddedilir', () => {
 
 test('pazar kapsamı dışındaki ajan SEÇİLMEZ', async () => {
   const r = new AgentRegistry();
-  r.register(ajan({ id: 'sadece-de', capabilities: ['fiyat'], marketScope: ['DE'] }));
+  r.register(ajan({ id: 'sadece-eu', capabilities: ['fiyat'], marketScope: ['EU'] }));
 
   const tr = await orchestrate({
     market: 'TR',
@@ -130,7 +130,7 @@ test('pazar kapsamı dışındaki ajan SEÇİLMEZ', async () => {
   assert.equal(tr.status, 'basarisiz');
 
   const de = await orchestrate({
-    market: 'DE',
+    market: 'EU',
     registry: r,
     tasks: [{ id: 'f', capability: 'fiyat' }],
   });

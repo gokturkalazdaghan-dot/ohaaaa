@@ -21,22 +21,32 @@ export const LOCALES = ['tr', 'de', 'en'] as const;
 export type Locale = (typeof LOCALES)[number];
 
 /**
- * Faaliyet gösterilen pazarlar (ISO 3166-1 alpha-2).
+ * Faaliyet gösterilen pazarlar.
  *
- * ⚠️ BU LİSTE ŞU AN VERİTABANINDAN İLERİDE.
- * `public.market` enum'u bugün yalnızca TR/DE/US taşıyor; buradaki GB/ES/PT
- * karşılığı henüz şemada YOK. Bu bilerek böyle: pazar modeli veri odaklı
- * `markets` tablosuna taşınıyor (global market modeli, M1–M4) ve enum
- * tamamen düşürülecek. Araya bir `ALTER TYPE` sıkıştırmak, birkaç gün sonra
- * düşürülecek bir tipe geri alınamaz değer eklemek olurdu.
+ * BU LİSTE ARTIK VERİTABANIYLA UYUMLU. Önceki hâli `['TR','DE','US','GB','ES','PT']`
+ * idi ve kendi yorumunda bunun veritabanından ileride olduğunu, güvenli
+ * olmasının tek sebebinin "bu değerler hiçbir sorguya ULAŞMIYOR" olduğunu
+ * yazıyordu. O koşul artık geçerli değil: pazar kodu sorguya parametre olarak
+ * girecek (`products.market_code`), dolayısıyla sözlüğün veriyle birebir
+ * olması ŞART.
  *
- * BUGÜN NEDEN GÜVENLİ: bu listedeki bir değer hiçbir veritabanı sorgusuna
- * ULAŞMIYOR. `resolveMarket()` sonucu yalnızca `localeTag()`'e gidiyor;
- * alım hattındaki `market` ise DB satırından OKUNUYOR, buraya yazılmıyor.
- * Ölçüldü. Bu koşul değişirse -- yani bir pazar kodu sorguya parametre
- * olarak geçmeye başlarsa -- şema hazır olana kadar o yol açılmamalı.
+ * ÖLÇÜLEN GERÇEK -- `public.markets` tablosu:
+ *   ANZ · CA · EU · GCC · NORDICS · TR · UK · US
+ *
+ * Eski listedeki `GB` veritabanında YOK; oradaki kod `UK`. Ürünlerin tamamı
+ * `market_code = 'UK'` taşıyor (35.742 teklif, ölçüldü). Yani eski sözlükle
+ * kurulacak bir pazar süzmesi HİÇBİR ürün döndürmezdi. `DE`, `ES` ve `PT` de
+ * tabloda yok -- Avrupa tek bir `EU` pazarı olarak modellenmiş.
+ *
+ * NEDEN TABLONUN TAMAMI DEĞİL: `ANZ`, `GCC` ve `NORDICS` satırlarının
+ * `default_currency` değeri NULL (ölçüldü) -- çünkü üçü de tek para birimi
+ * olmayan bölgeler (AUD/NZD, AED/SAR/QAR/KWD, SEK/NOK/DKK). Bir pazarın para
+ * birimi, ziyaretçinin gerçekte ödeyeceği birimdir; onu uydurmak fiyatı
+ * yanlış göstermek olur. O üçü, para birimi kararı verilip ürün geldiğinde
+ * eklenecek. Buradaki her kod tabloda VAR -- liste bir alt küme, çelişki
+ * değil.
  */
-export const MARKETS = ['TR', 'DE', 'US', 'GB', 'ES', 'PT'] as const;
+export const MARKETS = ['TR', 'UK', 'US', 'EU', 'CA'] as const;
 export type Market = (typeof MARKETS)[number];
 
 export const DEFAULT_LOCALE: Locale = 'tr';
@@ -62,17 +72,12 @@ export const MARKET_CONFIG: Record<Market, MarketConfig> = {
     numberLocale: 'tr-TR',
     locales: ['tr', 'en'],
   },
-  DE: {
-    code: 'DE',
-    currency: 'EUR',
-    defaultLocale: 'de',
-    numberLocale: 'de-DE',
-    /*
-     * Almanya'da Türkçe DE BİR PAZAR DİLİDİR. Bu bir nezaket değil,
-     * ölçülebilir bir gerçek: Almanya'daki en büyük göçmen topluluğu
-     * Türkçe konuşuyor ve Ohaaaa'nın ilk doğal kitlesi tam olarak orada.
-     */
-    locales: ['de', 'tr', 'en'],
+  UK: {
+    code: 'UK',
+    currency: 'GBP',
+    defaultLocale: 'en',
+    numberLocale: 'en-GB',
+    locales: ['en'],
   },
   US: {
     code: 'US',
@@ -81,48 +86,82 @@ export const MARKET_CONFIG: Record<Market, MarketConfig> = {
     numberLocale: 'en-US',
     locales: ['en'],
   },
-  /*
-   * GB / ES / PT — Awin advertiser kısa listesinin ülkeleri.
-   *
-   * Üçünün de `defaultLocale` değeri 'en'. Bu bir tercih değil, ELDEKİNİN
-   * DÜRÜST BEYANI: `LOCALES` yalnızca tr/de/en taşıyor ve projede çeviri
-   * altyapısı yok (i18n dizini, mesaj dosyası yok — metinler bileşenlerin
-   * içinde). 'es'/'pt' eklemek, karşılığı olmayan bir dil vaadi olurdu:
-   * kullanıcı İspanyolca seçer, sayfa İngilizce gelirdi.
-   *
-   * `numberLocale` ise gerçek: sayı ve para biçimi ülkeye göre değişir ve
-   * bunun için çeviri gerekmez. İspanya'da "1.234,56 €", Portekiz'de
-   * "1 234,56 €", Britanya'da "£1,234.56" -- üçü de farklı ve üçü de
-   * Intl tarafından karşılanıyor.
-   */
-  GB: {
-    code: 'GB',
-    currency: 'GBP',
-    defaultLocale: 'en',
-    numberLocale: 'en-GB',
-    locales: ['en'],
-  },
-  ES: {
-    code: 'ES',
+  EU: {
+    /*
+     * Avrupa tek bir pazar olarak modelleniyor -- veritabanı öyle diyor
+     * (`markets.code = 'EU'`, `default_currency = 'EUR'`). Ülke ülke ayırmak
+     * mümkün ama bugün hiçbir Avrupa ülkesinde ürün yok; ayrım, ayıracak
+     * ürün geldiğinde anlam kazanır.
+     *
+     * `defaultLocale` 'en': `LOCALES` yalnızca tr/de/en taşıyor ve EU yirmi
+     * ülkeyi kapsıyor. Almancayı varsayılan yapmak Fransız kullanıcıya
+     * Almanca göstermek olurdu. Almanca ve Türkçe PAZAR DİLİ olarak duruyor:
+     * ikisi de gerçekten var ve kullanıcı seçerse çalışıyor.
+     *
+     * `numberLocale` 'en-IE': İngilizce + euro biçimi. Uydurma değil --
+     * İrlanda tam olarak böyle yazar ("€1,234.56").
+     */
+    code: 'EU',
     currency: 'EUR',
     defaultLocale: 'en',
-    numberLocale: 'es-ES',
-    locales: ['en'],
+    numberLocale: 'en-IE',
+    locales: ['en', 'de', 'tr'],
   },
-  PT: {
-    code: 'PT',
-    currency: 'EUR',
+  CA: {
+    code: 'CA',
+    currency: 'CAD',
     defaultLocale: 'en',
-    numberLocale: 'pt-PT',
+    numberLocale: 'en-CA',
     locales: ['en'],
   },
 };
 
+/**
+ * Ülke kodundan pazara eşleme (ISO 3166-1 alpha-2).
+ *
+ * NEDEN AYRI BİR EŞLEME GEREKİYOR
+ * Eskiden IP ülkesi DOĞRUDAN pazar kodu sayılıyordu. Artık olmaz: ülke ile
+ * pazar aynı şey değil. Britanya'nın ülke kodu `GB`, pazar kodu `UK`;
+ * Almanya'nın ülke kodu `DE`, pazarı ise `EU`.
+ *
+ * AVRUPA'DA YALNIZCA EURO BÖLGESİ EŞLENİYOR ve bu bilinçli. `EU` pazarının
+ * para birimi EUR; bir pazarın para birimi ziyaretçinin gerçekte ödeyeceği
+ * birimdir. İsveç'i (SEK) ya da Polonya'yı (PLN) EU'ya eşlemek onlara euro
+ * fiyat göstermek olurdu. Euro kullanmayan AB üyeleri, kendi pazarları
+ * açılana kadar varsayılana düşer -- onlara yanlış para birimi göstermektense
+ * varsayılan pazarı göstermek dürüst.
+ */
+const EURO_BOLGESI = [
+  'AT', 'BE', 'HR', 'CY', 'EE', 'FI', 'FR', 'DE', 'GR', 'IE',
+  'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PT', 'SK', 'SI', 'ES',
+] as const;
+
+const COUNTRY_TO_MARKET: Readonly<Record<string, Market>> = {
+  TR: 'TR',
+  GB: 'UK',
+  US: 'US',
+  CA: 'CA',
+  ...Object.fromEntries(EURO_BOLGESI.map((ulke) => [ulke, 'EU' as Market])),
+};
+
+/**
+ * Bir ülke kodunun pazarı; tanınmıyorsa null.
+ *
+ * Tanınmayan ülke için UYDURMA PAZAR AÇILMAZ. Çağıran taraf null görünce
+ * varsayılana düşer; bu, ziyaretçiye yanlış para biriminde fiyat göstermekten
+ * iyidir.
+ */
+export function marketForCountry(value: string | null | undefined): Market | null {
+  if (!value) return null;
+  const kod = value.trim().toUpperCase();
+  return COUNTRY_TO_MARKET[kod] ?? null;
+}
+
 /** BCP-47 dil etiketi — `<html lang>` ve sesli arama için. */
-const LOCALE_TAGS: Record<Locale, Record<string, string>> = {
-  tr: { TR: 'tr-TR', DE: 'tr-TR', US: 'tr-TR', GB: 'tr-TR', ES: 'tr-TR', PT: 'tr-TR' },
-  de: { TR: 'de-DE', DE: 'de-DE', US: 'de-DE', GB: 'de-DE', ES: 'de-DE', PT: 'de-DE' },
-  en: { TR: 'en-GB', DE: 'en-GB', US: 'en-US', GB: 'en-GB', ES: 'en-GB', PT: 'en-GB' },
+const LOCALE_TAGS: Record<Locale, Record<Market, string>> = {
+  tr: { TR: 'tr-TR', UK: 'tr-TR', US: 'tr-TR', EU: 'tr-TR', CA: 'tr-TR' },
+  de: { TR: 'de-DE', UK: 'de-DE', US: 'de-DE', EU: 'de-DE', CA: 'de-DE' },
+  en: { TR: 'en-GB', UK: 'en-GB', US: 'en-US', EU: 'en-IE', CA: 'en-CA' },
 };
 
 export function isLocale(value: unknown): value is Locale {
@@ -246,7 +285,8 @@ export function resolveMarket(signals: MarketSignals = {}): ResolvedMarket {
 
   const explicitMarket = normalizeMarket(signals.explicitMarket);
   const accountMarket = normalizeMarket(signals.accountMarket);
-  const ipMarket = normalizeMarket(signals.ipCountry);
+  // IP bir ÜLKE kodu verir, pazar kodu değil: eşlemeden geçmeli.
+  const ipMarket = marketForCountry(signals.ipCountry);
 
   if (explicitMarket) {
     market = explicitMarket;
