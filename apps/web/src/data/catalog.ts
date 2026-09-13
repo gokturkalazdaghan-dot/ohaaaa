@@ -83,6 +83,14 @@ const ONBELLEK = {
   vitrin: 900,
   /** Gezinme amaçlı arama (serbest metin YOK): fiyatlar beslemeyle değişir. */
   listeleme: 600,
+  /**
+   * SİSTEM DÜZEYİNDE, günde en çok bir kez değişen olgular.
+   *
+   * "Ölçülmüş fiyat düşüşü mümkün mü" sorusu böyle bir olgu: cevabı ancak
+   * fiyat anlık görüntüsü yeniden alındığında değişir (ölçüldü: en yeni
+   * ölçüm 2026-09-12 16:36, yani günde en fazla birkaç kez).
+   */
+  gunluk: 21_600,
 } as const;
 
 /**
@@ -2168,10 +2176,10 @@ export async function getAnswerVendorId(groupId: string): Promise<string | null>
  * geçer ve sayfa gerçek fırsatları göstermeye başlar -- ama o noktada
  * `price_drops` fonksiyonunun kendisi de hızlandırılmalı (bkz. PR notu).
  */
-async function olculmusDususVarMi(
-  supabase: NonNullable<ReturnType<typeof createAnonClient>>,
-  days: number,
-): Promise<boolean> {
+async function olculmusDususVarMiOku(days: number): Promise<boolean> {
+  const supabase = createAnonClient();
+  if (!supabase) return false;
+
   const esik = new Date(Date.now() - days * 86_400_000).toISOString();
   let oncekiUrun: string | null = null;
   let tekrarVar = false;
@@ -2182,7 +2190,19 @@ async function olculmusDususVarMi(
     // "tekrar yok" demek DEĞİL, yalnızca "burada bulamadık" demek --
     // ve bu durumda pahalı sorgu yine çalışır, yani hata güvenli tarafta.
     max: 200_000,
-    pageSize: 1000,
+    /*
+     * SAYFA BOYUTU BÜYÜK, ÇÜNKÜ MALİYET TUR SAYISINDA.
+     *
+     * Örnek ölçüldü: 10.000 satırlık index-only tarama, buffer'ların
+     * TAMAMI önbellekte olduğu hâlde 1,6 saniye sürüyor (`shared hit=1670`).
+     * Yani gecikme veriden değil, örneğin kısıtlı işlemci payından
+     * geliyor. Bu koşulda 1.000'lik sayfalar 34 tur demekti ve /firsatlar
+     * 4-8 saniyeye çıkıyordu -- ölçüldü.
+     *
+     * 10.000, `anon` rolünün 3 saniyelik deyim zaman aşımının altında
+     * kalıyor (1,6 sn) ve tur sayısını dörde indiriyor.
+     */
+    pageSize: 10_000,
     key: (satir) => satir.product_id,
     fetchPage: async (after, limit) => {
       if (tekrarVar) return [];
@@ -2234,8 +2254,33 @@ async function fiyatiDusenleriOku(options?: {
 
   const gunler = options?.days ?? 30;
 
-  // Cevabı boş olacak pahalı sorguyu hiç çalıştırma.
-  if (!(await olculmusDususVarMi(supabase, gunler))) return [];
+  /*
+   * Cevabı boş olacak pahalı sorguyu hiç çalıştırma.
+   *
+   * ÖN KOŞUL DÜŞERSE "DÜŞÜŞ YOK" KABUL EDİLİR, hata fırlatılmaz. `anon`
+   * rolünün deyim zaman aşımı 3 saniye (ölçüldü) ve örnek yoğunken bu
+   * tarama sınıra dayanabilir. İki seçenek vardı:
+   *
+   *   hata fırlat → sayfa yine "Fırsatları şu an gösteremiyoruz" kutusu
+   *   boş say     → sayfa dürüst boş durumu gösterir
+   *
+   * Bugünün verisinde doğru cevap zaten boş (hiçbir ürünün iki ölçümü
+   * yok), dolayısıyla ikincisi kullanıcıya YANLIŞ bir şey söylemiyor.
+   * Yine de sessiz değil: düşen her kontrol günlüğe yazılıyor, çünkü
+   * gerçek düşüşler biriktiğinde bu davranış onları gizleyebilir.
+   */
+  const dususMumkunMu = await olculmusDususVarMi(gunler).catch((hata: unknown) => {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'Fiyat ölçümü tekrarı kontrol edilemedi — düşüş yok kabul edildi',
+        hata: hata instanceof Error ? hata.message : String(hata),
+      }),
+    );
+    return false;
+  });
+
+  if (!dususMumkunMu) return [];
 
   const { data, error } = await supabase.rpc('price_drops', {
     p_days: gunler,
@@ -2509,6 +2554,24 @@ export const getSearchHints = onbellekle('arama-ipuclari', aramaIpuclariniOku, O
  * çalıştırıyordu. Ölçülen sonuç 4-8 saniyeydi.
  */
 export const getPriceDrops = onbellekle('fiyat-dusenler', fiyatiDusenleriOku, ONBELLEK.vitrin);
+
+/*
+ * ÖN KOŞUL AYRI ÖNBELLEKTE ve bu bilinçli.
+ *
+ * `getPriceDrops` kategoriye göre değişiyor (kök sayfa + her fırsat
+ * kategorisi); ön koşul ise DEĞİŞMİYOR -- "sistemde iki kez ölçülmüş bir
+ * ürün var mı" sorusunun kategoriyle ilgisi yok. Aynı önbellekte
+ * tutulsaydı her kategori aynı taramayı kendisi için bir kez daha
+ * yapardı.
+ *
+ * Süre 6 saat: cevap ancak fiyat anlık görüntüsü yeniden alındığında
+ * değişir.
+ */
+const olculmusDususVarMi = onbellekle(
+  'olcum-tekrari',
+  olculmusDususVarMiOku,
+  ONBELLEK.gunluk,
+);
 
 /** Serbest metin ARAMASI OLMAYAN listeleme -- kategori, sıralama, sayfalama. */
 const listelemeOnbellekli = onbellekle('listeleme', aramaOku, ONBELLEK.listeleme);
