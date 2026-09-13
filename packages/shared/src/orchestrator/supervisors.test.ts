@@ -17,7 +17,7 @@ import type { AgentDefinition, AgentResult, SupervisorId, ToolName } from './typ
  * biri bu dosyayı da değiştirmek zorunda kalsın; değişiklik bilinçli olsun.
  */
 
-test('on alan var ve hepsi tam olarak beklenen adlar', () => {
+test('on bir alan var ve hepsi tam olarak beklenen adlar', () => {
   assert.deepEqual([...SUPERVISORS], [
     'catalog',
     'pricing',
@@ -28,8 +28,18 @@ test('on alan var ve hepsi tam olarak beklenen adlar', () => {
     'infra',
     'commerce',
     'risk',
+    'security',
     'intelligence',
   ]);
+});
+
+test('security alani risk alanindan AYRI', () => {
+  /* `risk` urun ve ticaret riskiyle ilgileniyor; `security` sistemin
+     kendisini hedef alan tehditlerle. Tek kutuya konsalardi dolandiricilik
+     alarmlari guvenlik bulgularini golgelerdi -- cunku cok daha sik gelir. */
+  const l = SUPERVISORS as readonly string[];
+  assert.ok(l.includes('risk'));
+  assert.ok(l.includes('security'));
 });
 
 test('sistemle örtüşmeyen eski alanlar KALDIRILDI', () => {

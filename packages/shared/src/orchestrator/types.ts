@@ -31,7 +31,7 @@ import type { Market } from '../market.js';
  *
  * Boş bir alan zararsız görünür ama değildir: bir ajanı nereye koyacağını
  * bilmeyen geliştirici onu en yakın adı taşıyan kutuya atar ve sahiplik
- * sessizce kaybolur. Aşağıdaki on alanın her biri, depoda çalışan kod VE
+ * sessizce kaybolur. Aşağıdaki on bir alanın her biri, depoda çalışan kod VE
  * üretimde veri tutan tablolarla eşleşiyor.
  *
  * Sayı sabit değil: ihtiyaç çıkarsa alan eklenir ya da birleştirilir.
@@ -56,6 +56,18 @@ export const SUPERVISORS = [
   'commerce',
   /** Listeleme riski, dolandırıcılık, yasal uyum. */
   'risk',
+  /**
+   * Şema ve yetki sapması, sır yaşam döngüsü, tedarik zinciri, tespit ve
+   * olay müdahalesi.
+   *
+   * `risk`ten AYRI ve bu bilinçli: `risk` ürün ve ticaret riskiyle
+   * ilgileniyor -- yasaklı listeleme, sahte dönüşüm, yasal uyum. Burası
+   * sistemin KENDİSİNİ hedef alan tehditlerle ilgileniyor. İkisini tek
+   * kutuya koymak, birinin diğerini sessizce gölgelemesi demek olurdu:
+   * dolandırıcılık alarmları güvenlik bulgularından her zaman daha sık
+   * gelir.
+   */
+  'security',
   /** İş zekâsı, rakip analizi, fırsat keşfi, raporlama, deney. */
   'intelligence',
 ] as const;

@@ -14,6 +14,8 @@ import type { ToolName } from '../orchestrator/types.js';
 import type { ToolKaydi } from './contract.js';
 import { readRepoAraci } from './readRepo.js';
 import { runCheckAraci } from './runCheck.js';
+import { readDbAraci } from './readDb.js';
+import type { MetadataYurutucu } from './readDb.js';
 
 /** Uygulaması olmayan araçlar ve neden olmadığı. */
 const UYGULANMAMIS: Record<string, string> = {
@@ -26,7 +28,6 @@ const UYGULANMAMIS: Record<string, string> = {
   read_user_scoped: 'yetki sınıfı; oturum bağlamı araç katmanına taşınmadı',
   read_analytics: 'analitik kaynağı henüz tanımlı değil',
   read_ops: 'Supabase okuma istemcisi araç katmanına bağlanmadı',
-  read_db: 'şema/plan okuma yüzeyi araç katmanına bağlanmadı',
   write_catalog: 'yazma araçları doğrulama zinciri üretimde çalışmadan açılmayacak',
   write_price: 'yazma araçları doğrulama zinciri üretimde çalışmadan açılmayacak',
   write_risk_flag: 'yazma araçları doğrulama zinciri üretimde çalışmadan açılmayacak',
@@ -45,11 +46,24 @@ const UYGULANMAMIS: Record<string, string> = {
 export class ToolKayitDefteri {
   private readonly araclar = new Map<ToolName, ToolKaydi>();
 
-  constructor(kokDizin?: string) {
+  constructor(kokDizin?: string, metadataYurutucu?: MetadataYurutucu) {
     /* Uygulananlar. */
     if (kokDizin) {
       this.araclar.set('read_repo', readRepoAraci(kokDizin) as unknown as ToolKaydi);
       this.araclar.set('run_check', runCheckAraci(kokDizin) as unknown as ToolKaydi);
+    }
+    /*
+     * `read_db` YALNIZCA yürütücü verilirse uygulanmış sayılır. Yürütücüsüz
+     * bir veritabanı aracı, sessizce boş sonuç döndürerek "sapma yok"
+     * demenin en kolay yolu olurdu -- fail-closed.
+     */
+    if (metadataYurutucu) {
+      this.araclar.set('read_db', readDbAraci(metadataYurutucu) as unknown as ToolKaydi);
+    } else {
+      this.araclar.set('read_db', {
+        ad: 'read_db', uygulanmamis: true,
+        neden: 'meta veri yürütücüsü verilmedi (salt okunur DB kimliği yok)',
+      });
     }
     /* Kalanlar açıkça uygulanmamış olarak kaydediliyor. */
     for (const [ad, neden] of Object.entries(UYGULANMAMIS)) {

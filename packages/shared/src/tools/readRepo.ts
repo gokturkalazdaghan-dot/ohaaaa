@@ -16,7 +16,7 @@
  * bir dosyayı belleğe alması, hem maliyet hem de zaman aşımı üretir.
  */
 
-import { readFile, realpath } from 'node:fs/promises';
+import { readFile, readdir, realpath, stat } from 'node:fs/promises';
 import { isAbsolute, resolve, sep } from 'node:path';
 
 import { z } from 'zod';
@@ -27,12 +27,23 @@ import { ToolHatasi } from './contract.js';
 export const readRepoGirdi = z.object({
   /** Kök dizine GÖRE yol. Mutlak yol kabul edilmez. */
   yol: z.string().min(1).max(512),
+  /**
+   * `oku` dosya içeriğini, `listele` dizin girdilerini döndürür.
+   *
+   * Listeleme ayrı bir ARAÇ değil aynı aracın ikinci kipi: yol kapsamı,
+   * sembolik bağ kontrolü ve salt okunurluk tek yerde duruyor. İkinci bir
+   * araç yazmak, o üç kontrolü ikinci kez -- ve bir gün eksik -- yazmak
+   * olurdu.
+   */
+  mod: z.enum(['oku', 'listele']).default('oku'),
 });
 
 export const readRepoCikti = z.object({
   yol: z.string(),
   icerik: z.string(),
   bayt: z.number().int().nonnegative(),
+  /** `listele` kipinde dizin girdileri; `oku` kipinde boş. */
+  girdiler: z.array(z.string()),
 });
 
 export type ReadRepoGirdi = z.infer<typeof readRepoGirdi>;
@@ -40,6 +51,8 @@ export type ReadRepoCikti = z.infer<typeof readRepoCikti>;
 
 /** Tek dosya için üst sınır. */
 export const EN_BUYUK_BAYT = 2 * 1024 * 1024;
+/** Bir dizinde döndürülecek en çok girdi. */
+export const EN_COK_GIRDI = 1000;
 
 /** Yol kökün İÇİNDE mi? Ayırıcı kontrolü, `/a/bc` ile `/a/b` karışmasın diye. */
 function icerideMi(kok: string, tam: string): boolean {
@@ -88,6 +101,23 @@ export function readRepoAraci(kokDizin: string): ToolTanimi<ReadRepoGirdi, ReadR
         throw new ToolHatasi('izin_yok', 'read_repo', 'sembolik bağ kök dışına çıkıyor');
       }
 
+      if (girdi.mod === 'listele') {
+        let girdiler: string[];
+        try {
+          const d = await stat(gercek);
+          if (!d.isDirectory()) {
+            throw new ToolHatasi('gecersiz_girdi', 'read_repo', 'yol bir dizin değil');
+          }
+          girdiler = (await readdir(gercek)).sort();
+        } catch (e) {
+          if (e instanceof ToolHatasi) throw e;
+          throw new ToolHatasi('ic_hata', 'read_repo', `listelenemedi: ${girdi.yol}`);
+        }
+        const kirpik = girdiler.slice(0, EN_COK_GIRDI);
+        ctx.log('read_repo_listele', { yol: girdi.yol, girdi: kirpik.length });
+        return { yol: girdi.yol, icerik: '', bayt: 0, girdiler: kirpik };
+      }
+
       let icerik: string;
       try {
         icerik = await readFile(gercek, 'utf8');
@@ -104,7 +134,7 @@ export function readRepoAraci(kokDizin: string): ToolTanimi<ReadRepoGirdi, ReadR
       }
 
       ctx.log('read_repo_ok', { yol: girdi.yol, bayt });
-      return { yol: girdi.yol, icerik, bayt };
+      return { yol: girdi.yol, icerik, bayt, girdiler: [] };
     },
   };
 }

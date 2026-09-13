@@ -75,7 +75,7 @@ test('uretim defterinde GERCEK ajanlar kayitli', () => {
   const { registry } = uretimDefteriniKur({ kokDizin: KOK });
   /* Her dikey dilim tamamlandikca buraya BIR ajan ekleniyor. */
   assert.deepEqual(registry.all().map((a) => a.id).sort(),
-                   ['contract-verification', 'localization-parity']);
+                   ['contract-verification', 'localization-parity', 'schema-drift-auditor']);
 });
 
 test('supervisor routing: ajan growth alanina bagli', () => {
@@ -91,7 +91,8 @@ test('yetenekle cozumleme calisir', () => {
 
 test('ajan EN AZ YETKI tasiyor: yalnizca read_repo', () => {
   const { registry } = uretimDefteriniKur({ kokDizin: KOK });
-  assert.deepEqual([...registry.all()[0]!.allowedTools], ['read_repo']);
+  /* Sırayla değil ADLA seçiyoruz: defter büyüdükçe indeks kayar. */
+  assert.deepEqual([...registry.resolve(YETENEK, 'TR').allowedTools], ['read_repo']);
 });
 
 // --- Gerçek yürütme -------------------------------------------------------
