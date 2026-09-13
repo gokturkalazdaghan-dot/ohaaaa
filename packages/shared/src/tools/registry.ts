@@ -1,9 +1,9 @@
 /**
  * ARAÇ KAYIT DEFTERİ.
  *
- * Yirmi beş araç adı tanımlı. Bugün GERÇEKTEN uygulanmış olan: bir tane.
+ * Yirmi beş araç adı tanımlı. Bugün GERÇEKTEN uygulanmış olan: iki tane.
  *
- * Kalan yirmi dördü burada `uygulanmamis` olarak, her biri kendi
+ * Kalan yirmi üçü burada `uygulanmamis` olarak, her biri kendi
  * gerekçesiyle duruyor. Bu bilinçli bir tercih: eksik araçları listeden
  * çıkarmak, "yirmi beş araç var" izlenimini korurken hangilerinin
  * çalıştığını görünmez kılardı. Bir ajan uygulanmamış bir aracı
@@ -13,6 +13,7 @@
 import type { ToolName } from '../orchestrator/types.js';
 import type { ToolKaydi } from './contract.js';
 import { readRepoAraci } from './readRepo.js';
+import { runCheckAraci } from './runCheck.js';
 
 /** Uygulaması olmayan araçlar ve neden olmadığı. */
 const UYGULANMAMIS: Record<string, string> = {
@@ -38,7 +39,6 @@ const UYGULANMAMIS: Record<string, string> = {
   http_fetch: 'ağ erişimi için oran sınırı ve alan adı listesi tanımlanmadı',
   browser: 'tarayıcı sürücüsü araç katmanına bağlanmadı',
   write_repo: 'yetki sınıfı; diff denetimi ve onay kapısı olmadan açılmayacak',
-  run_check: 'süreç çalıştırma yüzeyi araç katmanına bağlanmadı',
   read_ci: 'CI istemcisi araç katmanına bağlanmadı',
 };
 
@@ -49,6 +49,7 @@ export class ToolKayitDefteri {
     /* Uygulananlar. */
     if (kokDizin) {
       this.araclar.set('read_repo', readRepoAraci(kokDizin) as unknown as ToolKaydi);
+      this.araclar.set('run_check', runCheckAraci(kokDizin) as unknown as ToolKaydi);
     }
     /* Kalanlar açıkça uygulanmamış olarak kaydediliyor. */
     for (const [ad, neden] of Object.entries(UYGULANMAMIS)) {
@@ -58,9 +59,9 @@ export class ToolKayitDefteri {
       }
     }
     if (!kokDizin) {
-      this.araclar.set('read_repo', {
-        ad: 'read_repo', uygulanmamis: true, neden: 'kök dizin verilmedi',
-      });
+      for (const t of ['read_repo', 'run_check'] as const) {
+        this.araclar.set(t, { ad: t, uygulanmamis: true, neden: 'kök dizin verilmedi' });
+      }
     }
   }
 

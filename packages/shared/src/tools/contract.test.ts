@@ -115,8 +115,8 @@ test('uygulanmamis arac cagrilinca ACIKCA hata verir', async () => {
 
 test('kayit defteri uygulanan ve uygulanmayanlari AYIRIR', () => {
   const d = new ToolKayitDefteri(KOK);
-  assert.deepEqual(d.uygulananlar(), ['read_repo']);
-  assert.equal(d.uygulanmayanlar().length, 24);
+  assert.deepEqual(d.uygulananlar().sort(), ['read_repo', 'run_check']);
+  assert.equal(d.uygulanmayanlar().length, 23);
   /* Uygulanmamış her araç gerekçe taşıyor. */
   for (const ad of d.uygulanmayanlar()) {
     const t = d.get(ad);

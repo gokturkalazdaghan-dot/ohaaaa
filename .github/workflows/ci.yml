@@ -128,6 +128,13 @@ jobs:
       - name: Yerellestirme paritesi (ajan)
         run: npm run agent:locale
 
+      # Sozlesme dogrulamasi ayni uc kontrolu calistiriyor ama BETIK OLARAK
+      # DEGIL: kayitli bir ajan -> izin listesine alinmis run_check araci ->
+      # bagimsiz dogrulayici -> denetci zinciri uzerinden. Zincirin kendisi
+      # de boylece her derlemede gercekten calisiyor.
+      - name: Sozlesme dogrulamasi (ajan)
+        run: npm run agent:contract
+
       # SQL paketi pgTAP iddialarıyla yazılmıştır ve `postgres:16` imajı bunu
       # İÇERMEZ. Eksikliği sessiz değil, ölümcül: 00_supabase_shim.sql'deki
       # `create extension pgtap` düşer ve tüm SQL adımı ilk saniyede biter.

@@ -4,15 +4,16 @@
  * PHASE 1 sonunda `registry.register(...)` yalnızca testlerde çağrılıyordu:
  * motor vardı, işçi yoktu. Burası o boşluğu kapatan tek yer.
  *
- * BİR AJAN. Görev haritası altmış bir tane sayıyor ama burada yalnızca
- * biri var ve bu bilinçli: ilk dikey dilim uçtan uca çalışmadan ikincisini
- * yazmak, doğrulanmamış bir deseni altmış kez kopyalamak olurdu.
+ * İKİ AJAN. Görev haritası altmış bir tane sayıyor. Her biri ancak kendi
+ * dikey dilimi uçtan uca çalıştıktan sonra ekleniyor: doğrulanmamış bir
+ * deseni altmış kez kopyalamak, altmış kez hata yapmak olurdu.
  */
 
 import { AgentRegistry } from '../orchestrator/registry.js';
 import type { AgentContext } from '../orchestrator/types.js';
 import { ToolKayitDefteri } from '../tools/registry.js';
 import type { ToolCtx } from '../tools/contract.js';
+import { contractVerificationAjani } from './contractVerification.js';
 import { localeParityAjani } from './localeParity.js';
 
 export interface UretimKurulumu {
@@ -50,5 +51,19 @@ export function uretimDefteriniKur(k: UretimKurulumu): UretimDefteri {
   });
 
   registry.register(ajan);
+
+  registry.register(
+    contractVerificationAjani({
+      tool: (ad) => araclar.get(ad),
+      toolCtx: (ctx: AgentContext): ToolCtx => ({
+        agentId: 'contract-verification',
+        izinliAraclar: ctx.tools,
+        guvenliMod: k.guvenliMod ?? false,
+        kalanMs: Math.max(1, ctx.deadline - Date.now()),
+        log: ctx.log,
+      }),
+    }),
+  );
+
   return { registry, araclar };
 }

@@ -71,11 +71,11 @@ test('sozluk ayristirici gercek dosyayi okur', async () => {
 
 // --- Registry ve routing --------------------------------------------------
 
-test('uretim defterinde GERCEK ajan kayitli', () => {
+test('uretim defterinde GERCEK ajanlar kayitli', () => {
   const { registry } = uretimDefteriniKur({ kokDizin: KOK });
-  const hepsi = registry.all();
-  assert.equal(hepsi.length, 1);
-  assert.equal(hepsi[0]?.id, 'localization-parity');
+  /* Her dikey dilim tamamlandikca buraya BIR ajan ekleniyor. */
+  assert.deepEqual(registry.all().map((a) => a.id).sort(),
+                   ['contract-verification', 'localization-parity']);
 });
 
 test('supervisor routing: ajan growth alanina bagli', () => {
