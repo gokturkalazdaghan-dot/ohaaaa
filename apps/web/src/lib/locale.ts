@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 
 import {
   DEFAULT_LOCALE,
+  MARKET_CONFIG,
   isTranslatedLocale,
   localeTag,
   resolveMarket,
@@ -60,6 +61,27 @@ export function isTranslated(locale: Locale): boolean {
 }
 
 /**
+ * İSTENEN dilden SUNULACAK dile.
+ *
+ * Çevirisi olmayan bir dil istendiğinde nereye düşeceğimiz önemsiz bir
+ * ayrıntı değil. Önceki hâli her durumda Türkçeye düşüyordu; bu, Londra'dan
+ * Almanca tarayıcıyla gelen ziyaretçiye TÜRKÇE sayfa göstermek demekti --
+ * ona en yakın dil açık biçimde İngilizceyken.
+ *
+ * Sıra: istenen dil → PAZARIN varsayılan dili → genel varsayılan. Pazarın
+ * varsayılanı, "bu ülkedeki bir ziyaretçi büyük olasılıkla hangi dili
+ * okuyabilir" sorusunun zaten verilmiş cevabıdır.
+ */
+function sunulacakDil(istenen: Locale, market: Market): Locale {
+  if (isTranslated(istenen)) return istenen;
+
+  const pazarDili = MARKET_CONFIG[market].defaultLocale;
+  if (isTranslated(pazarDili)) return pazarDili;
+
+  return DEFAULT_LOCALE;
+}
+
+/**
  * İstek başlıklarından pazarı ve dili çözer.
  *
  * Vercel `x-vercel-ip-country` başlığını ekler; yerelde yoktur ve bu
@@ -73,7 +95,7 @@ export async function getRequestLocale(): Promise<RequestLocale> {
     acceptLanguage: h.get('accept-language'),
   });
 
-  const contentLocale = isTranslated(resolved.locale) ? resolved.locale : DEFAULT_LOCALE;
+  const contentLocale = sunulacakDil(resolved.locale, resolved.market);
 
   return {
     ...resolved,

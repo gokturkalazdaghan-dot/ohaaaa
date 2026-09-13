@@ -152,9 +152,46 @@ test('Avrupa pazarında Türkçe tarayıcı Türkçe arayüz alır', () => {
   assert.equal(r.localeSource, 'accept-language');
 });
 
-test('pazarda desteklenmeyen dile düşülmez', () => {
-  // ABD pazarı yalnızca İngilizce; Türkçe tarayıcı yine İngilizce alır.
+/*
+ * BU TEST DE BİR HATANIN ANITIDIR -- ve hata CANLIDA ÖLÇÜLDÜ.
+ *
+ * `MARKET_CONFIG[market].locales` bir zamanlar tarayıcı dilini SÜZÜYORDU.
+ * UK pazarının listesi yalnızca `['en']` olduğu için, Türkçe tarayıcıyla
+ * gelen ziyaretçi -- `x-vercel-ip-country: GB` yüzünden -- İngilizce sayfa
+ * alıyordu. Canlı ölçüm: `Accept-Language: tr-TR` ile istenen ana sayfa
+ * `<html lang="en-US">` ve "We found what you need" dönüyordu.
+ *
+ * Bu, market.ts'in KENDİ başlığında yanlış diye anlatılan davranıştı:
+ * dili pazara zincirlemek. Süzgeç kaldırıldı. Dil kullanıcının okuyabildiği
+ * şeydir; pazar, ödeyeceği para birimidir. İkisi ayrı kalır.
+ */
+test('ABD pazarındaki Türkçe tarayıcı Türkçe arayüz + dolar alır', () => {
   const r = resolveMarket({ explicitMarket: 'US', acceptLanguage: 'tr-TR' });
+  assert.equal(r.locale, 'tr');
+  assert.equal(r.localeSource, 'accept-language');
+  // Dil değişti, PARA BİRİMİ DEĞİŞMEDİ: ABD'ye kargo dolarla ödenir.
+  assert.equal(r.currency, 'USD');
+  assert.equal(r.market, 'US');
+});
+
+test('UK pazarındaki Türkçe tarayıcı Türkçe arayüz + sterlin alır', () => {
+  const r = resolveMarket({ ipCountry: 'GB', acceptLanguage: 'tr-TR,tr;q=0.9,en;q=0.8' });
+  assert.equal(r.market, 'UK');
+  assert.equal(r.marketSource, 'ip');
+  assert.equal(r.locale, 'tr');
+  assert.equal(r.currency, 'GBP');
+});
+
+test('İngilizce tarayıcı Türkiye pazarında İngilizce arayüz alır', () => {
+  const r = resolveMarket({ ipCountry: 'TR', acceptLanguage: 'en-GB,en;q=0.9' });
+  assert.equal(r.market, 'TR');
+  assert.equal(r.locale, 'en');
+  assert.equal(r.currency, 'TRY');
+});
+
+test('tarayıcı dili tanınmıyorsa pazarın varsayılanına düşülür', () => {
+  // Fransızca bir arayüz dilimiz yok; UK pazarının varsayılanı İngilizce.
+  const r = resolveMarket({ ipCountry: 'GB', acceptLanguage: 'fr-FR,fr;q=0.9' });
   assert.equal(r.locale, 'en');
   assert.equal(r.localeSource, 'market-default');
 });
