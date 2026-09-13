@@ -60,7 +60,19 @@ export interface MarketConfig {
   defaultLocale: Locale;
   /** Sayı/tarih biçimi için BCP-47 etiketi. */
   numberLocale: string;
-  /** Bu pazarda konuşulan/desteklenen diller. */
+  /**
+   * Bu pazarda öne çıkan diller -- dil SEÇİMİNİ SINIRLAMAZ.
+   *
+   * Bir zamanlar bu liste bir SÜZGEÇTİ: tarayıcının istediği dil listede
+   * yoksa yok sayılıyordu. Ölçülen sonuç, dosyanın kendi başlığında yanlış
+   * diye anlatılan davranışın ta kendisiydi -- Türkçe tarayıcıyla gelen
+   * ziyaretçi `x-vercel-ip-country: GB` yüzünden İngilizce sayfa alıyordu
+   * (canlıda doğrulandı: `<html lang="en-US">`, "We found what you need").
+   *
+   * Dil kullanıcının OKUYABİLDİĞİ şeydir, bulunduğu ülkenin değil. Süzgeç
+   * kaldırıldı; liste, pazar için varsayılan/alternatif dilleri bildirmeye
+   * devam ediyor (hreflang ve dil seçici bunu kullanır).
+   */
   locales: readonly Locale[];
 }
 
@@ -315,12 +327,22 @@ export function resolveMarket(signals: MarketSignals = {}): ResolvedMarket {
     localeSource = 'account';
   } else {
     /*
-     * Tarayıcı dilleri arasından bu PAZARDA desteklenen ilkini seçeriz.
-     * Pazarda desteklenmeyen bir dile düşmek, çevirisi olmayan bir sayfa
-     * göstermek demektir.
+     * Tarayıcının İLK tanıdığımız dili -- pazardan BAĞIMSIZ.
+     *
+     * Eskiden burada `config.locales.includes(l)` süzgeci vardı ve bu,
+     * dosyanın başındaki ilkeyi ("dili pazara zincirleme") ihlal ediyordu:
+     * Londra'daki Türk ziyaretçi Türkçe istiyor ama sterlin fiyat görmeli.
+     * Süzgeç ikisini birbirine bağladığı için ona İngilizce sayfa
+     * gösteriliyordu.
+     *
+     * Çevirisi olmayan dil burada ELENMEZ; o ayrı bir sorudur ve tek bir
+     * yerde -- sunum katmanındaki `contentLocale` -- cevaplanır. Burada
+     * elemek, "kullanıcı ne istedi" bilgisini geri dönülemez biçimde
+     * kaybettirirdi: dil seçiciye ne göstereceğimizi de, hangi çevirinin
+     * talep gördüğünü de bilemezdik.
      */
     const preferred = parseAcceptLanguage(signals.acceptLanguage);
-    const match = preferred.find((l) => config.locales.includes(l));
+    const match = preferred[0];
     if (match) {
       locale = match;
       localeSource = 'accept-language';
