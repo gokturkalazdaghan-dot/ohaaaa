@@ -11,6 +11,8 @@
 
 import 'server-only';
 
+import { unstable_cache } from 'next/cache';
+
 import {
   buildCategoryTree,
   collectByKeyset,
@@ -43,6 +45,65 @@ import {
 } from './demo';
 
 export type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'offers';
+
+/**
+ * KATALOG OKUMALARI İÇİN ÖNBELLEK.
+ *
+ * NEDEN GEREKLİ -- ÖLÇÜLEN DURUM
+ * Sitenin tamamı `force-dynamic` (yerleşimdeki oturum çerezi yüzünden), yani
+ * her tıklama sunucuda sıfırdan render ediliyor ve her render bütün katalog
+ * sorgularını yeniden atıyor. Canlıda ölçüldü:
+ *
+ *   veritabanına HİÇ gitmeyen sayfa (/sss)   ~240 ms
+ *   katalog okuyan sayfa (/, /magaza, ...)  2.000-6.300 ms
+ *
+ * Yani sürenin neredeyse tamamı sorgularda. Next.js'te bir bağlantıya
+ * tıklamak da aynı sunucu render'ını beklettiği için kullanıcı bunu
+ * "butonlar geç yanıt veriyor" diye yaşıyor.
+ *
+ * NEDEN GÜVENLİ
+ * Burada önbelleğe alınan her şey HERKESE AÇIK katalog verisi: kategori,
+ * mağaza, vitrin, kampanya. Kullanıcıya özel hiçbir şey yok, dolayısıyla
+ * bir ziyaretçinin gördüğü veriyi başkasına göstermek gibi bir risk yok.
+ * Oturuma bağlı her şey (sepet, favoriler, hesap) bu katmanın DIŞINDA ve
+ * önbelleğe hiç girmiyor.
+ *
+ * SÜRELER VERİNİN GERÇEK DEĞİŞİM HIZINA GÖRE
+ * Katalog günde bir kez beslemeyle tazeleniyor (ölçüldü: `next_refresh_at`
+ * ertesi gün). Taksonomi ondan da yavaş değişiyor. Süreler buna göre
+ * seçildi; daha uzun tutmak bayat fiyat göstermek olurdu, daha kısa tutmak
+ * hiç önbelleklememekle aynı kapıya çıkardı.
+ */
+const ONBELLEK = {
+  /** Kategori ağacı ve listesi: taksonomi göçle değişir, beslemeyle değil. */
+  taksonomi: 3600,
+  /** Mağaza listesi: yeni ortak eklenmesi nadir. */
+  magazalar: 1800,
+  /** Vitrin ve kampanyalar: beslemeden etkilenir. */
+  vitrin: 900,
+  /** Gezinme amaçlı arama (serbest metin YOK): fiyatlar beslemeyle değişir. */
+  listeleme: 600,
+} as const;
+
+/**
+ * Bir katalog okumasını önbelleğe alır.
+ *
+ * `unstable_cache` anahtarı `anahtar` + fonksiyonun ARGÜMANLARINDAN üretir,
+ * dolayısıyla aynı fonksiyonun farklı parametreli çağrıları birbirine
+ * karışmaz.
+ */
+function onbellekle<A extends unknown[], R>(
+  anahtar: string,
+  fn: (...args: A) => Promise<R>,
+  saniye: number,
+): (...args: A) => Promise<R> {
+  return unstable_cache(fn, ['katalog', anahtar], {
+    revalidate: saniye,
+    tags: ['katalog'],
+  });
+}
+
+
 
 /**
  * Bir arama sayfasi: sonuclar VE filtreye uyan toplam.
@@ -140,7 +201,7 @@ function normalize(value: string): string {
 // ---------------------------------------------------------------------------
 // Arama
 // ---------------------------------------------------------------------------
-export async function searchProducts(params: SearchParams): Promise<SearchPage> {
+async function aramaOku(params: SearchParams): Promise<SearchPage> {
   const supabase = createAnonClient();
 
   if (supabase) {
@@ -759,7 +820,7 @@ export async function getProductGroup(slug: string): Promise<ProductGroupWithOff
 // ---------------------------------------------------------------------------
 // Kampanyalar, kategoriler, taşeronlar
 // ---------------------------------------------------------------------------
-export async function getFlashDeals(limit = 3): Promise<FlashDeal[]> {
+async function kampanyalariOku(limit = 3): Promise<FlashDeal[]> {
   const supabase = createAnonClient();
 
   if (supabase) {
@@ -845,7 +906,7 @@ export async function getFlashDeals(limit = 3): Promise<FlashDeal[]> {
  * Menüler düz liste istemiyor; onlar için `getCategoryTree()` var. Burası
  * ham gerçeği döndürür: hangi kategoriler etkin.
  */
-export async function getCategories(): Promise<Category[]> {
+async function kategorileriOku(): Promise<Category[]> {
   const supabase = createAnonClient();
 
   if (supabase) {
@@ -880,7 +941,7 @@ export async function getCategories(): Promise<Category[]> {
  * sayıya ihtiyaç yok ve 32.894 satırlık bir kategoriyi baştan sona saymanın
  * bedeli bu soru için gereksiz.
  */
-export async function categoryHasProducts(categoryId: string): Promise<boolean> {
+async function kategoriDoluMuOku(categoryId: string): Promise<boolean> {
   const supabase = createAnonClient();
 
   if (!supabase) {
@@ -939,7 +1000,7 @@ export async function categoryHasProducts(categoryId: string): Promise<boolean> 
  * ama 530 ms sürüyor (ölçüldü) ve yalnızca ÜST kategorileri sayıyor --
  * alt kategori sayıları olmadan ağaç kurulamaz.
  */
-export async function getCategoryTree(): Promise<CategoryNode<Category>[]> {
+async function kategoriAgaciniOku(): Promise<CategoryNode<Category>[]> {
   const kategoriler = await getCategories();
   if (kategoriler.length === 0) return [];
 
@@ -991,7 +1052,7 @@ export async function getCategoryTree(): Promise<CategoryNode<Category>[]> {
   return buildCategoryTree(kategoriler, sayimlar);
 }
 
-export async function getVendors(): Promise<Vendor[]> {
+async function tasoronlariOku(): Promise<Vendor[]> {
   const supabase = createAnonClient();
 
   if (supabase) {
@@ -2217,6 +2278,58 @@ export async function getOhaaaaScore(productId: string): Promise<OhaaaaScore | n
   };
 }
 
+
+// ---------------------------------------------------------------------------
+// Önbelleğe alınmış katalog okumaları
+// ---------------------------------------------------------------------------
+/*
+ * Aşağıdaki dışa açık adlar, yukarıdaki HAM okumaların önbelleğe alınmış
+ * hâlleridir. Çağıran taraf hiçbir şey bilmez: aynı ad, aynı imza.
+ */
+
+/** Etkin kategorilerin tamamı (alt kategoriler dahil). */
+export const getCategories = onbellekle('kategoriler', kategorileriOku, ONBELLEK.taksonomi);
+
+/** Gezinilebilir kategori ağacı -- boş dallar elenmiş, sayılar ölçülmüş. */
+export const getCategoryTree = onbellekle('kategori-agaci', kategoriAgaciniOku, ONBELLEK.taksonomi);
+
+/** Bu kategoride gösterilecek ürün var mı. */
+export const categoryHasProducts = onbellekle(
+  'kategori-dolu-mu',
+  kategoriDoluMuOku,
+  ONBELLEK.listeleme,
+);
+
+/** Onaylı taşeronlar. */
+export const getVendors = onbellekle('tasoronlar', tasoronlariOku, ONBELLEK.magazalar);
+
+/** Ana sayfadaki kampanya şeridi. */
+export const getFlashDeals = onbellekle('kampanyalar', kampanyalariOku, ONBELLEK.vitrin);
+
+/** Vitrin basamakları. */
+export const getShowcaseTiers = onbellekle('vitrin', vitriniOku, ONBELLEK.vitrin);
+
+/** Serbest metin ARAMASI OLMAYAN listeleme -- kategori, sıralama, sayfalama. */
+const listelemeOnbellekli = onbellekle('listeleme', aramaOku, ONBELLEK.listeleme);
+
+/**
+ * Ürün araması.
+ *
+ * SERBEST METİN ARAMASI ÖNBELLEĞE ALINMAZ ve bu bilinçli: kullanıcının
+ * yazdığı her sorgu ayrı bir önbellek anahtarı üretir, yani anahtar uzayı
+ * sınırsızdır. Sınırsız anahtar, önbelleği doldurup asıl işe yarayan
+ * girdileri (kategori listeleri, ana sayfa) dışarı atar -- yani önbellek
+ * kendi kendini bozar.
+ *
+ * Gezinme amaçlı çağrılar (kategori sayfası, ana sayfa, sıralama, sayfalama)
+ * SINIRLI sayıda kombinasyona sahip ve sayfa başına saniyeler kazandırıyor;
+ * onlar önbelleğe alınıyor.
+ */
+export async function searchProducts(params: SearchParams): Promise<SearchPage> {
+  if (params.query && params.query.trim().length > 0) return aramaOku(params);
+  return listelemeOnbellekli(params);
+}
+
 // ---------------------------------------------------------------------------
 // Site haritası
 // ---------------------------------------------------------------------------
@@ -2422,7 +2535,7 @@ function demoShowcaseTiers(tiers: number, perTier: number): ShowcaseTier[] {
  * geçmişini iki gözleme çıkardığında skor yolu kendiliğinden devreye girer;
  * burada değiştirilecek bir şey kalmaz.
  */
-export async function getShowcaseTiers(options?: {
+async function vitriniOku(options?: {
   tiers?: number;
   perTier?: number;
 }): Promise<ShowcaseTier[]> {
