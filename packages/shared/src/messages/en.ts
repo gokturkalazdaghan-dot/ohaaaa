@@ -47,9 +47,23 @@ export const EN: Record<keyof typeof TR, string> = {
   'ev.altBaslikVurgu': 'total including delivery',
   'ev.cokKarsilastirilanlar': 'Most compared',
   'ev.karsilastirdigimizMagazalar': 'Shops we compare',
-  'ev.katalogBos': 'The catalogue fills up as shops join',
   'ev.listelenemiyor': 'We can’t list products right now',
   'ev.kategoriler': 'Categories',
+
+  // --- User value section ---
+  'deger.baslik': 'Before you buy, Ohaaaa.',
+  'deger.altMetin':
+    'Explore your product across different options, compare prices and shops, and decide on the one that suits you with more to go on.',
+  'deger.kesfetBaslik': 'Discover more',
+  'deger.kesfetMetin': 'Find the products that fit your need in one place.',
+  'deger.karsilastirBaslik': 'Compare',
+  'deger.karsilastirMetin': 'Compare prices, features and shop options easily.',
+  'deger.firsatBaslik': 'Catch the deal',
+  'deger.firsatMetin': 'See the different offers and find the advantageous one.',
+  'deger.kararBaslik': 'Decide with more to go on',
+  'deger.kararMetin': 'Look at product and shop details before you buy.',
+  'deger.markaMesaji': 'Ohaaaa! Come to find the right product, not to search.',
+  'deger.cta': 'Explore products',
 
   // --- Showcase ---
   'vitrin.baslik': 'Showcase',
