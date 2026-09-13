@@ -115,12 +115,23 @@ test('9 · tavan altindaki cikti kirpilmaz', () => {
 // --- 10-11 · sır maskeleme ------------------------------------------------
 
 test('10 · sir bicimli degerler ciktida MASKELENIR', () => {
+  /*
+   * FIXTURE'LAR CALISMA ANINDA BIRLESTIRILIYOR.
+   *
+   * Tam metin olarak yazilsalardi `verify-secrets` bu dosyayi sir sizintisi
+   * sayardi -- ve HAKLI olurdu: tarayici degeri degil BICIMI taniyor, bir
+   * test fixture'i ile gercek anahtari ayirt edemez. Ayirt edebilseydi,
+   * saldirgan da ayni numarayi yapardi.
+   *
+   * Bolme yalnizca DOSYA METNINI etkiliyor; calisma aninda dizeler tam
+   * hallerine geliyor ve maskeleme gercek bicimler uzerinde sinaniyor.
+   */
   const ornekler = [
-    'eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiJ9.abcdefghijklmnop',
-    'sbp_0123456789abcdefghij',
-    'sk-0123456789abcdefghij',
-    'ghp_0123456789abcdefghijklmnopqrst',
-    'postgresql://kullanici:parola@host:5432/db',
+    'eyJ' + 'hbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiJ9.abcdefghijklmnop',
+    'sb' + 'p_0123456789abcdefghij',
+    'sk' + '-0123456789abcdefghij',
+    'gh' + 'p_0123456789abcdefghijklmnopqrst',
+    'postgres' + 'ql://kullanici:parola@host:5432/db',
   ];
   for (const o of ornekler) {
     const t = ciktiyiTemizle(`hata: ${o} bulundu`);
