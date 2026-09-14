@@ -165,3 +165,47 @@ export function dilAlternatifleri(
 
   return cikti;
 }
+
+/**
+ * Sayfanın KENDİ kanonik adresi.
+ *
+ * NEDEN GEREKLİ
+ * Kanonik, `dilMetaVerisi` içinde dil öneki ATILMIŞ yoldan üretiliyordu.
+ * Sonucu üretimde ölçüldü: `/en-uk` sayfası `rel="canonical"` ile
+ * `https://www.ohaaaa.com` (Türkçe kök) gösteriyordu. Bu, arama motoruna
+ * "İngiliz pazarı sayfası Türkçe kökün KOPYASIDIR" demektir; sayfa dizine
+ * girmez ve üzerindeki `hreflang` kümesi de yok sayılır -- çünkü arama
+ * motoru `hreflang`i yalnızca KENDİ kanonik sayfasında dikkate alır.
+ * Yani adres öneki eklenmiş olmasına rağmen hiçbir pazar sayfası
+ * indekslenemezdi.
+ *
+ * KURAL
+ * Kanonik, sayfanın gerçekten sunduğu dil-pazar ikilisine işaret eder.
+ * Varsayılan ikili öneksiz kalır (`yolKur` zaten böyle davranır), yani
+ * `/tr-tr/...` hâlâ `/...` adresine kanoniklenir -- bilinçli olan tek
+ * çapraz-kanonik budur.
+ *
+ * `sunulanlar` ŞART. Kanonik, `hreflang` listesinde BULUNMAYAN bir adrese
+ * işaret ederse küme tutarsız olur ve arama motoru tamamını atar. Aynı
+ * listeyi kaynak almak bu tutarlılığı yapısal olarak garanti eder:
+ * tanınmayan bir önek (`/en-gb` -- `gb` bir pazar değil) ya da çevirisi
+ * olmayan bir dil geldiğinde varsayılana düşülür, böylece uydurma adres
+ * kanonikleşmez.
+ */
+export function kanonikYol(
+  kalan: string,
+  secim: YolDili | null,
+  varsayilan: YolDili,
+  sunulanlar: readonly AlternatifGirdisi[],
+): string {
+  const sunuluyor =
+    secim !== null &&
+    sunulanlar.some(
+      (g) =>
+        g.locale.toLowerCase() === secim.locale.toLowerCase() &&
+        g.market.toUpperCase() === secim.market.toUpperCase(),
+    );
+
+  const ikili = sunuluyor ? secim : varsayilan;
+  return yolKur(kalan, ikili.locale, ikili.market, varsayilan);
+}

@@ -88,7 +88,7 @@ export async function generateMetadata({
   // Sayfa 2+ KENDINI kanonik gosterir. Hepsini 1. sayfaya kanonikleseydik
   // 2. sayfadaki urunler hicbir kanonik sayfada gecmez, yani dizinde
   // gorunmez olurdu.
-  const canonical =
+  const kalan =
     page > 1 ? `/kategori/${category.slug}?sayfa=${page}` : `/kategori/${category.slug}`;
 
   /*
@@ -112,7 +112,14 @@ export async function generateMetadata({
         : t(contentLocale, 'kategori.fiyatlari', { ad: category.name }),
     ...(doluMu ? {} : { robots: { index: false, follow: true } }),
     description: t(contentLocale, 'kategori.metaAciklama', { ad: category.name }),
-    alternates: { ...(await dilMetaVerisi(canonical)), canonical },
+    /*
+     * KANONIK'I BURADA EZMIYORUZ. Onceki hali `dilMetaVerisi`nin dondurdugu
+     * kanonigi onek-siz yolla degistiriyordu; sonucu uretimde olculdu:
+     * `/en-uk/kategori/x` kendini Turkce koke kanonikliyordu, yani hicbir
+     * pazar sayfasi dizine giremiyordu. Kanonigi tek yerin uretmesi, onun
+     * hreflang kumesiyle tutarli kalmasini da garanti eder.
+     */
+    alternates: await dilMetaVerisi(kalan),
     openGraph: {
       title: t(contentLocale, 'kategori.ogBaslik', { ad: category.name }),
       description: t(contentLocale, 'kategori.ogAciklama', { ad: category.name }),
