@@ -6,6 +6,7 @@ import {
   DEFAULT_MARKET,
   MARKETS,
   MARKET_CONFIG,
+  VARSAYILAN_PAZAR_YAPILANDIRMASI,
   currencyOf,
   formatCount,
   isLocale,
@@ -283,5 +284,5 @@ test('formatCount kucuk sayilari bozmaz', () => {
 });
 
 test('formatCount etiket verilmezse varsayilan pazara duser', () => {
-  assert.equal(formatCount(1234), formatCount(1234, MARKET_CONFIG[DEFAULT_MARKET].numberLocale));
+  assert.equal(formatCount(1234), formatCount(1234, VARSAYILAN_PAZAR_YAPILANDIRMASI.numberLocale));
 });

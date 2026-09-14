@@ -15,6 +15,13 @@
  */
 
 import type { Currency } from './money.js';
+import {
+  pazarinParaBirimi,
+  pazarinSayiBicimi,
+  pazarTaniniyor,
+  ulkeninPazari,
+  type MarketKatalogu,
+} from './marketCatalog.js';
 
 /** Arayüz dilleri. */
 export const LOCALES = ['tr', 'de', 'en'] as const;
@@ -47,7 +54,27 @@ export type Locale = (typeof LOCALES)[number];
  * değil.
  */
 export const MARKETS = ['TR', 'UK', 'US', 'EU', 'CA'] as const;
-export type Market = (typeof MARKETS)[number];
+
+/**
+ * Pazar kodu — TİP `string`, DERLEME ZAMANI UNION DEĞİL.
+ *
+ * `Currency` ile aynı gerekçe: pazarlar artık REFERANS VERİSİ
+ * (`public.markets`). Yeni bir pazar açmak bir satır eklemektir; kod
+ * dağıtımı gerektirmemelidir. Sabit bir union sekiz pazarı kodun içine
+ * gömer ve dokuzuncusu için derleme isterdi -- oysa Avrupa'nın her ülkesi
+ * ve Körfez'in altı ülkesi ayrı pazar olarak açılabilmeli.
+ *
+ * YUKARIDAKİ `MARKETS` LİSTESİ SİLİNMEDİ ama artık YALNIZCA YEDEK: katalog
+ * okunamadığında (veritabanı erişilemez, demo modu, birim testi) sitenin
+ * pazarsız kalmaması için duruyor. Çalışma anındaki doğruluk kaynağı
+ * `MarketKatalogu`.
+ *
+ * KAYBEDİLEN NE: `currencyOf('XX')` artık derlemede değil, çalışma anında
+ * yedeğe düşerek karşılanır. Yerine konan: veritabanındaki yabancı anahtar
+ * (`products.market_code → markets.code`) uydurma kodun satıra girmesini
+ * zaten engelliyor.
+ */
+export type Market = string;
 
 export const DEFAULT_LOCALE: Locale = 'tr';
 export const DEFAULT_MARKET: Market = 'TR';
@@ -76,14 +103,23 @@ export interface MarketConfig {
   locales: readonly Locale[];
 }
 
-export const MARKET_CONFIG: Record<Market, MarketConfig> = {
-  TR: {
-    code: 'TR',
-    currency: 'TRY',
-    defaultLocale: 'tr',
-    numberLocale: 'tr-TR',
-    locales: ['tr', 'en'],
-  },
+/**
+ * Yedek yapılandırma — katalog yokken KESİN var olması gereken tek kayıt.
+ *
+ * Ayrı bir sabit, çünkü `MARKET_CONFIG[DEFAULT_MARKET]` artık indeksli
+ * erişim: `Market` union olmaktan çıkınca tip sistemi haklı olarak
+ * "olmayabilir" diyor. Yedeğin kendisi olmayabilir olamaz.
+ */
+export const VARSAYILAN_PAZAR_YAPILANDIRMASI: MarketConfig = {
+  code: 'TR',
+  currency: 'TRY',
+  defaultLocale: 'tr',
+  numberLocale: 'tr-TR',
+  locales: ['tr', 'en'],
+};
+
+export const MARKET_CONFIG: Record<string, MarketConfig> = {
+  TR: VARSAYILAN_PAZAR_YAPILANDIRMASI,
   UK: {
     code: 'UK',
     currency: 'GBP',
@@ -148,7 +184,7 @@ const EURO_BOLGESI = [
   'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PT', 'SK', 'SI', 'ES',
 ] as const;
 
-const COUNTRY_TO_MARKET: Readonly<Record<string, Market>> = {
+const COUNTRY_TO_MARKET: Readonly<Record<string, string>> = {
   TR: 'TR',
   GB: 'UK',
   US: 'US',
@@ -163,14 +199,26 @@ const COUNTRY_TO_MARKET: Readonly<Record<string, Market>> = {
  * varsayılana düşer; bu, ziyaretçiye yanlış para biriminde fiyat göstermekten
  * iyidir.
  */
-export function marketForCountry(value: string | null | undefined): Market | null {
+export function marketForCountry(
+  value: string | null | undefined,
+  katalog?: MarketKatalogu,
+): Market | null {
   if (!value) return null;
   const kod = value.trim().toUpperCase();
+
+  /*
+   * KATALOG VARSA O KARAR VERİR. Aşağıdaki sabit eşleme yalnızca YEDEKTİR:
+   * veritabanı okunamadığında site pazarsız kalmasın diye duruyor. Yeni bir
+   * ülke eklemek için burayı değiştirmek GEREKMEZ -- `countries` ve
+   * `market_countries` tablolarına satır eklemek yeterlidir.
+   */
+  if (katalog) return ulkeninPazari(katalog, kod);
+
   return COUNTRY_TO_MARKET[kod] ?? null;
 }
 
 /** BCP-47 dil etiketi — `<html lang>` ve sesli arama için. */
-const LOCALE_TAGS: Record<Locale, Record<Market, string>> = {
+const LOCALE_TAGS: Record<Locale, Record<string, string>> = {
   tr: { TR: 'tr-TR', UK: 'tr-TR', US: 'tr-TR', EU: 'tr-TR', CA: 'tr-TR' },
   de: { TR: 'de-DE', UK: 'de-DE', US: 'de-DE', EU: 'de-DE', CA: 'de-DE' },
   en: { TR: 'en-GB', UK: 'en-GB', US: 'en-US', EU: 'en-IE', CA: 'en-CA' },
@@ -180,7 +228,8 @@ export function isLocale(value: unknown): value is Locale {
   return typeof value === 'string' && (LOCALES as readonly string[]).includes(value);
 }
 
-export function isMarket(value: unknown): value is Market {
+export function isMarket(value: unknown, katalog?: MarketKatalogu): value is Market {
+  if (katalog) return pazarTaniniyor(katalog, value);
   return typeof value === 'string' && (MARKETS as readonly string[]).includes(value);
 }
 
@@ -191,13 +240,41 @@ export function isMarket(value: unknown): value is Market {
  * geçerlidir ama bölge kodu ekli hâli, ekran okuyucunun ve ses tanımanın
  * doğru varyantı seçmesini sağlar: "en" belirsizdir, "en-US" değildir.
  */
-export function localeTag(locale: Locale, market: Market = DEFAULT_MARKET): string {
-  return LOCALE_TAGS[locale][market] ?? LOCALE_TAGS[locale][DEFAULT_MARKET]!;
+export function localeTag(
+  locale: Locale,
+  market: Market = DEFAULT_MARKET,
+  katalog?: MarketKatalogu,
+  countryCode?: string | null,
+): string {
+  /*
+   * BÖLGE KODU ÜLKEDEN GELİR, pazardan değil. Katalog varsa ülkenin
+   * `number_locale` alanındaki bölge ("en-AE" → "AE") dile eklenir; böylece
+   * yeni bir ülke için burada matris genişletmek gerekmez.
+   */
+  if (katalog) {
+    const bicim = pazarinSayiBicimi(katalog, market, countryCode);
+    const bolge = bicim?.split('-')[1];
+    if (bolge) return `${locale}-${bolge}`;
+  }
+  return LOCALE_TAGS[locale]?.[market] ?? LOCALE_TAGS[locale]?.[DEFAULT_MARKET] ?? locale;
 }
 
 /** Bir pazarın para birimi. */
-export function currencyOf(market: Market): Currency {
-  return MARKET_CONFIG[market].currency;
+export function currencyOf(
+  market: Market,
+  katalog?: MarketKatalogu,
+  countryCode?: string | null,
+): Currency {
+  if (katalog) {
+    const para = pazarinParaBirimi(katalog, market, countryCode);
+    /*
+     * Katalogda para birimi YOKSA yedeğe düşülür, uydurulmaz. GCC ve
+     * NORDICS gibi çok para birimli pazarlarda `markets.default_currency`
+     * bilerek NULL; o durumda ülke bilinmiyorsa doğru cevap "bilmiyorum".
+     */
+    if (para) return para;
+  }
+  return MARKET_CONFIG[market]?.currency ?? VARSAYILAN_PAZAR_YAPILANDIRMASI.currency;
 }
 
 /**
@@ -291,14 +368,17 @@ export interface ResolvedMarket {
  * ona "ülkenizde hizmet yok" demek yerine bir pazar göstermek, hiçbir şey
  * göstermemekten iyidir -- ama uydurma bir pazar da yaratılmaz.
  */
-export function resolveMarket(signals: MarketSignals = {}): ResolvedMarket {
+export function resolveMarket(
+  signals: MarketSignals = {},
+  katalog?: MarketKatalogu,
+): ResolvedMarket {
   let market: Market = DEFAULT_MARKET;
   let marketSource: ResolvedMarket['marketSource'] = 'fallback';
 
-  const explicitMarket = normalizeMarket(signals.explicitMarket);
-  const accountMarket = normalizeMarket(signals.accountMarket);
+  const explicitMarket = normalizeMarket(signals.explicitMarket, katalog);
+  const accountMarket = normalizeMarket(signals.accountMarket, katalog);
   // IP bir ÜLKE kodu verir, pazar kodu değil: eşlemeden geçmeli.
-  const ipMarket = marketForCountry(signals.ipCountry);
+  const ipMarket = marketForCountry(signals.ipCountry, katalog);
 
   if (explicitMarket) {
     market = explicitMarket;
@@ -311,7 +391,7 @@ export function resolveMarket(signals: MarketSignals = {}): ResolvedMarket {
     marketSource = 'ip';
   }
 
-  const config = MARKET_CONFIG[market];
+  const config = MARKET_CONFIG[market] ?? VARSAYILAN_PAZAR_YAPILANDIRMASI;
 
   let locale: Locale = config.defaultLocale;
   let localeSource: ResolvedMarket['localeSource'] = 'market-default';
@@ -349,14 +429,23 @@ export function resolveMarket(signals: MarketSignals = {}): ResolvedMarket {
     }
   }
 
-  return { market, locale, currency: config.currency, marketSource, localeSource };
+  return {
+    market,
+    locale,
+    currency: currencyOf(market, katalog, signals.ipCountry),
+    marketSource,
+    localeSource,
+  };
 }
 
 /** Serbest metni bilinen bir pazara çevirir; tanınmazsa null. */
-function normalizeMarket(value: string | null | undefined): Market | null {
+function normalizeMarket(
+  value: string | null | undefined,
+  katalog?: MarketKatalogu,
+): Market | null {
   if (!value) return null;
   const upper = value.trim().toUpperCase();
-  return isMarket(upper) ? upper : null;
+  return isMarket(upper, katalog) ? upper : null;
 }
 
 /** Serbest metni bilinen bir dile çevirir; tanınmazsa null. */
@@ -381,6 +470,6 @@ function normalizeLocale(value: string | null | undefined): Locale | null {
  */
 export function formatCount(value: number, numberLocale?: string): string {
   return new Intl.NumberFormat(
-    numberLocale ?? MARKET_CONFIG[DEFAULT_MARKET].numberLocale,
+    numberLocale ?? VARSAYILAN_PAZAR_YAPILANDIRMASI.numberLocale,
   ).format(value);
 }

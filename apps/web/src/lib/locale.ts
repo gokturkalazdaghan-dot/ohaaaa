@@ -1,15 +1,22 @@
 import { headers } from 'next/headers';
 
 import {
+  BOS_KATALOG,
   DEFAULT_LOCALE,
   MARKET_CONFIG,
+  isLocale,
   isTranslatedLocale,
   localeTag,
+  pazarinUlkeleri,
   resolveMarket,
+  ulkeKaydi,
   type Locale,
   type Market,
+  type MarketKatalogu,
   type ResolvedMarket,
 } from '@ohaaaa/shared';
+
+import { pazarKatalogu } from '@/data/markets';
 
 /**
  * İstek başına dil ve pazar çözümlemesi (madde 12–14).
@@ -61,6 +68,19 @@ export function isTranslated(locale: Locale): boolean {
 }
 
 /**
+ * Veritabanından gelen SERBEST dil kodunu daraltır.
+ *
+ * `countries.default_locale` her ISO dil kodunu taşıyabilir ('ar', 'fr',
+ * 'pl'...) -- çevirisi olup olmadığından bağımsız, çünkü ülkenin gerçek
+ * dilidir. Arayüzde kullanılabilmesi için İKİ koşul birden gerekir:
+ * bilinen bir dil olmalı VE sözlüğü bulunmalı. İkisini ayrı ayrı sormak,
+ * "Arapça ülke dili ama henüz çevirimiz yok" durumunu doğru ifade eder.
+ */
+function cevirisiVarMi(kod: string): kod is Locale {
+  return isLocale(kod) && isTranslatedLocale(kod);
+}
+
+/**
  * İSTENEN dilden SUNULACAK dile.
  *
  * Çevirisi olmayan bir dil istendiğinde nereye düşeceğimiz önemsiz bir
@@ -72,11 +92,34 @@ export function isTranslated(locale: Locale): boolean {
  * varsayılanı, "bu ülkedeki bir ziyaretçi büyük olasılıkla hangi dili
  * okuyabilir" sorusunun zaten verilmiş cevabıdır.
  */
-function sunulacakDil(istenen: Locale, market: Market): Locale {
+function sunulacakDil(
+  istenen: Locale,
+  market: Market,
+  katalog?: MarketKatalogu,
+): Locale {
   if (isTranslated(istenen)) return istenen;
 
-  const pazarDili = MARKET_CONFIG[market].defaultLocale;
-  if (isTranslated(pazarDili)) return pazarDili;
+  /*
+   * `Market` artık veri güdümlü bir `string`; yedek yapılandırmada
+   * olmayan bir pazar kodu gelebilir. O durumda pazar dili bilinmiyor
+   * demektir ve genel varsayılana düşülür -- uydurma yapılmaz.
+   */
+  /*
+   * KATALOG VARSA DİL ÜLKEDEN GELİR. Pazar dil TAŞIMAZ (şema da öyle
+   * diyor: `markets` tablosunda `default_locale` sütunu bilerek yok).
+   * Pazarın kapsadığı ülkelerin varsayılan dilleri sırayla denenir;
+   * çevirisi olan ilki sunulur. Böylece `GCC` açıldığında Arapça çevirisi
+   * geldiği anda kod değişmeden devreye girer.
+   */
+  if (katalog) {
+    for (const ulkeKodu of pazarinUlkeleri(katalog, market)) {
+      const ulke = ulkeKaydi(katalog, ulkeKodu);
+      if (ulke && cevirisiVarMi(ulke.defaultLocale)) return ulke.defaultLocale;
+    }
+  }
+
+  const pazarDili = MARKET_CONFIG[market]?.defaultLocale;
+  if (pazarDili && isTranslated(pazarDili)) return pazarDili;
 
   return DEFAULT_LOCALE;
 }
@@ -90,17 +133,38 @@ function sunulacakDil(istenen: Locale, market: Market): Locale {
 export async function getRequestLocale(): Promise<RequestLocale> {
   const h = await headers();
 
-  const resolved = resolveMarket({
-    ipCountry: h.get('x-vercel-ip-country'),
-    acceptLanguage: h.get('accept-language'),
-  });
+  /*
+   * Katalog okunamazsa BOŞ gelir ve `resolveMarket` sabit yedeğe düşer --
+   * yani bugünkü davranış. Pazar/dil çözümlemesi veritabanına BAĞIMLI
+   * DEĞİL, ondan BESLENİYOR.
+   */
+  const katalog = await pazarKatalogu().catch(() => BOS_KATALOG);
+  const katalogVar = katalog.markets.length > 0;
+  const ipCountry = h.get('x-vercel-ip-country');
 
-  const contentLocale = sunulacakDil(resolved.locale, resolved.market);
+  const resolved = resolveMarket(
+    {
+      ipCountry,
+      acceptLanguage: h.get('accept-language'),
+    },
+    katalogVar ? katalog : undefined,
+  );
+
+  const contentLocale = sunulacakDil(
+    resolved.locale,
+    resolved.market,
+    katalogVar ? katalog : undefined,
+  );
 
   return {
     ...resolved,
     contentLocale,
-    contentTag: localeTag(contentLocale, resolved.market),
+    contentTag: localeTag(
+      contentLocale,
+      resolved.market,
+      katalogVar ? katalog : undefined,
+      ipCountry,
+    ),
     untranslated: contentLocale !== resolved.locale,
   };
 }
