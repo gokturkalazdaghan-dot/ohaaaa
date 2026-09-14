@@ -65,11 +65,28 @@ export default function robots(): MetadataRoute.Robots {
         disallow: PRIVATE_PATHS_WITH_SEARCH,
       },
       {
-        // Yapay zekâ arama motorlarının ürün sayfalarımızı okumasını
-        // istiyoruz: fiyat karşılaştırması sorulduğunda kaynak olabiliriz.
+        /*
+         * Yapay zekâ arama motorlarının ürün sayfalarımızı okumasını
+         * istiyoruz: fiyat karşılaştırması sorulduğunda kaynak olabiliriz.
+         *
+         * AMA `/arama` BURADA DA KAPALI. Önceki hâl `PRIVATE_PATHS`
+         * kullanıyordu ve o listede `/arama` yok; sonuç olarak bu üç bot,
+         * dosyanın en başında "tarama bütçesini yer" diye engellenen
+         * sonsuz parametreli arama adreslerini tarayabiliyordu.
+         *
+         * Ölçüldü (üretim, 14 Eylül 2026 gecesi): her arama sayfası
+         * render'ı `search_products` + `search_facets` olmak üzere İKİ
+         * pahalı RPC açıyor ve ikisi de birebir aynı oranda zaman aşımına
+         * uğruyordu (85 dakikada 267 + 406 hata). Gerçek kullanıcı
+         * trafiğinin olmadığı saatlerde bile sürmesi, kaynağın tarayıcı
+         * olduğunu gösteriyor.
+         *
+         * Sayfadaki `noindex` bunu tek başına çözmüyor: indekslemeyi
+         * engeller, TARAMAYI engellemez. Taramayı durduran yer burası.
+         */
         userAgent: ['OAI-SearchBot', 'PerplexityBot', 'ClaudeBot'],
         allow: ['/', '/urun/'],
-        disallow: PRIVATE_PATHS,
+        disallow: PRIVATE_PATHS_WITH_SEARCH,
       },
     ],
     sitemap: `${siteUrl}/sitemap.xml`,
