@@ -14,19 +14,24 @@
  * bulur. Bildirdiğimiz her varyant, gerçekten sunduğumuz bir varyanttır.
  */
 
+import { headers } from 'next/headers';
+
 import {
   dilAlternatifleri,
+  kanonikYol,
   DEFAULT_LOCALE,
   DEFAULT_MARKET,
   pazarinUlkeleri,
   ulkeKaydi,
   type AlternatifGirdisi,
   type MarketKatalogu,
+  type YolDili,
 } from '@ohaaaa/shared';
 
 import { pazarKatalogu } from '@/data/markets';
 import { siteUrl } from '@/lib/env';
 import { isTranslated } from '@/lib/locale';
+import { ADRES_DILI_BASLIGI, ADRES_PAZARI_BASLIGI } from '@/middleware';
 
 const VARSAYILAN = { locale: DEFAULT_LOCALE, market: DEFAULT_MARKET };
 
@@ -73,24 +78,46 @@ export interface DilMetaVerisi {
 }
 
 /**
+ * Adresteki dil öneki -- middleware'in yazdığı başlıklardan.
+ *
+ * Sayfa kendi yolunu bilir ama önekini bilmez: `next.config` yeniden
+ * yazması öneki yoldan SİLDİĞİ için sayfa bileşeni `/kategori/x` görür.
+ * Öneki tek bilen middleware'dir, o yüzden başlıktan okunuyor.
+ */
+async function adrestekiIkili(): Promise<YolDili | null> {
+  const h = await headers();
+  const dil = h.get(ADRES_DILI_BASLIGI);
+  const pazar = h.get(ADRES_PAZARI_BASLIGI);
+  if (!dil || !pazar) return null;
+  return { locale: dil, market: pazar };
+}
+
+/** Yolu mutlak adrese çevirir; kök için sondaki eğik çizgi yazılmaz. */
+function mutlak(kok: string, yol: string): string {
+  return yol === '/' ? kok : `${kok}${yol}`;
+}
+
+/**
  * Bir sayfa yolu için kanonik adres ve dil alternatifleri.
  *
  * `kalan`, dil öneki OLMAYAN yoldur (`/kategori/telefon`). Sayfa kendi
  * yolunu zaten bilir; başlıktan okumaya gerek yok.
  *
- * Katalog okunamazsa alternatif ÜRETİLMEZ, yalnızca kanonik döner: yanlış
- * bir dil haritası yayımlamaktansa hiç yayımlamamak doğrudur.
+ * Katalog okunamazsa alternatif ÜRETİLMEZ ve kanonik varsayılana düşer:
+ * yanlış bir dil haritası yayımlamaktansa hiç yayımlamamak doğrudur.
  */
 export async function dilMetaVerisi(kalan: string): Promise<DilMetaVerisi> {
   const kok = siteUrl.replace(/\/+$/, '');
-  const canonical = `${kok}${kalan === '/' ? '' : kalan}` || kok;
 
   const katalog = await pazarKatalogu().catch(() => null);
-  if (!katalog || katalog.markets.length === 0) {
-    return { canonical, languages: {} };
-  }
+  const varyantlar = katalog ? sunulanVaryantlar(katalog) : [];
+  const secim = await adrestekiIkili();
 
-  const alternatifler = dilAlternatifleri(kalan, sunulanVaryantlar(katalog), VARSAYILAN, kok);
+  const canonical = mutlak(kok, kanonikYol(kalan, secim, VARSAYILAN, varyantlar));
+
+  if (varyantlar.length === 0) return { canonical, languages: {} };
+
+  const alternatifler = dilAlternatifleri(kalan, varyantlar, VARSAYILAN, kok);
 
   const languages: Record<string, string> = {};
   for (const a of alternatifler) languages[a.hreflang] = a.href;

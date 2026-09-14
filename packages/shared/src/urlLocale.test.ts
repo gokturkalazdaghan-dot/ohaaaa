@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  dilAlternatifleri, hreflangEtiketi, yolKur, yolSegmentiniCoz,
-  yolSegmentiYaz, yoluAyristir, type YolDili,
+  dilAlternatifleri, hreflangEtiketi, kanonikYol, yolKur, yolSegmentiniCoz,
+  yolSegmentiYaz, yoluAyristir, type AlternatifGirdisi, type YolDili,
 } from './urlLocale.js';
 
 const VARSAYILAN: YolDili = { locale: 'tr', market: 'TR' };
@@ -145,4 +145,66 @@ test('alternatifler KARARLI sirada', () => {
 test('bos alternatif listesi yalnizca x-default verir', () => {
   const a = dilAlternatifleri('/', [], VARSAYILAN, 'https://x.test');
   assert.deepEqual(a.map((x) => x.hreflang), ['x-default']);
+});
+
+// --- Kanonik yol ----------------------------------------------------------
+
+const SUNULANLAR: AlternatifGirdisi[] = [
+  { locale: 'tr', market: 'TR', countryCode: 'TR' },
+  { locale: 'en', market: 'UK', countryCode: 'GB' },
+  { locale: 'en', market: 'GCC', countryCode: 'AE' },
+];
+
+test('KANONIK KENDINE isaret eder -- olculen hata: /en-uk Turkce koku gosteriyordu', () => {
+  /*
+   * Uretimde olculdu: /en-uk sayfasi canonical olarak https://www.ohaaaa.com
+   * veriyordu. Arama motoru bunu "kopya" sayar; sayfa dizine girmez ve
+   * uzerindeki hreflang kumesi de yok sayilir.
+   */
+  assert.equal(
+    kanonikYol('/', { locale: 'en', market: 'UK' }, VARSAYILAN, SUNULANLAR),
+    '/en-uk',
+  );
+  assert.equal(
+    kanonikYol('/kategori/telefon', { locale: 'en', market: 'GCC' }, VARSAYILAN, SUNULANLAR),
+    '/en-gcc/kategori/telefon',
+  );
+});
+
+test('VARSAYILAN ikili oneksiz kanoniklenir -- bilincli tek capraz-kanonik', () => {
+  assert.equal(kanonikYol('/', { locale: 'tr', market: 'TR' }, VARSAYILAN, SUNULANLAR), '/');
+  assert.equal(
+    kanonikYol('/kategori/x', { locale: 'tr', market: 'TR' }, VARSAYILAN, SUNULANLAR),
+    '/kategori/x',
+  );
+});
+
+test('onek YOKSA varsayilana dusulur', () => {
+  assert.equal(kanonikYol('/kategori/x', null, VARSAYILAN, SUNULANLAR), '/kategori/x');
+});
+
+test('SUNULMAYAN ikili kanoniklesmez -- uydurma adres dizine verilmez', () => {
+  /*
+   * /en-gb bicim olarak gecerli ama `gb` bir PAZAR degil. Kendine kanonik
+   * verseydik var olmayan bir pazar sayfasini dizine sokardik.
+   */
+  assert.equal(kanonikYol('/', { locale: 'en', market: 'GB' }, VARSAYILAN, SUNULANLAR), '/');
+  /* Cevirisi olmayan dil de sunulanlar listesinde yoktur. */
+  assert.equal(kanonikYol('/', { locale: 'ar', market: 'GCC' }, VARSAYILAN, SUNULANLAR), '/');
+});
+
+test('KANONIK her zaman hreflang kumesinin ICINDE -- yoksa kume tutarsiz olur', () => {
+  const kok = 'https://x.test';
+  for (const g of SUNULANLAR) {
+    const kanonik = `${kok}${kanonikYol('/kategori/x', g, VARSAYILAN, SUNULANLAR)}`;
+    const kume = dilAlternatifleri('/kategori/x', SUNULANLAR, VARSAYILAN, kok);
+    assert.ok(
+      kume.some((a) => a.href === kanonik),
+      `kanonik ${kanonik} alternatifler arasinda yok`,
+    );
+  }
+});
+
+test('sunulanlar bos ise varsayilana dusulur -- katalog okunamadiginda', () => {
+  assert.equal(kanonikYol('/', { locale: 'en', market: 'UK' }, VARSAYILAN, []), '/');
 });
