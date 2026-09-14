@@ -31,16 +31,17 @@
 -- çözümlemeyi belirsizleştirirdi.
 -- ============================================================================
 
--- Faz 1 kapsamı: Avrupa (27) + Körfez (6). TR ve GB bilerek dışarıda.
-create temporary table faz1_ulkeler (code char(2) primary key) on commit drop;
-
-insert into faz1_ulkeler (code) values
-  -- Avrupa
-  ('AT'), ('BE'), ('BG'), ('HR'), ('CY'), ('CZ'), ('DK'), ('EE'), ('FI'),
-  ('FR'), ('DE'), ('GR'), ('HU'), ('IE'), ('IT'), ('LV'), ('LT'), ('LU'),
-  ('MT'), ('NL'), ('PL'), ('PT'), ('RO'), ('SK'), ('SI'), ('ES'), ('SE'),
-  -- Körfez
-  ('AE'), ('SA'), ('QA'), ('KW'), ('BH'), ('OM');
+/*
+ * KAPSAM HER İFADEDE YENİDEN YAZILIYOR, geçici tablo KULLANILMIYOR.
+ *
+ * İlk hâli `create temporary table ... on commit drop` kullanıyordu ve CI
+ * bunu yakaladı: göçler `psql` ile çalıştığında her ifade kendi örtük
+ * işleminde koşar, dolayısıyla geçici tablo `CREATE`'ten hemen sonra
+ * düşüyor ve sonraki `INSERT` "relation does not exist" ile patlıyordu.
+ *
+ * İki kez yazılan liste bir tekrar ama güvenli tekrar: aynı göç dosyasında,
+ * yan yana duruyor ve ayrışması için ikisini birden düzenlemek gerekir.
+ */
 
 /*
  * Pazar kodu = ülke kodu. İkisinin aynı olması tesadüf değil, çözümlemenin
@@ -50,9 +51,15 @@ insert into faz1_ulkeler (code) values
  * `markets_code_bicimi` kısıtı iki büyük harfi kabul ediyor (^[A-Z][A-Z0-9_]{1,15}$).
  */
 insert into public.markets (code, name_en, default_currency, is_active)
-select u.code, c.name_en, c.default_currency, true
-  from faz1_ulkeler u
-  join public.countries c on c.code = u.code
+select c.code, c.name_en, c.default_currency, true
+  from public.countries c
+ where c.code in (
+   -- Avrupa (27)
+   'AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE',
+   'IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE',
+   -- Körfez (6)
+   'AE','SA','QA','KW','BH','OM'
+ )
 on conflict (code) do nothing;
 
 /*
@@ -61,7 +68,13 @@ on conflict (code) do nothing;
  * desteklediği durum.
  */
 insert into public.market_countries (market_code, country_code)
-select u.code, u.code from faz1_ulkeler u
+select c.code, c.code
+  from public.countries c
+ where c.code in (
+   'AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE',
+   'IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE',
+   'AE','SA','QA','KW','BH','OM'
+ )
 on conflict (market_code, country_code) do nothing;
 
 
@@ -72,7 +85,7 @@ on conflict (market_code, country_code) do nothing;
 --   select c.code, m.code, m.default_currency
 --     from public.countries c
 --     join public.markets m on m.code = c.code
---    where c.code in (select code from faz1_ulkeler);
+--    where c.code = m.code;
 --
 -- İsveç iki pazarda üye olmalı (SE ve EU ve NORDICS):
 --   select market_code from public.market_countries where country_code = 'SE';

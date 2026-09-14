@@ -12,7 +12,7 @@
 \set ON_ERROR_STOP on
 
 begin;
-select plan(15);
+select plan(17);
 
 -- --- Zemin ----------------------------------------------------------------
 insert into public.merchants (slug, display_name, network, status)
@@ -37,16 +37,27 @@ select has_index('public', 'products', 'products_market_code_status_idx',
 -- B) ESLEME VE YABANCI ANAHTAR DAVRANISI
 -- ---------------------------------------------------------------------------
 /*
- * ALMANYA BIR PAZAR DEGIL.
+ * ALMANYA ARTIK HEM ULKE HEM PAZAR -- VE IKISI AYNI SEY DEGIL.
  *
- * Eski enum'da 'DE' bir "pazar" degeriydi; yeni modelde Almanya EU
- * pazarinin bir ULKESI. `markets` tablosunda 'DE' satiri YOK ve olmamali.
- * Bu iddia duserse backfill eslemesi kimlik eslemesine dogru kaymis
- * demektir.
+ * Bu iddia once "markets tablosunda DE YOK" diyordu ve Avrupa'nin tek bir
+ * EU pazari oldugu varsayimini kilitliyordu. Faz 1 ile her Avrupa ve
+ * Korfez ulkesi kendi ticari pazarini aliyor (goc 20260914041000), cunku
+ * tek pazar varsayimi Isvec'e euro, Korfez'in alti ulkesine tek bir para
+ * birimi dayatiyordu.
+ *
+ * DEGISMEYEN AYRIM: `countries.DE` ulkedir, `markets.DE` pazardir. Ikisi
+ * ayni kodu tasir ama ayni tablo degildir; cozumleme ulkeden pazara
+ * `market_countries` uzerinden gecer.
  */
-select is_empty(
+select isnt_empty(
   $$ select code from public.markets where code = 'DE' $$,
-  '9) markets tablosunda ''DE'' YOK -- Almanya EU''nun bir ulkesi'
+  '9) markets tablosunda ''DE'' VAR -- Almanya kendi pazari'
+);
+
+select is(
+  (select default_currency from public.markets where code = 'DE'),
+  'EUR',
+  '9b) DE pazarinin para birimi ulkesinden turetildi'
 );
 
 select is(
@@ -67,16 +78,30 @@ select lives_ok(
   '11) EU pazari + DE ulkesi olan kaynak acilabiliyor'
 );
 
--- 'DE' bir PAZAR kodu olarak REDDEDILIR.
-select throws_ok(
+/*
+ * 'DE' ARTIK KABUL EDILIR (pazar oldu) ama UYDURMA kod hala REDDEDILIR.
+ *
+ * Korunan sey yabanci anahtarin kendisi: `markets` tablosunda olmayan bir
+ * kod satira giremez. Testin amaci "DE yasak" degil, "bilinmeyen yasak".
+ */
+select lives_ok(
   $$ insert into public.sources
        (merchant_id, slug, name, kind, endpoint_url, currency, market_code)
      select id, 'm3-de-kaynak', 'DE Kaynak', 'feed_csv',
             'https://ornek.gecersiz/f2.csv', 'EUR', 'DE'
        from public.merchants where slug = 'm3-testi-magaza' $$,
+  '12) market_code = ''DE'' KABUL EDILIYOR -- Almanya artik bir pazar'
+);
+
+select throws_ok(
+  $$ insert into public.sources
+       (merchant_id, slug, name, kind, endpoint_url, currency, market_code)
+     select id, 'm3-uydurma-kaynak', 'Uydurma Kaynak', 'feed_csv',
+            'https://ornek.gecersiz/f3.csv', 'EUR', 'YOKBOYLE'
+       from public.merchants where slug = 'm3-testi-magaza' $$,
   '23503',
   null,
-  '12) market_code = ''DE'' REDDEDILIYOR (boyle bir pazar yok)'
+  '12b) UYDURMA market_code hala REDDEDILIYOR (yabanci anahtar koruyor)'
 );
 
 -- Pazar ve ulke BAGIMSIZ: EU pazarinda Ispanya kaynagi acilabilir.

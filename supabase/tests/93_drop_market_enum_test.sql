@@ -114,15 +114,20 @@ select lives_ok(
 
 -- --- 16: uydurma pazar REDDEDILIYOR --------------------------------------
 -- Enum kalksa bile serbest metin olmadi: markets(code) yabanci anahtari
--- kapiyi tutuyor. 'DE' ozellikle secildi -- eski enum'da GECERLI bir
--- degerdi, yeni modelde Almanya bir ulke ve boyle bir pazar YOK.
+-- kapiyi tutuyor.
+--
+-- ORNEK KOD DEGISTI: once 'DE' kullaniliyordu cunku "Almanya bir pazar
+-- degil" varsayimi geceliydi. Faz 1'de her Avrupa ve Korfez ulkesi kendi
+-- pazarini aldigi icin 'DE' artik GECERLI bir pazar. Testin iddiasi zaten
+-- 'DE' hakkinda degildi -- "tabloda olmayan kod giremez" hakkindaydi;
+-- ornek, gercekten var olmayan bir koda cevrildi.
 select throws_ok(
   $$ select public.enqueue_job(
-       'TEST_M4', 'normal', '{}'::jsonb, 'm4-test-gecersiz', 'DE', null
+       'TEST_M4', 'normal', '{}'::jsonb, 'm4-test-gecersiz', 'YOKBOYLE', null
      ) $$,
   '23503',
   null,
-  'var olmayan pazar kodu ("DE") yabanci anahtar tarafindan reddediliyor'
+  'var olmayan pazar kodu ("YOKBOYLE") yabanci anahtar tarafindan reddediliyor'
 );
 
 select * from finish();
