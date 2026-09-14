@@ -1,5 +1,7 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
+
+import { dilMetaVerisi } from '@/lib/seo';
 import Link from 'next/link';
 
 import { DataUnavailable } from '@/components/DataUnavailable';
@@ -36,9 +38,14 @@ import { ShowcaseTiers } from '@/components/ShowcaseTiers';
  * Başlık burada TEKRAR yazılmaz: yerleşimdeki `default` zaten doğru ve
  * iki yere yazmak, birini değiştirip diğerini unutmanın davetidir.
  */
-export const metadata: Metadata = {
-  alternates: { canonical: '/' },
-};
+/*
+ * STATİK `metadata` YERİNE `generateMetadata`: dil alternatifleri
+ * katalogdan geliyor ve katalog bir okuma, yani asenkron. Başlık burada
+ * hâlâ tekrar yazılmıyor -- yerleşimdeki `default` doğru.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  return { alternates: await dilMetaVerisi('/') };
+}
 
 /**
  * Bir veri çağrısının sonucu: değer geldi mi, yoksa kaynağa mı ulaşılamadı?
