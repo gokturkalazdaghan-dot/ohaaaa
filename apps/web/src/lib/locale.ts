@@ -171,11 +171,25 @@ export async function getRequestLocale(): Promise<RequestLocale> {
   return {
     ...resolved,
     contentLocale,
+    /*
+     * BÖLGE KODU YALNIZCA PAZAR IP'DEN GELDİYSE IP ÜLKESİNDEN ALINIR.
+     *
+     * Ölçülen hata: `/en-gb` adresini ABD IP'siyle açan ziyaretçi
+     * `lang="en-US"` alıyordu; `/tr-uk` ise `lang="tr-US"`. Dil ezmesi
+     * çalışıyordu ama pazar ezmesi çalışmıyordu, çünkü `ipCountry`
+     * koşulsuz geçiliyordu ve katalog ülke verildiğinde pazarı tamamen
+     * yok sayıyor.
+     *
+     * Kullanıcı pazarı AÇIKÇA seçtiyse (adresten) ya da hesabından
+     * geliyorsa, bölge o pazardan türemeli -- IP'den değil. IP yalnızca
+     * pazarı zaten IP belirlediğinde bölgeyi de belirleyebilir; o durumda
+     * ikisi tutarlıdır ve ülke, pazardan daha özgül bilgi taşır.
+     */
     contentTag: localeTag(
       contentLocale,
       resolved.market,
       katalogVar ? katalog : undefined,
-      ipCountry,
+      resolved.marketSource === 'ip' ? ipCountry : null,
     ),
     untranslated: contentLocale !== resolved.locale,
   };

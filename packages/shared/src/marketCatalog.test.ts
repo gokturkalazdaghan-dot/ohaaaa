@@ -148,6 +148,31 @@ test('localeTag bolgeyi ULKEDEN alir, matris gerektirmez', () => {
   assert.equal(localeTag('tr', 'TR', K, 'TR'), 'tr-TR');
 });
 
+test('ULKE VERILMEZSE bolge PAZARDAN gelir', () => {
+  /*
+   * Uretimde olculmus hata: `/en-gb` adresini ABD IP'siyle acan ziyaretci
+   * `lang="en-US"` aliyordu, `/tr-uk` ise `tr-US`. Dil ezmesi calisiyor
+   * ama pazar ezmesi calismiyordu -- cunku cagiran taraf IP ulkesini
+   * KOSULSUZ geciriyordu ve katalog, ulke verildiginde pazari yok sayiyor.
+   *
+   * Buradaki iki iddia o kurali kilitliyor: ulke YOKSA bolge pazardan
+   * turer; ulke VARSA ulke kazanir. Hangisinin gecirilecegine cagiran
+   * karar verir ve bu karar `lib/locale.ts` icinde `marketSource`'a bagli.
+   */
+  assert.equal(localeTag('en', 'UK', K, null), 'en-GB');
+  assert.equal(localeTag('tr', 'UK', K, null), 'tr-GB');
+  /*
+   * `localeTag` yalnizca CEVIRISI OLAN dilleri kabul eder (`Locale` union).
+   * Korfez'in bolge kodunu dogrulamak icin katalog fonksiyonuna dogrudan
+   * bakiyoruz -- Arapca sozlugu geldigi gun buraya `localeTag` de eklenir.
+   */
+  assert.equal(pazarinSayiBicimi(K, 'GCC'), 'ar-AE');
+});
+
+test('ULKE VERILIRSE ulke kazanir -- cagiran bilincli gecirmeli', () => {
+  assert.equal(localeTag('en', 'UK', K, 'DE'), 'en-DE');
+});
+
 test('BOS KATALOG guvenli: cokme yok, yedege dusulur', () => {
   assert.deepEqual(etkinPazarlar(BOS_KATALOG), []);
   assert.equal(ulkeninPazari(BOS_KATALOG, 'TR'), null);
