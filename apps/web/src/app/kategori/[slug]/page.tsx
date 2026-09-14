@@ -1,3 +1,4 @@
+import { dilMetaVerisi } from '@/lib/seo';
 import type { Metadata } from 'next';
 import { ProductCard } from '@/components/ProductCard';
 import Link from 'next/link';
@@ -111,7 +112,7 @@ export async function generateMetadata({
         : t(contentLocale, 'kategori.fiyatlari', { ad: category.name }),
     ...(doluMu ? {} : { robots: { index: false, follow: true } }),
     description: t(contentLocale, 'kategori.metaAciklama', { ad: category.name }),
-    alternates: { canonical },
+    alternates: { ...(await dilMetaVerisi(canonical)), canonical },
     openGraph: {
       title: t(contentLocale, 'kategori.ogBaslik', { ad: category.name }),
       description: t(contentLocale, 'kategori.ogAciklama', { ad: category.name }),

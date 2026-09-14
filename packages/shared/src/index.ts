@@ -22,4 +22,5 @@ export * from './concurrency.js';
 export * from './listingSort.js';
 export * from './listingCount.js';
 export * from './marketCatalog.js';
+export * from './urlLocale.js';
 export * from './governance/index.js';

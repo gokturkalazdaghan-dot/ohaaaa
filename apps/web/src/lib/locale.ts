@@ -17,6 +17,7 @@ import {
 } from '@ohaaaa/shared';
 
 import { pazarKatalogu } from '@/data/markets';
+import { ADRES_DILI_BASLIGI, ADRES_PAZARI_BASLIGI } from '@/middleware';
 
 /**
  * İstek başına dil ve pazar çözümlemesi (madde 12–14).
@@ -142,8 +143,19 @@ export async function getRequestLocale(): Promise<RequestLocale> {
   const katalogVar = katalog.markets.length > 0;
   const ipCountry = h.get('x-vercel-ip-country');
 
+  /*
+   * ADRESTEKİ SEÇİM IP TAHMİNİNİ EZER.
+   *
+   * `resolveMarket` bu alanları en baştan destekliyordu ama hiçbir çağıran
+   * doldurmuyordu -- yani açık seçim ÖLÜ bir yetenekti ve dil her zaman
+   * IP'den tahmin ediliyordu. Önek artık middleware tarafından başlığa
+   * yazıldığı için `/en-gb/...` adresini açan ziyaretçi, nereden bakarsa
+   * baksın İngilizce ve sterlin görüyor.
+   */
   const resolved = resolveMarket(
     {
+      explicitLocale: h.get(ADRES_DILI_BASLIGI),
+      explicitMarket: h.get(ADRES_PAZARI_BASLIGI),
       ipCountry,
       acceptLanguage: h.get('accept-language'),
     },
