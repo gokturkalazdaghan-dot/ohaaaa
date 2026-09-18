@@ -1,0 +1,1 @@
+grant execute on function public.net_after_tax(date, date, char) to service_role;
