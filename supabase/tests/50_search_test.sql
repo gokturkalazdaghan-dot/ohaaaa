@@ -51,9 +51,24 @@ begin
   raise notice '✓ offset farkli sayfa donduruyor, toplam sabit kaliyor';
 
   -- 3) Ust kategori secimi alt kategorideki urunleri de kapsamali.
-  --    "Elektronik" diyen kullanici "Telefon"daki urunu gormeli.
-  select id into v_cat   from public.categories where slug = 'elektronik';
-  select id into v_child from public.categories where slug = 'telefon';
+  --    "Elektronik" diyen kullanici altindaki "Bilgisayar"daki urunu gormeli.
+  --
+  --    CIFT SABIT YAZILMIYOR, VERIDEN BULUNUYOR. Onceki hali
+  --    'elektronik' + 'telefon' slug'larini gomuyordu; taksonomi
+  --    degisip 'telefon' ust duzeye cikinca test, kural bozulmadigi
+  --    halde kirildi -- yani sabit cift, KURALI degil o gunku
+  --    yerlesimi test ediyordu.
+  --
+  --    Simdi urunu olan herhangi bir alt kategori ve onun ustu
+  --    seciliyor. Boyle bir cift yoksa iddia atlanir: kapsama kurali
+  --    ancak gercekten ic ice bir kategori varsa anlamlidir.
+  select g.category_id, c.parent_id
+    into v_child, v_cat
+    from public.product_groups g
+    join public.categories c on c.id = g.category_id
+   where c.parent_id is not null
+     and g.offer_count > 0
+   limit 1;
 
   if v_child is not null then
     select count(*) into v_rows
