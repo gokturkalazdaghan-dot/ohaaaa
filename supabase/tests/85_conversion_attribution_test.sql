@@ -153,24 +153,18 @@ select is(
 -- merchants.network -- DB kisiti kod tarafindaki kayitla ayni olmali
 -- ===========================================================================
 
--- DIKKAT: birden fazla kisit benzer hata dondurebilir
--- (merchants_active_needs_template gibi). Yalnizca SQLSTATE'e bakan bir iddia
--- YANLIS SEBEPLE gecebilir. Bu yuzden satir her acidan gecerli tutuluyor ve
--- kisit ADI da dogrulaniyor.
---
--- KISIT ADI DEGISTI: `merchants_network_known` (CHECK) yerine
--- `merchants_network_fkey` (yabanci anahtar). Koruma zayiflamadi, guclendi:
--- CHECK yalnizca yazili iki degeri biliyordu, yabanci anahtar
--- affiliate_networks tablosunda GERCEKTEN var olan her kodu kabul eder ve
--- olmayani reddeder. Iddianin amaci -- "bilinmeyen ag yazilamaz" -- ayni.
+-- DIKKAT: iki kisit da 23514 dondurur (merchants_active_needs_template ve
+-- merchants_network_known). Yalnizca SQLSTATE'e bakan bir iddia YANLIS SEBEPLE
+-- gecebilir. Bu yuzden satir her acidan gecerli tutuluyor ve kisit ADI da
+-- dogrulaniyor.
 select throws_matching(
   $$insert into public.merchants
       (slug, display_name, homepage_url, network, status, country_code,
        deeplink_template, terms_verified_at)
     values ('ag-bilinmeyen', 'Bilinmeyen Ag', 'https://x.gecersiz',
             'uydurma-ag', 'active', 'TR', 'https://x.gecersiz/g?u={url}', now())$$,
-  'merchants_network_fkey',
-  '19) taninmayan network degeri veritabanina YAZILAMAZ (yabanci anahtar)'
+  'merchants_network_known',
+  '19) taninmayan network degeri veritabanina YAZILAMAZ (dogru kisit adiyla)'
 );
 
 select lives_ok(
