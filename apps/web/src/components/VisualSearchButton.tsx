@@ -131,7 +131,24 @@ export function VisualSearchButton({
         ref={inputRef}
         type="file"
         accept="image/*"
-        className="sr-only"
+        /*
+         * `sr-only` DEĞİL, saydamlık.
+         *
+         * Tailwind'in `sr-only`si ögeyi 1 piksele indirip
+         * `clip: rect(0,0,0,0)` ile kırpar. Bu, KODLA tıklanan bir dosya
+         * girdisinde iOS Safari'de bilinen kırılgan desendir: seçiciden
+         * "Fotoğraf Çek" seçildiğinde kamera katmanı boyutu sıfıra yakın
+         * ögeye bağlanır ve önizleme siyah kalır.
+         *
+         * Saydam ama KIRPILMAMIŞ bir öge aynı görünmezliği verir, kırpma
+         * kaynaklı yolu ortadan kaldırır. Erişilebilirlik tarafı
+         * değişmiyor: öge hâlâ ağaçta ve aşağıdaki adı taşıyor.
+         *
+         * NOT: iOS Safari bu ortamda çalıştırılamadığı için siyah ekran
+         * BURADA yeniden üretilemedi. Bu, nedeni bilinen deseni ortadan
+         * kaldıran düzeltmedir; kesin doğrulama cihazda yapılmalı.
+         */
+        className="pointer-events-none absolute h-px w-px opacity-0"
         /*
          * Görünmez ama ERİŞİLEBİLİR AD taşır. `aria-hidden` yapmak yanlış
          * olurdu: ekran okuyucu kullanıcısı da dosya seçebilmeli. Adsız

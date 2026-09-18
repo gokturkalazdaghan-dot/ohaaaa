@@ -1,3 +1,4 @@
+import { dilMetaVerisi } from '@/lib/seo';
 import type { Metadata } from 'next';
 import { ProductCard } from '@/components/ProductCard';
 import Link from 'next/link';
@@ -87,7 +88,7 @@ export async function generateMetadata({
   // Sayfa 2+ KENDINI kanonik gosterir. Hepsini 1. sayfaya kanonikleseydik
   // 2. sayfadaki urunler hicbir kanonik sayfada gecmez, yani dizinde
   // gorunmez olurdu.
-  const canonical =
+  const kalan =
     page > 1 ? `/kategori/${category.slug}?sayfa=${page}` : `/kategori/${category.slug}`;
 
   /*
@@ -111,7 +112,14 @@ export async function generateMetadata({
         : t(contentLocale, 'kategori.fiyatlari', { ad: category.name }),
     ...(doluMu ? {} : { robots: { index: false, follow: true } }),
     description: t(contentLocale, 'kategori.metaAciklama', { ad: category.name }),
-    alternates: { canonical },
+    /*
+     * KANONIK'I BURADA EZMIYORUZ. Onceki hali `dilMetaVerisi`nin dondurdugu
+     * kanonigi onek-siz yolla degistiriyordu; sonucu uretimde olculdu:
+     * `/en-uk/kategori/x` kendini Turkce koke kanonikliyordu, yani hicbir
+     * pazar sayfasi dizine giremiyordu. Kanonigi tek yerin uretmesi, onun
+     * hreflang kumesiyle tutarli kalmasini da garanti eder.
+     */
+    alternates: await dilMetaVerisi(kalan),
     openGraph: {
       title: t(contentLocale, 'kategori.ogBaslik', { ad: category.name }),
       description: t(contentLocale, 'kategori.ogAciklama', { ad: category.name }),
@@ -190,6 +198,13 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
 
   const totalOffers = results.results.reduce((sum, result) => sum + result.offerCount, 0);
   const totalPages = Math.max(1, Math.ceil(results.totalCount / PAGE_SIZE));
+
+  /*
+   * Tavana dayanmis sayi KESIN DEGIL, alt sinirdir. "1.000" yazmak
+   * kullaniciya yanlis bir kesinlik vaat ederdi; "1.000+" dogruyu soyler.
+   */
+  const toplamMetni =
+    formatCount(results.totalCount, contentTag) + (results.totalCapped ? '+' : '');
 
   /** Siralamayi koruyarak sayfa degistiren bag uretir. */
   function categoryHref(changes: { sirala?: string; sayfa?: string }): string {
@@ -291,9 +306,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
                 ad: category.name,
                 urunSayisi: (
                   <strong className="text-fg">
-                    {t(contentLocale, 'kategori.urunAdet', {
-                      adet: formatCount(results.totalCount, contentTag),
-                    })}
+                    {t(contentLocale, 'kategori.urunAdet', { adet: toplamMetni })}
                   </strong>
                 ),
                 // Tek sayfalık kategoride "(sayfa 1/1)" yazmak gürültüdür.

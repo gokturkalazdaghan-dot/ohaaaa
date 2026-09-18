@@ -1,0 +1,92 @@
+/**
+ * ÜRETİM AJAN KAYIT DEFTERİ.
+ *
+ * PHASE 1 sonunda `registry.register(...)` yalnızca testlerde çağrılıyordu:
+ * motor vardı, işçi yoktu. Burası o boşluğu kapatan tek yer.
+ *
+ * İKİ AJAN. Görev haritası altmış bir tane sayıyor. Her biri ancak kendi
+ * dikey dilimi uçtan uca çalıştıktan sonra ekleniyor: doğrulanmamış bir
+ * deseni altmış kez kopyalamak, altmış kez hata yapmak olurdu.
+ */
+
+import { AgentRegistry } from '../orchestrator/registry.js';
+import type { AgentContext } from '../orchestrator/types.js';
+import { ToolKayitDefteri } from '../tools/registry.js';
+import type { MetadataYurutucu } from '../tools/readDb.js';
+import type { ToolCtx } from '../tools/contract.js';
+import { contractVerificationAjani } from './contractVerification.js';
+import { schemaDriftAjani } from './schemaDrift.js';
+import { localeParityAjani } from './localeParity.js';
+
+export interface UretimKurulumu {
+  /** Depo kökü -- `read_repo` bunun dışına çıkamaz. */
+  kokDizin: string;
+  /** Güvenli mod açık mı. Kill switch buradan bağlanır. */
+  guvenliMod?: boolean;
+  /**
+   * Meta veri yürütücüsü. VERİLMEZSE `read_db` uygulanmamış kalır ve onu
+   * taşıyan ajan çalışamaz -- fail-closed.
+   *
+   * Bağlantı buraya DIŞARIDAN veriliyor: kayıt defteri hiçbir kimlik
+   * bilgisi okumuyor, tutmuyor, taşımıyor.
+   */
+  metadataYurutucu?: MetadataYurutucu;
+}
+
+export interface UretimDefteri {
+  registry: AgentRegistry;
+  araclar: ToolKayitDefteri;
+}
+
+/**
+ * Üretim kayıt defterini kurar.
+ *
+ * Araç bağlamı ajanın DIŞINDA üretiliyor: ajan kendi izin listesini
+ * genişletemesin diye. `izinliAraclar` ajanın kaydından geliyor, ajanın
+ * çalışma anındaki isteğinden değil.
+ */
+export function uretimDefteriniKur(k: UretimKurulumu): UretimDefteri {
+  const araclar = new ToolKayitDefteri(k.kokDizin, k.metadataYurutucu);
+  const registry = new AgentRegistry();
+
+  const ajan = localeParityAjani({
+    tool: (ad) => araclar.get(ad),
+    toolCtx: (ctx: AgentContext): ToolCtx => ({
+      agentId: 'localization-parity',
+      izinliAraclar: ctx.tools,
+      guvenliMod: k.guvenliMod ?? false,
+      kalanMs: Math.max(1, ctx.deadline - Date.now()),
+      log: ctx.log,
+    }),
+  });
+
+  registry.register(ajan);
+
+  registry.register(
+    contractVerificationAjani({
+      tool: (ad) => araclar.get(ad),
+      toolCtx: (ctx: AgentContext): ToolCtx => ({
+        agentId: 'contract-verification',
+        izinliAraclar: ctx.tools,
+        guvenliMod: k.guvenliMod ?? false,
+        kalanMs: Math.max(1, ctx.deadline - Date.now()),
+        log: ctx.log,
+      }),
+    }),
+  );
+
+  registry.register(
+    schemaDriftAjani({
+      tool: (ad) => araclar.get(ad),
+      toolCtx: (ctx: AgentContext): ToolCtx => ({
+        agentId: 'schema-drift-auditor',
+        izinliAraclar: ctx.tools,
+        guvenliMod: k.guvenliMod ?? false,
+        kalanMs: Math.max(1, ctx.deadline - Date.now()),
+        log: ctx.log,
+      }),
+    }),
+  );
+
+  return { registry, araclar };
+}

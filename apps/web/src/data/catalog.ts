@@ -11,14 +11,19 @@
 
 import 'server-only';
 
-import { unstable_cache } from 'next/cache';
+import { ONBELLEK, onbellekle } from './onbellek';
 
 import {
   buildCategoryTree,
   collectByKeyset,
   eszamanliHaritala,
+  listelemeSiralamasi,
+  SAYIM_TAVANI,
+  sayimAraligi,
+  tavanliSayim,
   offerSellerName,
   rankShowcase,
+  rpcsizListelenebilir,
 } from '@ohaaaa/shared';
 import type {
   Category,
@@ -75,42 +80,7 @@ export type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'offers';
  * seçildi; daha uzun tutmak bayat fiyat göstermek olurdu, daha kısa tutmak
  * hiç önbelleklememekle aynı kapıya çıkardı.
  */
-const ONBELLEK = {
-  /** Kategori ağacı ve listesi: taksonomi göçle değişir, beslemeyle değil. */
-  taksonomi: 3600,
-  /** Mağaza listesi: yeni ortak eklenmesi nadir. */
-  magazalar: 1800,
-  /** Vitrin ve kampanyalar: beslemeden etkilenir. */
-  vitrin: 900,
-  /** Gezinme amaçlı arama (serbest metin YOK): fiyatlar beslemeyle değişir. */
-  listeleme: 600,
-  /**
-   * SİSTEM DÜZEYİNDE, günde en çok bir kez değişen olgular.
-   *
-   * "Ölçülmüş fiyat düşüşü mümkün mü" sorusu böyle bir olgu: cevabı ancak
-   * fiyat anlık görüntüsü yeniden alındığında değişir (ölçüldü: en yeni
-   * ölçüm 2026-09-12 16:36, yani günde en fazla birkaç kez).
-   */
-  gunluk: 21_600,
-} as const;
 
-/**
- * Bir katalog okumasını önbelleğe alır.
- *
- * `unstable_cache` anahtarı `anahtar` + fonksiyonun ARGÜMANLARINDAN üretir,
- * dolayısıyla aynı fonksiyonun farklı parametreli çağrıları birbirine
- * karışmaz.
- */
-function onbellekle<A extends unknown[], R>(
-  anahtar: string,
-  fn: (...args: A) => Promise<R>,
-  saniye: number,
-): (...args: A) => Promise<R> {
-  return unstable_cache(fn, ['katalog', anahtar], {
-    revalidate: saniye,
-    tags: ['katalog'],
-  });
-}
 
 
 
@@ -125,7 +95,17 @@ function onbellekle<A extends unknown[], R>(
 export interface SearchPage {
   results: SearchResult[];
   totalCount: number;
+  /**
+   * `totalCount` sayım tavanına dayandı mı?
+   *
+   * true ise gösterilen sayı bir ALT SINIRDIR: gerçek toplam bundan
+   * büyüktür. Arayüz bunu "1.000+" gibi göstermek zorunda -- tavana
+   * dayanmış bir sayıyı kesin sayıymış gibi basmak kullanıcıya yalan
+   * söylemek olurdu.
+   */
+  totalCapped: boolean;
 }
+
 
 /** Filtre seridinin gercek sinirlari (uydurma aralik gostermemek icin). */
 export interface SearchFacets {
@@ -205,6 +185,262 @@ function normalize(value: string): string {
     Â: 'a', Î: 'i', Û: 'u', â: 'a', î: 'i', û: 'u',
   };
   return value.replace(/[ĞÜŞİÖÇIğüşıöçÂÎÛâîû]/g, (char) => map[char] ?? char).toLowerCase();
+}
+
+// ---------------------------------------------------------------------------
+// Gezinme listelemesi (serbest metin YOK)
+// ---------------------------------------------------------------------------
+/**
+ * BU YOL NEDEN RPC'DEN AYRILDI.
+ *
+ * `search_products`, sıralamasını çalışma anındaki `p_sort` parametresine
+ * bağlı `case` ifadeleriyle yazıyor (ayrıntı: `listelemeSiralamasi`). Böyle
+ * bir sıralamayı hiçbir indeks karşılayamaz, dolayısıyla `limit 24` ancak
+ * filtreye uyan BÜTÜN satırlar okunup sıralandıktan sonra devreye giriyor.
+ * Üretimde ölçüldü (anon rolü, gerçek HTTP API):
+ *
+ *   /rest/v1/rpc/search_products  kategori=kulaklik  →  HTTP 500 · 57014
+ *
+ * Buradaki sorgu aynı sonucu DÜZ SÜTUN sıralamasıyla ister. Bu, tek başına
+ * bir hız kazancı DEĞİLDİR -- ölçüldü, indeks yokken o da zaman aşımına
+ * uğruyor. Kazandırdığı şey şu: sıralama artık bir btree indeksinin
+ * karşılayabileceği biçimde. Aynı tabloda indeksi OLAN bir sıralama ile
+ * OLMAYAN bir sıralamanın aynı andaki ölçümü:
+ *
+ *   order=min_price_cents.asc  (indeks VAR)  →  HTTP 200 · 0,88-1,71 sn
+ *   order=offer_count.desc     (indeks YOK)  →  HTTP 500 · 57014
+ *
+ * Yani bu değişiklik ÖN KOŞUL: indeks olmadan fayda vermez, kendisi olmadan
+ * da indeks kullanılamaz.
+ */
+
+/**
+ * Kategori kapsamı: kategorinin KENDİSİ + doğrudan çocukları.
+ *
+ * `search_products` ile aynı kapsam kuralı. Orada `is_active` filtresi YOK;
+ * burada da olmamalı -- aksi hâlde pasif bir alt kategoride duran ürünler
+ * RPC yolunda görünüp bu yolda kaybolurdu.
+ */
+async function kategoriKapsaminiOku(categoryId: string): Promise<string[]> {
+  const supabase = createAnonClient();
+  if (!supabase) return [categoryId];
+
+  const { data, error } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('parent_id', categoryId);
+
+  /*
+   * Okunamadıysa YALNIZCA kendi kategorisi kullanılır. Alt kategorileri
+   * atlamak, sonucu DARALTIR; hata fırlatıp sayfayı düşürmekten iyidir ve
+   * kullanıcıya yanlış ürün göstermez.
+   */
+  if (error) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'Kategori kapsami okunamadi; yalnizca kendi kategorisi kullanildi',
+        kategori: categoryId,
+        hata: error.message,
+      }),
+    );
+    return [categoryId];
+  }
+
+  return [categoryId, ...(data ?? []).map((satir) => String(satir.id))];
+}
+
+const kategoriKapsami = onbellekle(
+  'kategori-kapsami',
+  kategoriKapsaminiOku,
+  ONBELLEK.taksonomi,
+);
+
+/** En iyi teklifin para birimi ve satıcısı. */
+interface TeklifOzeti {
+  currency: string | null;
+  vendorId: string | null;
+  vendorName: string | null;
+}
+
+/**
+ * En iyi tekliflerin para birimi + satıcısı, TEK sorguda.
+ *
+ * RPC bunu üç `left join` ile yapıyordu (`products`, `vendors`, `merchants`).
+ * Burada aynı üç ilişki PostgREST'in gömülü kaynaklarıyla okunuyor; sorgu
+ * sayısı artmıyor, `aramaOku`'nun bugün zaten attığı para birimi sorgusunun
+ * yerine geçiyor.
+ *
+ * Kimlik listesi sayfa boyutuyla SINIRLI (en çok 100), yani bu sorgu birincil
+ * anahtar üzerinden sabit maliyetli.
+ */
+async function tekliflerinOzetiniOku(
+  supabase: NonNullable<ReturnType<typeof createAnonClient>>,
+  teklifKimlikleri: string[],
+): Promise<Map<string, TeklifOzeti>> {
+  const ozet = new Map<string, TeklifOzeti>();
+  if (teklifKimlikleri.length === 0) return ozet;
+
+  const { data, error } = await supabase
+    .from('products')
+    .select('id, currency, vendor:vendors(id, display_name), merchant:merchants(id, display_name)')
+    .in('id', teklifKimlikleri);
+
+  /*
+   * Bu sorgu LİSTEYİ KIRMAZ. Kırılırsa ürünler yine gösterilir; para birimi
+   * ve satıcı adı boş kalır. Yanlış simge ya da yanlış satıcı adı basmaktansa
+   * hiç basmamak doğrudur.
+   */
+  if (error) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'Listeleme icin teklif ozeti okunamadi',
+        hata: error.message,
+      }),
+    );
+    return ozet;
+  }
+
+  for (const satir of data ?? []) {
+    const vendor = unwrapRelation((satir as Record<string, unknown>).vendor);
+    const merchant = unwrapRelation((satir as Record<string, unknown>).merchant);
+    const kaynak = vendor ?? merchant;
+
+    ozet.set(String(satir.id), {
+      currency: satir.currency ? String(satir.currency).trim() : null,
+      vendorId: kaynak?.id ? String(kaynak.id) : null,
+      vendorName: kaynak?.display_name ? String(kaynak.display_name) : null,
+    });
+  }
+
+  return ozet;
+}
+
+/**
+ * Serbest metin İÇERMEYEN listeleme: kategori, sıralama, sayfalama.
+ *
+ * Anlam `search_products` ile birebir aynı olmalı. Korunan noktalar:
+ *   • Kapsam: `offer_count > 0` + kategori VE doğrudan alt kategorileri.
+ *   • Sıralama: `listelemeSiralamasi` (RPC'nin `case` zincirinin sadeleşmiş
+ *     ama davranışça özdeş hâli), `nulls last` dahil.
+ *   • Sayfalama: `offset`/`limit` aynı; `limit` yine 1..100 arasına sıkışır.
+ *   • Toplam: filtreye uyan satır sayısı, sayfalamadan ÖNCE.
+ *
+ * KORUNAN BİR HATA: `p_min_price`/`p_max_price` bugün ÜRETİMDE ETKİSİZ.
+ * RPC'deki koşul `p_currency is null or p_min_price is null or ...` biçiminde
+ * ve web katmanı `p_currency` göndermiyor, yani ilk terim her zaman doğru
+ * çıkıyor ve fiyat filtresi hiç uygulanmıyor. Bu yol da uygulamıyor --
+ * bilinçli: performans değişikliğinin içinde sessizce davranış değiştirmek,
+ * sonucun hangi değişiklikten geldiğini ölçülemez hâle getirir. Ayrı iş.
+ */
+async function listelemeOku(params: SearchParams): Promise<SearchPage> {
+  const supabase = createAnonClient();
+  if (!supabase) return searchDemo(params);
+
+  // RPC ile aynı sınırlar: `limit greatest(1, least(coalesce(p_limit,24),100))`.
+  const limit = Math.max(1, Math.min(params.limit ?? 24, 100));
+  const offset = Math.max(0, params.offset ?? 0);
+
+  const kapsam = params.categoryId ? await kategoriKapsami(params.categoryId) : null;
+
+  const satirSorgusu = (() => {
+    let q = supabase
+      .from('product_groups')
+      .select(
+        'id, slug, title, brand, image_url, offer_count, min_price_cents, max_price_cents, best_offer_id',
+      )
+      .gt('offer_count', 0);
+    if (kapsam) q = q.in('category_id', kapsam);
+    for (const anahtar of listelemeSiralamasi(params.sort ?? 'relevance')) {
+      q = q.order(anahtar.sutun, { ascending: anahtar.artan, nullsFirst: false });
+    }
+    return q.range(offset, offset + limit - 1);
+  })();
+
+  /*
+   * TOPLAM NEDEN AYRI SORGU
+   * RPC bunu `count(*) over ()` ile veriyordu; o pencere fonksiyonu, `limit`
+   * devreye girmeden ÖNCE eşleşen bütün satırların maddileşmesini zorunlu
+   * kılar -- yani sayfa başına 24 satır isterken 32.845 satır üretilir.
+   * Ayrı bir `count` ise indeksten karşılanabilir.
+   *
+   * Toplam UYDURULMUYOR: sayfalama (`totalPages`) ve "N sonuç" metni bu
+   * değere dayanıyor, dolayısıyla atlanamaz.
+   *
+   * İki sorgu PARALEL gidiyor; ek gidiş-dönüş süresi yok.
+   */
+  const sayimSorgusu = (() => {
+    let q = supabase
+      .from('product_groups')
+      .select('id')
+      .gt('offer_count', 0);
+    if (kapsam) q = q.in('category_id', kapsam);
+    /*
+     * `range` üst sınırı DAHİL: en çok TAVAN+1 kayıt döner. TAVAN+1 gelmesi
+     * "tavandan fazlası var" demenin en ucuz yolu; ek bir sorgu gerekmiyor.
+     */
+    const { baslangic, bitis } = sayimAraligi(SAYIM_TAVANI);
+    return q.range(baslangic, bitis);
+  })();
+
+  const [satirCevabi, sayimCevabi] = await Promise.all([satirSorgusu, sayimSorgusu]);
+
+  if (satirCevabi.error) {
+    throw new Error(`Listeleme başarısız: ${satirCevabi.error.message}`);
+  }
+
+  const rows = (satirCevabi.data ?? []) as Record<string, unknown>[];
+
+  /*
+   * Sayım kırılırsa liste YİNE gösterilir; toplam, bu sayfada görülen kadarı
+   * olur. Bu bir ALT SINIR: gösterilen sayı eksik kalabilir ve sonraki sayfa
+   * bağlantısı çıkmayabilir. Uydurulmuş bir üst sınır göstermektense
+   * eksiğini göstermek yeğdir -- kullanıcı olmayan bir sayfaya tıklamaz.
+   */
+  let totalCount = offset + rows.length;
+  let totalCapped = false;
+  if (sayimCevabi.error) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'Listeleme toplami okunamadi; gorulen kadari kullanildi',
+        hata: sayimCevabi.error.message,
+      }),
+    );
+  } else {
+    const olculen = tavanliSayim((sayimCevabi.data ?? []).length, SAYIM_TAVANI);
+    totalCount = olculen.toplam;
+    totalCapped = olculen.tavanaDayandi;
+  }
+
+  const teklifKimlikleri = rows
+    .map((row) => (row.best_offer_id ? String(row.best_offer_id) : null))
+    .filter((id): id is string => id !== null);
+
+  const ozetler = await tekliflerinOzetiniOku(supabase, teklifKimlikleri);
+
+  const results = rows.map((row): SearchResult => {
+    const ozet = ozetler.get(String(row.best_offer_id ?? ''));
+    return {
+      groupId: String(row.id),
+      slug: String(row.slug),
+      title: String(row.title),
+      brand: row.brand ? String(row.brand) : null,
+      imageUrl: row.image_url ? String(row.image_url) : null,
+      offerCount: Number(row.offer_count),
+      minPriceCents: row.min_price_cents === null ? null : Number(row.min_price_cents),
+      maxPriceCents: row.max_price_cents === null ? null : Number(row.max_price_cents),
+      /* `aramaOku` ile aynı kaynak ve aynı geri düşüş: para birimi
+         `products.currency`, okunamazsa 'TRY'. */
+      currency: ozet?.currency ?? 'TRY',
+      bestOfferId: row.best_offer_id ? String(row.best_offer_id) : null,
+      bestVendorId: ozet?.vendorId ?? null,
+      bestVendorName: ozet?.vendorName ?? null,
+    };
+  });
+
+  return { results, totalCount, totalCapped };
 }
 
 // ---------------------------------------------------------------------------
@@ -327,7 +563,8 @@ async function aramaOku(params: SearchParams): Promise<SearchPage> {
       }),
     );
 
-    return { results, totalCount };
+    /* RPC `count(*) over ()` ile KESİN toplam veriyor: tavan uygulanmıyor. */
+    return { results, totalCount, totalCapped: false };
   }
 
   return searchDemo(params);
@@ -523,6 +760,8 @@ function searchDemo(params: SearchParams): SearchPage {
   return {
     results: results.slice(offset, offset + (params.limit ?? 24)).map(toSearchResult),
     totalCount: results.length,
+    /* Demo verisi bellekte: sayım kesin. */
+    totalCapped: false,
   };
 }
 
@@ -1025,36 +1264,41 @@ async function kategoriAgaciniOku(): Promise<CategoryNode<Category>[]> {
     return buildCategoryTree(kategoriler, sayimlar);
   }
 
+  /*
+   * SAYIM TEK TURDA ALINIR.
+   *
+   * Önceki hâli her kategori için AYRI bir `count` isteği atıyordu.
+   * Taksonomi 9 kategoriden 132'ye çıkınca bu, önbellek her
+   * tazelendiğinde 132 gidiş-dönüş demek oldu. Eşzamanlılık tavanı yükü
+   * sınırlıyordu ama gecikmeyi ortadan kaldırmıyordu.
+   *
+   * `kategori_grup_sayilari()` aynı cevabı tek sorguda veriyor ve
+   * `product_groups (category_id)` indeksinden karşılanıyor.
+   *
+   * SAYIM OKUNAMAZSA KATEGORİLER KAYBOLMAZ. Hata durumunda her kategori
+   * 1 sayılır: bilinmeyeni sıfır yazmak, ulaşılamayan bir kategoriyi
+   * "boş" ilan edip menüden düşürmek olurdu. 1 yazmak da gerçek değil --
+   * o yüzden açıkça loglanıyor ve kategori görünür bırakılıyor.
+   */
   const sayimlar = new Map<string, number>();
-  await eszamanliHaritala(kategoriler, SAYIM_ESZAMANLILIK, async (kategori) => {
-    const { count, error } = await supabase
-      .from('product_groups')
-      .select('id', { count: 'exact', head: true })
-      .eq('category_id', kategori.id)
-      .gt('offer_count', 0);
+  const { data: sayimSatirlari, error: sayimHatasi } = await supabase.rpc(
+    'kategori_grup_sayilari',
+  );
 
-    if (error) {
-      /*
-       * Sayılamayan kategori SIFIR sayılmaz -- bu, ulaşılamayan bir
-       * kategoriyi "boş" ilan edip menüden düşürmek olurdu. Bilinmeyen
-       * yerine 1 yazmak da uydurma olurdu; kategori listede kalsın diye
-       * gerçek sayının bilinmediği açıkça loglanıyor ve kategori
-       * görünür bırakılıyor.
-       */
-      console.warn(
-        JSON.stringify({
-          level: 'warn',
-          msg: 'Kategori grup sayisi okunamadi',
-          kategori: kategori.slug,
-          hata: error.message,
-        }),
-      );
-      sayimlar.set(kategori.id, 1);
-      return;
+  if (sayimHatasi) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'Kategori grup sayilari okunamadi; kategoriler gorunur birakildi',
+        hata: sayimHatasi.message,
+      }),
+    );
+    for (const kategori of kategoriler) sayimlar.set(kategori.id, 1);
+  } else {
+    for (const satir of (sayimSatirlari ?? []) as { category_id: string; adet: number }[]) {
+      sayimlar.set(String(satir.category_id), Number(satir.adet));
     }
-
-    sayimlar.set(kategori.id, count ?? 0);
-  });
+  }
 
   return buildCategoryTree(kategoriler, sayimlar);
 }
@@ -1726,7 +1970,6 @@ export async function getProductReviews(
     .from('reviews')
     .select(
       `id, product_rating, vendor_rating, title, body, created_at,
-       author:users!inner ( email ),
        vendor:vendors ( display_name )`,
     )
     .eq('group_id', groupId)
@@ -1742,18 +1985,7 @@ export async function getProductReviews(
   }
 
   return (data ?? []).map((row: Record<string, unknown>): ProductReview => {
-    const author = unwrapRelation(row.author);
     const vendor = unwrapRelation(row.vendor);
-
-    /*
-     * Yazar adı olarak e-postanın YALNIZCA ilk harfi ve alan adı öncesi
-     * kısaltması gösterilir ("a***@"). Tam e-posta göstermek, yorum yazan
-     * her müşterinin adresini herkese açık hale getirirdi — hem KVKK
-     * açısından savunulamaz hem de spam toplayıcılara davetiye.
-     */
-    const email = String(author?.email ?? '');
-    const local = email.split('@')[0] ?? '';
-    const authorLabel = local.length > 0 ? `${local[0]}${'*'.repeat(Math.min(local.length - 1, 4))}` : 'Müşteri';
 
     return {
       id: String(row.id),
@@ -1762,7 +1994,7 @@ export async function getProductReviews(
       title: row.title ? String(row.title) : null,
       body: row.body ? String(row.body) : null,
       createdAt: String(row.created_at),
-      authorLabel,
+      authorLabel: ANONIM_YAZAR,
       vendorName: vendor?.display_name ? String(vendor.display_name) : null,
     };
   });
@@ -2060,7 +2292,6 @@ export async function getProductQuestions(groupId: string): Promise<ProductQuest
     .from('product_questions')
     .select(
       `id, body, created_at, answer, answered_at,
-       asker:users!user_id ( full_name ),
        vendor:vendors!answer_vendor_id ( display_name )`,
     )
     .eq('group_id', groupId)
@@ -2071,16 +2302,12 @@ export async function getProductQuestions(groupId: string): Promise<ProductQuest
   if (error || !data) return [];
 
   return data.map((row: Record<string, unknown>) => {
-    const asker = unwrapRelation(row.asker);
     const vendor = unwrapRelation(row.vendor);
 
     return {
       id: String(row.id),
       body: String(row.body),
-      // Soru soranın TAM ADI gösterilmez: alışveriş alışkanlığı kişisel bir
-      // veri ve soru herkese açık. Baş harf kimliği taşımadan sorular
-      // birbirinden ayırt edilebilsin diye yeter.
-      askerName: maskName(asker?.full_name ? String(asker.full_name) : null),
+      askerName: ANONIM_YAZAR,
       createdAt: String(row.created_at),
       answer: row.answer ? String(row.answer) : null,
       answerVendorName: vendor?.display_name ? String(vendor.display_name) : null,
@@ -2089,18 +2316,31 @@ export async function getProductQuestions(groupId: string): Promise<ProductQuest
   });
 }
 
-function maskName(fullName: string | null): string {
-  if (!fullName) return 'Ohaaaa kullanıcısı';
-  return fullName
-    .trim()
-    .split(/\s+/)
-    .map((part) => {
-      const ilk = part.charAt(0);
-      return ilk ? `${ilk.toLocaleUpperCase('tr-TR')}**` : '';
-    })
-    .join(' ')
-    .trim();
-}
+/**
+ * Herkese açık içerikte yazar etiketi.
+ *
+ * NEDEN İSİM YOK, NEDEN MASKELEME YOK
+ * Yorum ve soru listeleri herkese açık sayfalarda duruyor ve bu istekler
+ * veritabanına `anon` rolüyle gidiyor. `public.users` tablosunda `email` ve
+ * `phone` var; `anon` rolünün o tabloda SELECT yetkisi YOK ve OLMAMALI.
+ *
+ * Eskiden bu listeler yazar adını `users` tablosundan embed ile çekiyordu.
+ * Üretimde ölçüldü: bu istekler `42501 permission denied for table users`
+ * ile düşüyordu (bir saatte ~400 kez) ve çağıran taraf hatayı yutup boş
+ * liste döndürdüğü için yorum/soru bölümü SESSİZCE kayboluyordu.
+ *
+ * Yetki vermek çözüm DEĞİL: `anon`a SELECT açmak bütün kullanıcıların
+ * e-posta ve telefonunu herkese açardı. Embed'i kaldırmak da bir kayıp
+ * değil, çünkü zaten çalışmıyordu -- `users_select_self` politikası
+ * `(id = auth.uid()) OR is_admin()` diyor, yani oturum açmış bir kullanıcı
+ * bile BAŞKASININ satırını okuyamıyor. Yorumlardaki `!inner` join bunu
+ * daha da kötüleştiriyordu: satır görünmeyince yorumun KENDİSİ düşüyordu.
+ *
+ * Gerçek bir takma ad isteniyorsa doğru yer veritabanı: `reviews` ve
+ * `product_questions` üzerinde denormalize, maskelenmiş bir ad sütunu.
+ * O bir şema değişikliği olduğu için ayrı onaya bırakıldı.
+ */
+const ANONIM_YAZAR = 'Ohaaaa kullanıcısı';
 
 /**
  * Oturum açmış kullanıcı bu ürünü satan onaylı bir mağazanın sahibi mi?
@@ -2175,10 +2415,10 @@ export async function getAnswerVendorId(groupId: string): Promise<string | null>
  * geçer ve sayfa gerçek fırsatları göstermeye başlar -- ama o noktada
  * `price_drops` fonksiyonunun kendisi de hızlandırılmalı (bkz. PR notu).
  */
-async function olculmusDususVarMiOku(days: number): Promise<boolean> {
-  const supabase = createAnonClient();
-  if (!supabase) return false;
-
+async function olculmusDususVarMi(
+  supabase: NonNullable<ReturnType<typeof createAnonClient>>,
+  days: number,
+): Promise<boolean> {
   const esik = new Date(Date.now() - days * 86_400_000).toISOString();
   let oncekiUrun: string | null = null;
   let tekrarVar = false;
@@ -2189,19 +2429,7 @@ async function olculmusDususVarMiOku(days: number): Promise<boolean> {
     // "tekrar yok" demek DEĞİL, yalnızca "burada bulamadık" demek --
     // ve bu durumda pahalı sorgu yine çalışır, yani hata güvenli tarafta.
     max: 200_000,
-    /*
-     * SAYFA BOYUTU BÜYÜK, ÇÜNKÜ MALİYET TUR SAYISINDA.
-     *
-     * Örnek ölçüldü: 10.000 satırlık index-only tarama, buffer'ların
-     * TAMAMI önbellekte olduğu hâlde 1,6 saniye sürüyor (`shared hit=1670`).
-     * Yani gecikme veriden değil, örneğin kısıtlı işlemci payından
-     * geliyor. Bu koşulda 1.000'lik sayfalar 34 tur demekti ve /firsatlar
-     * 4-8 saniyeye çıkıyordu -- ölçüldü.
-     *
-     * 10.000, `anon` rolünün 3 saniyelik deyim zaman aşımının altında
-     * kalıyor (1,6 sn) ve tur sayısını dörde indiriyor.
-     */
-    pageSize: 10_000,
+    pageSize: 1000,
     key: (satir) => satir.product_id,
     fetchPage: async (after, limit) => {
       if (tekrarVar) return [];
@@ -2253,33 +2481,8 @@ async function fiyatiDusenleriOku(options?: {
 
   const gunler = options?.days ?? 30;
 
-  /*
-   * Cevabı boş olacak pahalı sorguyu hiç çalıştırma.
-   *
-   * ÖN KOŞUL DÜŞERSE "DÜŞÜŞ YOK" KABUL EDİLİR, hata fırlatılmaz. `anon`
-   * rolünün deyim zaman aşımı 3 saniye (ölçüldü) ve örnek yoğunken bu
-   * tarama sınıra dayanabilir. İki seçenek vardı:
-   *
-   *   hata fırlat → sayfa yine "Fırsatları şu an gösteremiyoruz" kutusu
-   *   boş say     → sayfa dürüst boş durumu gösterir
-   *
-   * Bugünün verisinde doğru cevap zaten boş (hiçbir ürünün iki ölçümü
-   * yok), dolayısıyla ikincisi kullanıcıya YANLIŞ bir şey söylemiyor.
-   * Yine de sessiz değil: düşen her kontrol günlüğe yazılıyor, çünkü
-   * gerçek düşüşler biriktiğinde bu davranış onları gizleyebilir.
-   */
-  const dususMumkunMu = await olculmusDususVarMi(gunler).catch((hata: unknown) => {
-    console.warn(
-      JSON.stringify({
-        level: 'warn',
-        msg: 'Fiyat ölçümü tekrarı kontrol edilemedi — düşüş yok kabul edildi',
-        hata: hata instanceof Error ? hata.message : String(hata),
-      }),
-    );
-    return false;
-  });
-
-  if (!dususMumkunMu) return [];
+  // Cevabı boş olacak pahalı sorguyu hiç çalıştırma.
+  if (!(await olculmusDususVarMi(supabase, gunler))) return [];
 
   const { data, error } = await supabase.rpc('price_drops', {
     p_days: gunler,
@@ -2554,26 +2757,17 @@ export const getSearchHints = onbellekle('arama-ipuclari', aramaIpuclariniOku, O
  */
 export const getPriceDrops = onbellekle('fiyat-dusenler', fiyatiDusenleriOku, ONBELLEK.vitrin);
 
-/*
- * ÖN KOŞUL AYRI ÖNBELLEKTE ve bu bilinçli.
+/**
+ * Serbest metin ARAMASI OLMAYAN listeleme -- kategori, sıralama, sayfalama.
  *
- * `getPriceDrops` kategoriye göre değişiyor (kök sayfa + her fırsat
- * kategorisi); ön koşul ise DEĞİŞMİYOR -- "sistemde iki kez ölçülmüş bir
- * ürün var mı" sorusunun kategoriyle ilgisi yok. Aynı önbellekte
- * tutulsaydı her kategori aynı taramayı kendisi için bir kez daha
- * yapardı.
- *
- * Süre 6 saat: cevap ancak fiyat anlık görüntüsü yeniden alındığında
- * değişir.
+ * `listelemeOku` RPC'ye HİÇ uğramaz. Marka ya da ücretsiz kargo filtresi
+ * varsa (anlamı PostgREST'te birebir korunamayan iki durum) çağrı yine
+ * `aramaOku` üzerinden RPC'ye gider -- bkz. `rpcsizListelenebilir`.
  */
-const olculmusDususVarMi = onbellekle(
-  'olcum-tekrari',
-  olculmusDususVarMiOku,
-  ONBELLEK.gunluk,
-);
+const listelemeOnbellekli = onbellekle('listeleme', listelemeOku, ONBELLEK.listeleme);
 
-/** Serbest metin ARAMASI OLMAYAN listeleme -- kategori, sıralama, sayfalama. */
-const listelemeOnbellekli = onbellekle('listeleme', aramaOku, ONBELLEK.listeleme);
+/** Filtresi RPC gerektiren, serbest metinsiz listeleme (marka / kargo). */
+const rpcListelemeOnbellekli = onbellekle('listeleme-rpc', aramaOku, ONBELLEK.listeleme);
 
 /**
  * Ürün araması.
@@ -2590,7 +2784,8 @@ const listelemeOnbellekli = onbellekle('listeleme', aramaOku, ONBELLEK.listeleme
  */
 export async function searchProducts(params: SearchParams): Promise<SearchPage> {
   if (params.query && params.query.trim().length > 0) return aramaOku(params);
-  return listelemeOnbellekli(params);
+  if (rpcsizListelenebilir(params)) return listelemeOnbellekli(params);
+  return rpcListelemeOnbellekli(params);
 }
 
 // ---------------------------------------------------------------------------

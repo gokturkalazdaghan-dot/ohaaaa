@@ -122,4 +122,37 @@ const config: NextConfig = {
   },
 };
 
+/*
+ * DİL ÖNEKİ YÖNLENDİRMESİ.
+ *
+ * `/en-gb/kategori/x` adresinin `/kategori/x` rotasına düşmesini sağlar.
+ * Böylece her sayfa için ikinci bir dosya ağacı açmaya gerek kalmıyor:
+ * tek rota, önekten gelen dil ve pazarla çalışıyor.
+ *
+ * NEDEN `beforeFiles` VE NEDEN MIDDLEWARE DEĞİL
+ * Next.js sırası: middleware → beforeFiles → dosya sistemi. Yani middleware
+ * ADRESİ ÖNEKLİ GÖRÜR (dili oradan okuyabilir), bu kural da rotaya
+ * düşmeden önce öneki soyar. Yeniden yazmayı middleware içinde yapmak,
+ * oradaki üç ayrı yanıt üretim noktasının hepsini değiştirmeyi
+ * gerektirirdi -- oturum ve CSP akışına dokunmadan aynı sonucu almanın
+ * yolu bu.
+ *
+ * DESEN İKİ HARF DİL + 2-15 KARAKTER PAZAR: `urlLocale.ts` içindeki
+ * `SEGMENT_DESENI` ile aynı. Ayrışmamaları gerekiyor; biri değişirse
+ * diğeri de değişmeli.
+ *
+ * `/urun/...` gibi mevcut yollar bu desene UYMAZ (tek parça, tire yok),
+ * dolayısıyla yanlışlıkla soyulmazlar.
+ */
+const DIL_ONEKI = ':dil([a-z]{2}-[a-z][a-z0-9_]{1,15})';
+
+config.rewrites = async () => ({
+  beforeFiles: [
+    { source: `/${DIL_ONEKI}`, destination: '/' },
+    { source: `/${DIL_ONEKI}/:yol*`, destination: '/:yol*' },
+  ],
+  afterFiles: [],
+  fallback: [],
+});
+
 export default config;

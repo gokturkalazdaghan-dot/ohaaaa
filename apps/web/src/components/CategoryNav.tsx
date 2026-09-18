@@ -37,9 +37,21 @@ export async function CategoryNav() {
       aria-label"). İkisi aynı veriyi gösteriyor ama biri her sayfada duran
       menü, diğeri ana sayfanın kendi listesi.
     */
+    /*
+      ŞERİT TELEFONDA DA GÖRÜNÜR.
+
+      Ölçülen durum: `hidden md:block` yüzünden kategori şeridi dar
+      ekranda HİÇ çizilmiyordu. Yani telefondan gelen ziyaretçinin
+      kategoriye göre gezinme yolu yoktu -- yalnızca arama kutusu vardı.
+      Ekran görüntülerinde bildirilen eksik buydu.
+
+      Şerit zaten yatay kaydırılıyor ve ürünsüz kategoriler
+      `buildCategoryTree` tarafından eleniyor, dolayısıyla dar ekranda
+      da tek satır kalıyor.
+    */
     <nav
       aria-label={t(contentLocale, 'ev.kategoriler')}
-      className="hidden border-t border-line md:block"
+      className="border-t border-line"
     >
       {/*
         Dar ekranda yatay kaydırılır, sarmalanmaz: sarmalanan bir şerit üst

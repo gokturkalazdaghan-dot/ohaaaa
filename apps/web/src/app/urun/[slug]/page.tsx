@@ -435,6 +435,33 @@ export default async function ProductPage({ params }: ProductPageProps) {
                   </span>
                 )}
               </p>
+
+              {/*
+                TESLİMAT VE KARGO FİYATIN YANINDA.
+                Bu iki bilgi zaten vardı ama yalnızca aşağıdaki mağaza
+                satırlarının içinde duruyordu; ziyaretçi fiyatı görüp
+                "ne zaman gelir, kargo ne tutar" sorusunun cevabını
+                görmeden sayfayı bırakıyordu. Kargo dahil toplam bu
+                sitenin ana vaadi, dolayısıyla fiyatla aynı yerde
+                durması gerekiyor.
+
+                YALNIZCA ÖLÇÜLEN DEĞER YAZILIR. En iyi teklifin kendi
+                verisi yoksa satır hiç çizilmez -- "genelde 2-3 gün"
+                gibi bir tahmin uydurulmaz.
+              */}
+              {bestOffer && (
+                <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted">
+                  {bestOffer.shippingFeeCents === 0 ? (
+                    <span className="font-medium text-success">Ücretsiz kargo</span>
+                  ) : (
+                    <span>Kargo {formatMoney(bestOffer.shippingFeeCents, bestOffer.currency)}</span>
+                  )}
+                  {bestOffer.estimatedDeliveryDays !== null &&
+                    bestOffer.estimatedDeliveryDays !== undefined && (
+                      <span>{bestOffer.estimatedDeliveryDays} günde kargoda</span>
+                    )}
+                </p>
+              )}
             </div>
 
             {savingsCents > 0 && (

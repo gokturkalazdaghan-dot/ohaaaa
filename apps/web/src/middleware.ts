@@ -14,6 +14,18 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { yoluAyristir } from '@ohaaaa/shared';
+
+/**
+ * Adresteki dil ve pazarın sunucu bileşenlerine taşındığı başlıklar.
+ *
+ * `x-` öneki ve tek bir yerde tanımlı olmaları bilinçli: iki tarafın
+ * (middleware ile `lib/locale.ts`) aynı dizgeyi elle yazması, sessizce
+ * ayrışacak iki doğruluk kaynağı üretirdi.
+ */
+export const ADRES_DILI_BASLIGI = 'x-ohaaaa-adres-dili';
+export const ADRES_PAZARI_BASLIGI = 'x-ohaaaa-adres-pazari';
+
 /*
  * DERIN ICE AKTARIM (deep import) — BARREL DEGIL.
  *
@@ -158,11 +170,34 @@ const GUEST_ONLY = ['/giris', '/kayit'];
 function withNonce(request: NextRequest, nonce: string): Headers {
   const headers = new Headers(request.headers);
   headers.set('x-nonce', nonce);
+
+  /*
+   * DİL ÖNEKİ SUNUCU BİLEŞENLERİNE BAŞLIKLA TAŞINIYOR.
+   *
+   * App Router'da sunucu bileşeni adresi doğrudan göremez; `next.config`
+   * içindeki `beforeFiles` kuralı da öneki rotaya varmadan soyuyor. Yani
+   * dili okuyabilecek son nokta burası. Okunmazsa kullanıcının AÇIK
+   * seçimi sessizce kaybolur ve IP tahmini geri gelir -- düzeltmeye
+   * çalıştığımız davranışın ta kendisi.
+   */
+  const { segment } = yoluAyristir(request.nextUrl.pathname);
+  if (segment) {
+    headers.set(ADRES_DILI_BASLIGI, segment.locale);
+    headers.set(ADRES_PAZARI_BASLIGI, segment.market);
+  }
+
   return headers;
 }
 
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  /*
+   * YETKİ KONTROLLERİ ÖNEKSİZ YOL ÜZERİNDE YAPILIR.
+   *
+   * `/en-gb/siparislerim` ile `/siparislerim` aynı sayfadır; öneki
+   * soymadan eşleştirmek, korumalı bir sayfayı dil öneki eklenerek
+   * atlanabilir hâle getirirdi. Sessiz ve ciddi bir açık olurdu.
+   */
+  const { kalan: pathname } = yoluAyristir(request.nextUrl.pathname);
 
   /*
    * Taşeron API'si (/api/v1/*) bu katmanı ATLAR.
