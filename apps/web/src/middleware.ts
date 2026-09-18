@@ -78,6 +78,24 @@ function buildCsp(nonce: string, supabaseUrl: string): string {
     // olacağı önceden bilinmez.
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
+    /*
+     * `worker-src` AÇIKÇA YAZILMAK ZORUNDA.
+     *
+     * Yazılmazsa tarayıcı sırayla `child-src`e, oradan `script-src`e
+     * düşer -- ve `script-src` içinde `'strict-dynamic'` var.
+     * `'strict-dynamic'` host kaynaklarını ('self', https:) GEÇERSİZ
+     * kılar, servis çalışanına da nonce verilemez. Sonuç:
+     * `navigator.serviceWorker.register('/sw.js')` CSP tarafından
+     * engellenir, uygulama hiçbir zaman kurulabilir olmaz ve konsolda
+     * sebebi kolay okunmayan bir ihlal görünür.
+     *
+     * `'self'` bu politikayı GEVŞETMEZ: daha önce örtük olarak miras
+     * alınan liste (https: dahil) yerine yalnızca kendi alan adımız
+     * geçerli oluyor.
+     */
+    "worker-src 'self'",
+    // Künye kendi alan adımızdan gelir; dışarıdan manifest yüklenmez.
+    "manifest-src 'self'",
     `connect-src 'self'${supabaseUrl ? ` ${supabaseUrl} ${supabaseUrl.replace('https://', 'wss://')}` : ''}`,
     // Siteyi iframe'e alarak tıklama hırsızlığı (clickjacking) yapılmasını
     // engeller. X-Frame-Options'ın modern karşılığı.
@@ -369,6 +387,13 @@ export const config = {
    * Supabase'e jeton doğrulatmak gereksiz gecikme ve kota tüketimidir.
    */
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico)$).*)',
+    /*
+     * PWA dosyaları da dışarıda: `sw.js`, künye ve çevrimdışı kapak
+     * herkese açık statik dosyalar. Servis çalışanı güncelleme denetimini
+     * düzenli olarak tekrarlar; her seferinde Supabase'e oturum
+     * doğrulatmanın hiçbir karşılığı yok. Üçü de korumalı yollardan
+     * değil, dolayısıyla dışarıda bırakmak bir yetki boşluğu açmaz.
+     */
+    '/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|sw\\.js|manifest\\.webmanifest|cevrimdisi\\.html|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico)$).*)',
   ],
 };

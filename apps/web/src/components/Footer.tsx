@@ -1,11 +1,27 @@
 import Link from 'next/link';
 
+import { InstallApp } from '@/components/InstallApp';
 import { isAffiliateOnly } from '@/lib/env';
 
 export function Footer() {
   return (
     <footer className="mt-16 border-t border-line bg-bg">
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-10 text-left sm:grid-cols-2 sm:px-6">
+      {/*
+        KURULUM ÇAĞRISI FOOTER'IN EN ÜSTÜNDE.
+
+        Sayfanın altı, "bu siteyi beğendim" kararının verildiği yer: ürünü
+        gezmiş, fiyatı görmüş kullanıcı buraya iner. Başlığa koymak her
+        sayfada yer kaplardı ve kararını vermemiş birine sorulan bir soru
+        olurdu.
+
+        Bileşen istemci tarafında çalışır ve ZATEN KURULUYSA ya da tarayıcı
+        kurulumu hiç desteklemiyorsa `null` döner -- yani boş bir kutu
+        bırakmaz.
+      */}
+      <div className="pt-10">
+        <InstallApp />
+      </div>
+      <div className="mx-auto grid max-w-6xl gap-10 px-4 pb-10 text-left sm:grid-cols-2 sm:px-6">
         <div>
           <p className="font-semibold text-fg">Ohaaaa.com</p>
           <ul className="mt-3 space-y-2 text-sm">

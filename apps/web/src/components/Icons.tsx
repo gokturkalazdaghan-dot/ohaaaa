@@ -187,6 +187,35 @@ export const ShareIcon = (p: IconProps) => (
   </Icon>
 );
 
+/*
+ * iOS'un PAYLAŞ simgesi, yukarıdaki `ShareIcon`dan başkadır: Apple'da
+ * kutudan yukarı çıkan ok, Android'de birbirine bağlı üç nokta. Ana ekrana
+ * ekleme yönergesinde kullanıcı ekranda GÖRDÜĞÜ simgeyi arar; yanlışını
+ * çizmek yönergeyi işe yaramaz hale getirir.
+ */
+export const IosShareIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 3.5v11" />
+    <path d="m8.5 7 3.5-3.5L15.5 7" />
+    <path d="M7 11H5.5a1.5 1.5 0 0 0-1.5 1.5v6A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5v-6A1.5 1.5 0 0 0 18.5 11H17" />
+  </Icon>
+);
+
+export const DownloadIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 3.5v11" />
+    <path d="m8 10.5 4 4 4-4" />
+    <path d="M4.5 17.5v1A2 2 0 0 0 6.5 20.5h11a2 2 0 0 0 2-2v-1" />
+  </Icon>
+);
+
+export const PhoneIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="6.5" y="2.5" width="11" height="19" rx="2.5" />
+    <path d="M10.5 18.5h3" />
+  </Icon>
+);
+
 export const CopyIcon = (p: IconProps) => (
   <Icon {...p}>
     <rect x="8.5" y="8.5" width="12" height="12" rx="2.5" />
