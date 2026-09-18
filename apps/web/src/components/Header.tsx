@@ -1,7 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
+
+import { yoluAyristir } from '@ohaaaa/shared';
 
 import { Logo } from './Logo';
 import { SearchBar } from './SearchBar';
@@ -24,6 +27,26 @@ export function Header({
   const sentinelRef = useRef<HTMLDivElement>(null);
   const isStuck = useStuck(sentinelRef);
 
+  /*
+   * ANA SAYFADA ÜST ÇUBUKTA İKİNCİ BİR ARAMA KUTUSU ÇİZİLMEZ.
+   *
+   * Ölçülen durum: ana sayfada aynı anda ÜÇ `role="search"` bölgesi
+   * vardı -- üst çubuğun masaüstü kopyası, mobil kopyası ve kahraman
+   * alanındaki kutu. Telefonda ikisi birden GÖRÜNÜYORDU: biri üstte,
+   * biri hemen altında. Ekran okuyucu da üç kez "arama" duyuruyordu ve
+   * üçünün etiketi aynıydı.
+   *
+   * Kahraman alanı ekrandayken arama zaten orada; üst çubuğunki fazladan.
+   * Kullanıcı aşağı kaydırıp kahraman alanı çıkınca (`isStuck`) üst
+   * çubuktaki kutu devreye giriyor. Yani her an TAM BİR arama kutusu var
+   * ve kaydırdıktan sonra arama kaybolmuyor.
+   *
+   * Dil öneki ayıklanıyor: `/en-uk` da ana sayfadır.
+   */
+  const { kalan } = yoluAyristir(usePathname() ?? '/');
+  const anaSayfa = kalan === '/';
+  const aramaGoster = !anaSayfa || isStuck;
+
   return (
     <>
       {/*
@@ -38,23 +61,27 @@ export function Header({
       <div ref={sentinelRef} aria-hidden="true" className="h-px w-full" />
 
       <header className="site-header" data-stuck={isStuck}>
-      <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 sm:px-6">
+      {/*
+        ARAMA KUTUSU DOM'DA TEK. Önce iki kez çiziliyordu -- biri
+        `hidden md:block`, diğeri `md:hidden` -- ve yalnızca biri
+        görünüyordu ama İKİSİ DE belgede duruyordu: iki `role="search"`
+        bölgesi, iki gizli dosya girdisi. Şimdi tek düğüm var; yerini
+        `flex-wrap` + `order` değiştiriyor, kopyalama değil.
+      */}
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
         <Logo />
-        <div className="hidden flex-1 md:block">
-          <Suspense fallback={<div className="h-10 w-full max-w-xl bg-surface-2" />}>
-            <SearchBar label="Üst çubukta ürün ara" visualSearchEnabled={visualSearchEnabled} />
-          </Suspense>
-        </div>
-        <div className="ml-auto flex items-center gap-2 text-sm sm:gap-3">
+        <div className="order-3 ml-auto flex items-center gap-2 text-sm sm:gap-3 md:order-4">
           {userMenu}
           <FavoritesButton />
           {isAffiliateOnly ? null : <CartButton />}
         </div>
-      </div>
-      <div className="border-t border-line px-4 py-2 md:hidden">
-        <Suspense fallback={<div className="h-10 w-full bg-surface-2" />}>
-          <SearchBar label="Üst çubukta ürün ara" visualSearchEnabled={visualSearchEnabled} />
-        </Suspense>
+        {aramaGoster && (
+          <div className="order-4 w-full border-t border-line pt-2 md:order-3 md:ml-0 md:w-auto md:flex-1 md:border-t-0 md:pt-0">
+            <Suspense fallback={<div className="h-10 w-full bg-surface-2 md:max-w-xl" />}>
+              <SearchBar label="Üst çubukta ürün ara" visualSearchEnabled={visualSearchEnabled} />
+            </Suspense>
+          </div>
+        )}
       </div>
 
       {/*
