@@ -5,6 +5,8 @@ import Link from 'next/link';
 
 import { ContentPage } from '@/components/ContentPage';
 import { ContactForm } from '@/components/ContactForm';
+import { JsonLd } from '@/components/JsonLd';
+import { siteUrl } from '@/lib/env';
 
 export const metadata: Metadata = {
   title: 'Bize Ulaşın',
@@ -57,6 +59,55 @@ export default function ContactPage() {
       description="Talebinizi doğru kişiye ulaştırmak için konuya göre ayrı kanallarımız var."
       breadcrumb="İletişim"
     >
+      {/*
+        İŞLETME KÜNYESİ YAPILANDIRILMIŞ VERİYE DE YAZILIR -- AMA UYDURULMAZ.
+
+        Arama motorunun "adres ve iletişim" sinyali için `ContactPage` +
+        `PostalAddress` gerekir. Bu alanlar bugün ortam değişkenlerinden
+        geliyor ve DOLDURULMAMIŞ; ekranda "—" görünüyor.
+
+        Bu yüzden şema KOŞULLU: alan gerçekten doluysa yazılır, boşsa o
+        anahtar hiç üretilmez. Uydurma bir adres yayımlamak hem arama
+        motoruna yalan söylemek hem de 6563 sayılı kanun karşısında
+        gerçeğe aykırı künye ilan etmek olurdu.
+
+        Künye Vercel'de doldurulduğu an şema kod değişmeden devreye girer.
+      */}
+      {(business.legalName.filled || business.address.filled || business.phone.filled) && (
+        <JsonLd
+          data={{
+            '@context': 'https://schema.org',
+            '@type': 'ContactPage',
+            url: `${siteUrl}/iletisim`,
+            mainEntity: {
+              '@type': 'Organization',
+              name: business.legalName.filled ? business.legalName.value : 'Ohaaaa',
+              url: siteUrl,
+              ...(business.address.filled
+                ? {
+                    address: {
+                      '@type': 'PostalAddress',
+                      streetAddress: business.address.value,
+                      addressCountry: 'TR',
+                    },
+                  }
+                : {}),
+              ...(business.phone.filled || business.kep.filled
+                ? {
+                    contactPoint: {
+                      '@type': 'ContactPoint',
+                      contactType: 'customer support',
+                      ...(business.phone.filled ? { telephone: business.phone.value } : {}),
+                      ...(business.kep.filled ? { email: business.kep.value } : {}),
+                      availableLanguage: ['tr', 'en'],
+                    },
+                  }
+                : {}),
+            },
+          }}
+        />
+      )}
+
       <LegalIncompleteNotice />
 
       <ul className="divide-y divide-line border-y border-line">
