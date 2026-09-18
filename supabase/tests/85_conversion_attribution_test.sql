@@ -153,17 +153,28 @@ select is(
 -- merchants.network -- DB kisiti kod tarafindaki kayitla ayni olmali
 -- ===========================================================================
 
--- DIKKAT: iki kisit da 23514 dondurur (merchants_active_needs_template ve
--- merchants_network_known). Yalnizca SQLSTATE'e bakan bir iddia YANLIS SEBEPLE
--- gecebilir. Bu yuzden satir her acidan gecerli tutuluyor ve kisit ADI da
--- dogrulaniyor.
+-- DIKKAT: birden cok kisit ayni hatayi dondurebilir
+-- (merchants_active_needs_template de 23514 dondurur). Yalnizca SQLSTATE'e
+-- bakan bir iddia YANLIS SEBEPLE gecebilir. Bu yuzden satir her acidan
+-- gecerli tutuluyor ve kisit ADI da dogrulaniyor.
+--
+-- KISIT ADI DEGISTI VE BU BIR DUZELTME DEGIL, GERCEGIN KENDISI.
+-- `network_registry` gocu, aglar listesini dort ayri CHECK kisitindan
+-- alip `affiliate_networks` tablosuna tasidi: `merchants_network_known`
+-- (CHECK) dusuruldu, yerine `merchants_network_fk` (FOREIGN KEY) geldi.
+-- Kural AYNI -- taninmayan bir ag yazilamaz -- ama artik yeni bir ag
+-- eklemek bir SATIR, bir goc degil. Hata kodu da degisti: 23514
+-- (check_violation) yerine 23503 (foreign_key_violation).
+--
+-- Bu test o goc depoda YOKKEN yazilmisti ve bu yuzden eski adi ariyordu;
+-- goc geri kazanilinca uretimdeki gercek ortaya cikti.
 select throws_matching(
   $$insert into public.merchants
       (slug, display_name, homepage_url, network, status, country_code,
        deeplink_template, terms_verified_at)
     values ('ag-bilinmeyen', 'Bilinmeyen Ag', 'https://x.gecersiz',
             'uydurma-ag', 'active', 'TR', 'https://x.gecersiz/g?u={url}', now())$$,
-  'merchants_network_known',
+  'merchants_network_fk',
   '19) taninmayan network degeri veritabanina YAZILAMAZ (dogru kisit adiyla)'
 );
 
