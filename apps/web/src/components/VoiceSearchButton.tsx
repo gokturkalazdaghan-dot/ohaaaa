@@ -103,8 +103,33 @@ export function VoiceSearchButton({
     recognition.onend = () => setListening(false);
 
     recognitionRef.current = recognition;
+
+    /*
+     * `start()` SENKRON FIRLATABİLİR -- ve fırlatırsa buton kilitlenirdi.
+     *
+     * Önceki hâli `setListening(true)`yi çağırıp ardından korumasız
+     * `start()` çalıştırıyordu. Safari, önceki oturum tam kapanmadan
+     * yeniden başlatıldığında ya da tanıma servisi kullanılamadığında bu
+     * çağrıyı fırlatır (`InvalidStateError` ve benzeri). Fırlatınca
+     * `onerror` ve `onend` HİÇ çalışmaz, dolayısıyla `listening` true'da
+     * asılı kalır: mikrofon nabız gibi atmaya devam eder, hiçbir şey
+     * dinlenmez, kullanıcıya da hata gösterilmez. Dışarıdan bakınca
+     * "sesli arama çalışmıyor" tam olarak böyle görünür.
+     *
+     * Sıra da değişti: durum ancak `start()` gerçekten döndükten sonra
+     * "dinliyor" oluyor. Yanlış başlangıçta buton hiç kıpırdamıyor ve
+     * sebebi yazılıyor.
+     */
+    try {
+      recognition.start();
+    } catch {
+      recognitionRef.current = null;
+      setListening(false);
+      setError('Sesli arama başlatılamadı, tekrar deneyin.');
+      return;
+    }
+
     setListening(true);
-    recognition.start();
   }
 
   function stop() {
