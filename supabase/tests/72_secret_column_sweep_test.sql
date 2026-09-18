@@ -32,7 +32,19 @@ declare
     ['product_groups', 'match_signature',
      'Baslik/marka/GTIN''den turetilmis eslestirme imzasi. Vitrinde kullaniliyor, gizli bilgi tasimiyor.'],
     ['risk_thresholds', 'key',
-     'Esik adi (ornek: median_ratio_block). Zaten istemciye kapali; kalibla adi yuzunden esleşiyor.']
+     'Esik adi (ornek: median_ratio_block). Zaten istemciye kapali; kalibla adi yuzunden esleşiyor.'],
+    /*
+     * `canonical_key` URETILMIS bir sutun: gtin/marka+mpn/marka+baslik
+     * uclusunden hesaplaniyor (bkz. canonical_product_identity gocu) ve
+     * uc girdinin ucu de urun sayfasinda ZATEN yaziyor. Yani icinde
+     * disariya sizacak hicbir sey yok; `_key$` kalibina yalnizca ADI
+     * yuzunden takiliyor.
+     *
+     * Kapatmak ise vitrini kirardi: karsilastirma, ayni urunun farkli
+     * magazalardaki tekliflerini bu anahtar uzerinden birlestiriyor.
+     */
+    ['product_groups', 'canonical_key',
+     'gtin/marka+mpn/marka+baslik tan URETILMIS eslestirme anahtari. Uc girdi de urun sayfasinda aciktan yaziyor; sir tasimiyor ve vitrin bu anahtarla calisiyor.']
   ];
   muaf_mi boolean;
 begin

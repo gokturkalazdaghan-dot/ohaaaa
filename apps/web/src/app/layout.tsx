@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { headers } from 'next/headers';
 import { Outfit, Plus_Jakarta_Sans } from 'next/font/google';
 
 import { Analytics } from '@/components/Analytics';
@@ -83,6 +84,38 @@ export const metadata: Metadata = {
       'max-video-preview': -1,
     },
   },
+  /*
+   * iOS'ta ANA EKRANA EKLE'nin tam ekran açılması bu üç etiketi ister.
+   * Apple `manifest.webmanifest` içindeki `display: standalone` değerini
+   * okumaz; kendi `apple-mobile-web-app-*` etiketlerine bakar. Bunlar
+   * olmadan ana ekrana eklenen kısayol, adres çubuğuyla birlikte sıradan
+   * bir Safari sekmesi olarak açılır.
+   *
+   * `startupImage` YOK: her iPhone ekran ölçüsü için ayrı açılış görseli
+   * üretmek gerekir, eksik ölçüde beyaz ekran görünür. Açılış rengi
+   * manifest'teki `background_color` ile zaten doğru.
+   */
+  appleWebApp: {
+    capable: true,
+    title: 'Ohaaaa',
+    statusBarStyle: 'default',
+  },
+  /*
+   * `apple-mobile-web-app-capable` ELLE EKLENİYOR -- ÖLÇÜLDÜ.
+   *
+   * `appleWebApp.capable: true` bu depodaki Next sürümünde yalnızca
+   * standart `mobile-web-app-capable` etiketini basıyor (üretilen HTML
+   * kontrol edildi: Apple önekli olan hiç çıkmıyor). Standart etiketi
+   * Safari ancak 17.4'ten itibaren tanır; daha eski iOS'ta ana ekrana
+   * eklenen kısayol tam ekran DEĞİL, adres çubuğuyla birlikte sıradan bir
+   * sekme olarak açılır.
+   *
+   * İkisi birlikte durduğunda yeni Safari standardı okur, eski Safari
+   * Apple önekli olanı; çakışma yok.
+   */
+  other: {
+    'apple-mobile-web-app-capable': 'yes',
+  },
   ...(searchConsoleVerification
     ? { verification: { google: searchConsoleVerification } }
     : {}),
@@ -145,11 +178,46 @@ export default async function RootLayout({ children }: { children: React.ReactNo
    * motoruna yanlış dil bildirmek demektir.
    */
   const { contentTag } = await getRequestLocale();
+  /*
+   * CSP nonce'u ara katmandan geliyor (bkz. middleware.ts -> withNonce).
+   * Nonce varken tarayıcı `'unsafe-inline'` yazsa bile nonce'suz satır içi
+   * betikleri ÇALIŞTIRMAZ; aşağıdaki betiğin nonce'u olmak zorunda.
+   */
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
 
   return (
     <html lang={contentTag} className={`${jakarta.variable} ${outfit.variable}`}>
       <head>
         <JsonLd data={siteJsonLd} />
+        {/*
+          KURULUM İSTEMİNİ ERKEN YAKALA + SERVİS ÇALIŞANINI KAYDET.
+
+          Neden React'te değil: Chrome `beforeinstallprompt` olayını
+          sayfa yüklenir yüklenmez yollar. Tekrar ziyaretlerde servis
+          çalışanı zaten etkin olduğundan olay, React hidrasyonundan ÖNCE
+          gelebilir -- dinleyici o an kurulmamışsa olay kaybolur ve
+          Android'de gerçek kurulum düğmesi hiç açılamaz. Burada yakalanıp
+          saklanıyor, `InstallApp` mount olunca saklanan değeri okuyor.
+
+          `preventDefault()` Chrome'un kendi alt şeridini bastırır: çağrı
+          zaten footer'da duruyor, iki ayrı yerden aynı şeyi istemek
+          rahatsız edici.
+
+          Kayıt `load` olayında: servis çalışanı indirmesi, ilk ekranın
+          çizilmesiyle bant genişliği için yarışmasın.
+        */}
+        <script
+          nonce={nonce}
+          dangerouslySetInnerHTML={{
+            __html:
+              'window.__ohaaaaKurulumIstemi=null;' +
+              "addEventListener('beforeinstallprompt',function(e){" +
+              'e.preventDefault();window.__ohaaaaKurulumIstemi=e;' +
+              "dispatchEvent(new Event('ohaaaa:kurulabilir'));});" +
+              "if('serviceWorker' in navigator){addEventListener('load',function(){" +
+              "navigator.serviceWorker.register('/sw.js',{scope:'/'}).catch(function(){});});}",
+          }}
+        />
       </head>
       <body className="min-h-screen bg-bg text-fg">
         <a

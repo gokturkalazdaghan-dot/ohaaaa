@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { Fragment } from 'react';
 
 import { t } from '@ohaaaa/shared';
 
@@ -54,10 +53,14 @@ export async function CategoryNav() {
       className="border-t border-line"
     >
       {/*
-        Dar ekranda yatay kaydırılır, sarmalanmaz: sarmalanan bir şerit üst
-        çubuğu iki üç sıra büyütür ve ilk ekranın yarısını yer.
+        DAR EKRANDA YATAY KAYDIRILIR, GENİŞ EKRANDA SARMALANIR.
+
+        `overflow-x-auto` bir KIRPMA BAĞLAMI yaratır: açılır panel şeridin
+        dışına taşıdığı anda kesilir. Bu yüzden taşma yalnızca dar ekranda
+        açık; geniş ekranda şerit sarmalanıyor ve panel serbestçe
+        aşağı açılabiliyor.
       */}
-      <ul className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 py-1.5 sm:px-6">
+      <ul className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 py-1.5 sm:px-6 md:flex-wrap md:overflow-x-visible">
         {/*
           Fırsatlar şeridin BAŞINDA duruyor ve vurgulu: fiyatı düşen ürünler
           sitenin en çok aranan girişi ve kategori listesinin içinde kaybolursa
@@ -72,33 +75,60 @@ export async function CategoryNav() {
           </Link>
         </li>
         {tree.map((node) => (
-          <Fragment key={node.category.id}>
-            <li className="shrink-0">
-              <Link
-                href={`/kategori/${node.category.slug}`}
-                className="block rounded-lg px-3 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg"
+          /*
+            ALT KATEGORİLER ARTIK ÜSTÜNÜN ALTINDA AÇILIYOR.
+
+            Önce hepsi tek sırada yan yana diziliyordu: üst kategoriyle alt
+            kategoriyi yalnızca renk ayırıyordu ve 21 alt kategori
+            dolduğunda şerit okunmaz bir listeye dönüyordu. Hangi alt
+            kategorinin hangi üste ait olduğu da görünmüyordu.
+
+            Panel SAF CSS ile açılıyor (`group-hover` + `group-focus-within`):
+            bileşen sunucuda kalıyor, istemciye fazladan JavaScript inmiyor.
+            `focus-within` klavye için şart -- yalnızca `hover` yazmak,
+            klavyeyle gezen kullanıcıya alt kategorileri hiç göstermemek
+            olurdu.
+
+            Dokunmatik ekranda panel açılmaz; üst kategoriye dokunmak
+            kategori sayfasını açar ve alt kategoriler orada zaten
+            listeleniyor. Dokunmayla açılan bir menü, ilk dokunuşu
+            "menüyü aç"a çevirip gezinmeyi yavaşlatırdı.
+          */
+          <li key={node.category.id} className="group relative shrink-0">
+            <Link
+              href={`/kategori/${node.category.slug}`}
+              className="block rounded-lg px-3 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg"
+            >
+              {node.category.name}
+            </Link>
+
+            {node.children.length > 0 && (
+              <div
+                className="invisible absolute left-0 top-full z-50 hidden min-w-56 rounded-xl border border-line bg-surface p-2 opacity-0 shadow-lg transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:block"
               >
-                {node.category.name}
-              </Link>
-            </li>
-            {/*
-              Alt kategoriler üstünün HEMEN ARDINDAN ve daha soluk geliyor:
-              şerit tek satır olduğu için girinti verilemiyor, hiyerarşiyi
-              renk taşıyor. Ayrı bir açılır menü kurmak şeridi tıklamayla
-              çalışan bir bileşene çevirirdi; tek satırlık bir menü için
-              fazla ağır.
-            */}
-            {node.children.map((child) => (
-              <li key={child.category.id} className="shrink-0">
-                <Link
-                  href={`/kategori/${child.category.slug}`}
-                  className="block rounded-lg px-2.5 py-1.5 text-sm text-subtle transition-colors hover:bg-surface-2 hover:text-fg"
-                >
-                  {child.category.name}
-                </Link>
-              </li>
-            ))}
-          </Fragment>
+                <ul>
+                  {node.children.map((child) => (
+                    <li key={child.category.id}>
+                      <Link
+                        href={`/kategori/${child.category.slug}`}
+                        className="flex items-center justify-between gap-4 rounded-lg px-3 py-1.5 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-fg"
+                      >
+                        <span>{child.category.name}</span>
+                        {/*
+                          Sayı gösteriliyor çünkü "Yazıcı (3.464)" ile
+                          "Aydınlatma (1)" kullanıcı için aynı şey değil:
+                          biri gezilecek bir raf, diğeri tek ürün.
+                        */}
+                        <span className="text-xs text-subtle">
+                          {child.groupCount.toLocaleString(contentLocale)}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </li>
         ))}
       </ul>
     </nav>
