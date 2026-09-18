@@ -1264,36 +1264,41 @@ async function kategoriAgaciniOku(): Promise<CategoryNode<Category>[]> {
     return buildCategoryTree(kategoriler, sayimlar);
   }
 
+  /*
+   * SAYIM TEK TURDA ALINIR.
+   *
+   * Önceki hâli her kategori için AYRI bir `count` isteği atıyordu.
+   * Taksonomi 9 kategoriden 132'ye çıkınca bu, önbellek her
+   * tazelendiğinde 132 gidiş-dönüş demek oldu. Eşzamanlılık tavanı yükü
+   * sınırlıyordu ama gecikmeyi ortadan kaldırmıyordu.
+   *
+   * `kategori_grup_sayilari()` aynı cevabı tek sorguda veriyor ve
+   * `product_groups (category_id)` indeksinden karşılanıyor.
+   *
+   * SAYIM OKUNAMAZSA KATEGORİLER KAYBOLMAZ. Hata durumunda her kategori
+   * 1 sayılır: bilinmeyeni sıfır yazmak, ulaşılamayan bir kategoriyi
+   * "boş" ilan edip menüden düşürmek olurdu. 1 yazmak da gerçek değil --
+   * o yüzden açıkça loglanıyor ve kategori görünür bırakılıyor.
+   */
   const sayimlar = new Map<string, number>();
-  await eszamanliHaritala(kategoriler, SAYIM_ESZAMANLILIK, async (kategori) => {
-    const { count, error } = await supabase
-      .from('product_groups')
-      .select('id', { count: 'exact', head: true })
-      .eq('category_id', kategori.id)
-      .gt('offer_count', 0);
+  const { data: sayimSatirlari, error: sayimHatasi } = await supabase.rpc(
+    'kategori_grup_sayilari',
+  );
 
-    if (error) {
-      /*
-       * Sayılamayan kategori SIFIR sayılmaz -- bu, ulaşılamayan bir
-       * kategoriyi "boş" ilan edip menüden düşürmek olurdu. Bilinmeyen
-       * yerine 1 yazmak da uydurma olurdu; kategori listede kalsın diye
-       * gerçek sayının bilinmediği açıkça loglanıyor ve kategori
-       * görünür bırakılıyor.
-       */
-      console.warn(
-        JSON.stringify({
-          level: 'warn',
-          msg: 'Kategori grup sayisi okunamadi',
-          kategori: kategori.slug,
-          hata: error.message,
-        }),
-      );
-      sayimlar.set(kategori.id, 1);
-      return;
+  if (sayimHatasi) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'Kategori grup sayilari okunamadi; kategoriler gorunur birakildi',
+        hata: sayimHatasi.message,
+      }),
+    );
+    for (const kategori of kategoriler) sayimlar.set(kategori.id, 1);
+  } else {
+    for (const satir of (sayimSatirlari ?? []) as { category_id: string; adet: number }[]) {
+      sayimlar.set(String(satir.category_id), Number(satir.adet));
     }
-
-    sayimlar.set(kategori.id, count ?? 0);
-  });
+  }
 
   return buildCategoryTree(kategoriler, sayimlar);
 }

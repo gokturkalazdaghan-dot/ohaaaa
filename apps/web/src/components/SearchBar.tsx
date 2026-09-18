@@ -73,7 +73,31 @@ export function SearchBar({
 }) {
   const router = useRouter();
   const params = useSearchParams();
-  const [value, setValue] = useState(params.get('q') ?? '');
+
+  /*
+   * KUTU ADRESTEKİ SORGUYU TAKİP EDER.
+   *
+   * Ölçülen hata: `/arama?q=telefon` sayfasındayken köşedeki logoya basıp
+   * ana sayfaya dönüldüğünde kutuda "telefon" yazılı kalıyordu. Sebep
+   * `useState(params.get('q'))`'nun YALNIZCA ilk çizimde okunması ve üst
+   * çubuğun gezinmede sökülmemesiydi: bileşen aynı yerde duruyor, ilk
+   * değer bir daha hesaplanmıyor.
+   *
+   * Çözüm bir `useEffect` DEĞİL. Etki, önce eski metni boyayıp sonra
+   * temizlerdi -- kullanıcı bir kare boyunca eski sorguyu görürdü.
+   * React'in "önceki çizimden bilgi saklama" deseni çizim sırasında
+   * düzeltir, fazladan boyama olmaz.
+   *
+   * Kullanıcı yazarken adres değişmediği için yazdığı metin EZİLMEZ;
+   * yalnızca adres gerçekten değiştiğinde kutu ona uyar.
+   */
+  const adrestekiSorgu = params.get('q') ?? '';
+  const [value, setValue] = useState(adrestekiSorgu);
+  const [oncekiSorgu, setOncekiSorgu] = useState(adrestekiSorgu);
+  if (adrestekiSorgu !== oncekiSorgu) {
+    setOncekiSorgu(adrestekiSorgu);
+    setValue(adrestekiSorgu);
+  }
 
   const listId = useId();
   const [focused, setFocused] = useState(false);
