@@ -145,3 +145,37 @@ test('katalog kategori ADI da slug\'a cevrilerek taninir', () => {
   assert.equal(kategoriSlugBul('Ev & Yaşam', 'Airfryer'), 'ev-yasam');
   assert.equal(kategoriSlugBul('Spor & Outdoor', 'Belirsiz'), 'spor-outdoor');
 });
+
+/*
+ * KATALOGDA OLMAYAN BİR SLUG'A EŞLEME YAPILAMAZ.
+ *
+ * Bu test gerçek bir hatadan doğdu: `fashion` ve `clothing` değerleri
+ * `moda` slug'ına eşleniyordu ama katalogda öyle bir kategori yoktu
+ * (üretim sorgulandı, sıfır satır). `resolveCategoryIds` yalnızca gerçek
+ * kategorileri çözdüğü için giyim satan bir feed'in tamamı
+ * sınıflandırılamaz olarak düşerdi -- sessizce.
+ *
+ * Liste burada elle yazılı DEĞİL, kanonik Level-1 taksonomisinden alındı.
+ * Bir hedef katalogdan kalkarsa bu test düşer ve sebebi görünür olur.
+ */
+test('feed eşlemesinin HER hedefi kanonik taksonomide var', () => {
+  const KANONIK_KOK = new Set([
+    'saglik-medikal', 'ev-yasam', 'yapi-market-bahce-oto', 'oto-yedek-parca',
+    'supermarket', 'elektronik', 'bilgisayar-tablet', 'telefon', 'giyim-ayakkabi',
+    'beyaz-esya-mutfak', 'kozmetik', 'spor-outdoor', 'ev-elektronigi', 'anne-bebek',
+    'kitap-kirtasiye-ofis', 'oyuncak-muzik-film', 'altin-taki-mucevher',
+    'yetiskin-urunleri',
+  ]);
+  /** Eşlemenin kullandığı alt kategoriler -- üretimde var olduğu doğrulandı. */
+  const BILINEN_ALT = new Set(['bilgisayar', 'kulaklik']);
+
+  for (const deger of ['computers', 'electronics', 'fashion', 'clothing', 'audio',
+                       'phones', 'home', 'beauty', 'sports', 'grocery']) {
+    const slug = kategoriSlugBul(deger, null);
+    assert.ok(slug, `${deger} icin eslesme yok`);
+    assert.ok(
+      KANONIK_KOK.has(slug) || BILINEN_ALT.has(slug),
+      `${deger} -> ${slug}: katalogda olmayan bir slug'a eslenmis`,
+    );
+  }
+});

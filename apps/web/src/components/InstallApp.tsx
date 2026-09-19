@@ -159,6 +159,26 @@ export function InstallApp() {
 
   if (kurulu) return null;
 
+  /*
+   * ADIMLAR KENDILIGINDEN ACIK OLMALI.
+   *
+   * Olculdu: kurulum istemi yokken bolumde "Nasil kurulur?" yazan TEK bir
+   * ogce kaliyordu -- ne kare kod, ne kurulum dugmesi. Kullanici bolumu
+   * gorse bile yapabilecegi bir sey bulamiyordu.
+   *
+   * Istem yoksa (iOS her zaman, Android/masaustu bazen) elle yonerge TEK
+   * yoldur; onu bir tiklama arkasina saklamak, tek yolu gizlemek demek.
+   * Masaustu disarida: orada kare kod zaten kartin icinde duruyor.
+   */
+  const adimlarGorunur = adimlarAcik || (!istemVar && platform !== 'masaustu');
+
+  /*
+   * Kare kod MASAUSTUNDE KARTIN ICINDE, panelin icinde degil. Amaci
+   * "bilgisayardayim, telefonuma gecireyim" -- bunun icin once bir dugmeye
+   * basmak gerekiyorsa kod, ihtiyaci olan kisiye hic gorunmez.
+   */
+  const kareKodGoster = platform === 'masaustu';
+
   return (
     <section
       aria-labelledby="kurulum-basligi"
@@ -189,7 +209,30 @@ export function InstallApp() {
           </div>
         </div>
 
-        <div className="shrink-0 sm:text-right">
+        <div className="flex shrink-0 flex-col items-stretch gap-4 sm:flex-row sm:items-center">
+          {kareKodGoster && (
+            <div className="flex items-center gap-3">
+              {/*
+                Kare kod SABİT bir dosya: içinde yalnızca ana sayfanın adresi
+                var, kişiye özel hiçbir şey yok. Çalışma anında kod üretmek
+                bunun için bir kitaplık eklemek demekti.
+              */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/marka/ohaaaa-qr.svg"
+                alt="ohaaaa.com adresini açan kare kod"
+                width={96}
+                height={96}
+                className="h-24 w-24 shrink-0 rounded-xl border border-line bg-white p-1"
+              />
+              <p className="text-xs leading-relaxed text-muted sm:max-w-[9rem]">
+                <strong className="block text-fg">Telefonunla okut</strong>
+                Kamerayı koda tut, telefonunda açılsın.
+              </p>
+            </div>
+          )}
+
+          <div className="sm:text-right">
           {istemVar ? (
             <button
               type="button"
@@ -203,18 +246,29 @@ export function InstallApp() {
             <button
               type="button"
               onClick={() => setAdimlarAcik((acik) => !acik)}
-              aria-expanded={adimlarAcik}
+              aria-expanded={adimlarGorunur}
               aria-controls="kurulum-adimlari"
               className="press inline-flex w-full items-center justify-center gap-2 rounded-xl border border-line-strong px-5 py-3 text-sm font-semibold text-fg transition-colors hover:bg-surface-2 sm:w-auto"
             >
               <DownloadIcon className="h-5 w-5" />
-              Nasıl kurulur?
+              {/*
+                Etiket duruma göre değişiyor. Adımlar zaten açıkken "Nasıl
+                kurulur?" yazmak, kullanıcıya görmediği bir şeyi vaat etmek
+                olurdu; bastığında panel KAPANDIĞI için de ters etki yapardı.
+
+                Burada BİLEREK sahte bir "Kur" düğmesi yok: istem yoksa
+                tarayıcı kurulumu programla başlatamaz (iOS'ta hiçbir zaman
+                başlatamaz). "Kur" yazıp yönerge açmak, çalışmayan bir düğmeyi
+                çalışıyormuş gibi göstermek olurdu.
+              */}
+              {adimlarGorunur ? 'Adımları gizle' : 'Nasıl kurulur?'}
             </button>
           )}
+          </div>
         </div>
       </div>
 
-      {adimlarAcik && (
+      {adimlarGorunur && (
         <div
           id="kurulum-adimlari"
           className="card mt-3 p-5 text-sm leading-relaxed text-muted sm:p-6"
@@ -266,32 +320,29 @@ export function InstallApp() {
           )}
 
           {platform === 'masaustu' && (
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+            <>
               {/*
-                Kare kod SABİT bir dosya: içinde yalnızca ana sayfanın
-                adresi var, kişiye özel hiçbir şey yok. Çalışma anında kod
-                üretmek bunun için bir kitaplık eklemek demekti.
+                Kare kod BURADA TEKRARLANMIYOR: kartın içinde, bu paneli hiç
+                açmadan görünüyor. İki kez çizmek, aynı şeyin iki ayrı şey
+                olduğunu düşündürürdü.
               */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/marka/ohaaaa-qr.svg"
-                alt="ohaaaa.com adresini açan kare kod"
-                width={132}
-                height={132}
-                className="shrink-0 rounded-xl border border-line bg-white p-1"
-              />
-              <div>
-                <p className="font-semibold text-fg">Telefonunla tara</p>
-                <p className="mt-2">
-                  Kamerayı kare koda tut, açılan sayfada bu bölümdeki kurulum
-                  adımlarını izle.
-                </p>
-                <p className="mt-3 text-xs text-subtle">
-                  Bilgisayara kurmak istersen: Chrome veya Edge’de adres
-                  çubuğunun sağındaki kurulum simgesine tıkla.
-                </p>
-              </div>
-            </div>
+              <p className="font-semibold text-fg">Bilgisayarına kurmak için</p>
+              <ol className="mt-3 list-decimal space-y-2 pl-5">
+                <li>
+                  Chrome veya Edge’de adres çubuğunun sağındaki{' '}
+                  <strong className="text-fg">kurulum</strong> simgesine tıkla.
+                </li>
+                <li>
+                  Açılan kutuda <strong className="text-fg">Yükle</strong>’yi
+                  seç.
+                </li>
+              </ol>
+              <p className="mt-3 text-xs text-subtle">
+                Simgeyi göremiyorsan tarayıcı menüsünden “Uygulamayı yükle”yi
+                ara. Safari ve Firefox masaüstünde kurulumu desteklemiyor —
+                telefonuna almak için yandaki kare kodu okut.
+              </p>
+            </>
           )}
         </div>
       )}

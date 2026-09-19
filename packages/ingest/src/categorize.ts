@@ -71,8 +71,20 @@ const FEED_KATEGORI_ESLEMESI: ReadonlyMap<string, string> = new Map([
   ['garden', 'ev-yasam'],
   ['beauty', 'kozmetik'],
   ['cosmetics', 'kozmetik'],
-  ['fashion', 'moda'],
-  ['clothing', 'moda'],
+  /*
+   * `moda` DEĞİL `giyim-ayakkabi`.
+   *
+   * ÖLÇÜLEN HATA: bu iki satır `moda` slug'ına eşliyordu ama katalogda
+   * `moda` diye bir kategori HİÇ YOKTU (üretim sorgulandı: sıfır satır).
+   * `resolveCategoryIds` yalnızca GERÇEK kategorileri çözdüğü için sonuç,
+   * giyim satan bir feed'in TAMAMININ sınıflandırılamaması olurdu --
+   * tıpkı BTO'nun `computers` değerinde yaşandığı gibi, üstelik aynı
+   * dosyanın düzeltmek için yazıldığı hata bu.
+   *
+   * Hedef artık kanonik Level-1 kategorisi: "Moda & Giyim".
+   */
+  ['fashion', 'giyim-ayakkabi'],
+  ['clothing', 'giyim-ayakkabi'],
   ['sports', 'spor-outdoor'],
   ['outdoor', 'spor-outdoor'],
   ['grocery', 'supermarket'],

@@ -1300,7 +1300,44 @@ async function kategoriAgaciniOku(): Promise<CategoryNode<Category>[]> {
     }
   }
 
-  return buildCategoryTree(kategoriler, sayimlar);
+  /*
+   * İKİNCİL YERLEŞİMLER MENÜYÜ ZENGİNLEŞTİRİR, VERİYİ DEĞİŞTİRMEZ.
+   *
+   * Kanonik taksonomi bazı kavramları iki Seviye-1 altında arıyor ("Saat"
+   * hem Moda'da hem Takı'da). Kategori tek evinde duruyor; burada yalnızca
+   * ikinci gezinme yolu okunuyor.
+   *
+   * OKUNAMAZSA MENÜ ÇALIŞMAYA DEVAM EDER. Yerleşimler bir EK; hata
+   * durumunda ağaç birincil ebeveynlerle çizilir. Burada düşmek, tek bir
+   * yardımcı tablo yüzünden bütün kategori şeridini karartmak olurdu.
+   */
+  const ikincil = new Map<string, string[]>();
+  const { data: yerlesimler, error: yerlesimHatasi } = await supabase
+    .from('category_secondary_parents')
+    .select('category_id, parent_id')
+    .order('sort_order');
+
+  if (yerlesimHatasi) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'Ikincil kategori yerlesimleri okunamadi; menu birincil agacla cizildi',
+        hata: yerlesimHatasi.message,
+      }),
+    );
+  } else {
+    for (const satir of (yerlesimler ?? []) as {
+      category_id: string;
+      parent_id: string;
+    }[]) {
+      const ust = String(satir.parent_id);
+      const liste = ikincil.get(ust);
+      if (liste) liste.push(String(satir.category_id));
+      else ikincil.set(ust, [String(satir.category_id)]);
+    }
+  }
+
+  return buildCategoryTree(kategoriler, sayimlar, ikincil);
 }
 
 async function tasoronlariOku(): Promise<Vendor[]> {
