@@ -14,7 +14,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { yoluAyristir } from '@ohaaaa/shared';
+import { yoluAyristir } from '@ohaaaa/shared/url-locale';
 
 /**
  * Adresteki dil ve pazarın sunucu bileşenlerine taşındığı başlıklar.
