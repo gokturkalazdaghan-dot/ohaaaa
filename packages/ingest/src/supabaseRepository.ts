@@ -721,6 +721,29 @@ export async function loadSources(
   const { data, error } = await query;
   if (error) throw new Error(`Kaynaklar okunamadı: ${error.message}`);
 
+  /*
+   * DESTEKLENEN PARA BİRİMLERİ VERİTABANINDAN OKUNUYOR, KODA YAZILMIYOR.
+   *
+   * `products.currency` bir yabancı anahtar ve ihlali TEK SATIRI değil
+   * PARTİNİN TAMAMINI düşürüyor. Listeyi normalleştirme adımına vermek,
+   * desteklenmeyen para birimli satırın tek başına elenmesini sağlıyor --
+   * ölçüldü: AliExpress PL turunda feed CNY gönderdi ve geçerli USD
+   * satırları dahil 6.719 satırın hepsi yazılamadı.
+   *
+   * Tek sorgu, bütün kaynaklar için: liste kaynağa göre değişmiyor.
+   * Kodda sabit bir kopya tutmak, iki listenin zamanla ayrışması ve bu
+   * hatanın sessizce geri dönmesi demekti.
+   */
+  const { data: paraBirimleri, error: paraHatasi } = await supabase
+    .from('currencies')
+    .select('code');
+
+  if (paraHatasi) throw new Error(`Para birimleri okunamadı: ${paraHatasi.message}`);
+
+  const izinliParaBirimleri = (paraBirimleri ?? [])
+    .map((satir: Record<string, unknown>) => String(satir.code).trim().toUpperCase())
+    .filter((kod) => kod.length === 3);
+
   return (data ?? []).map((row: Record<string, unknown>) => {
     const rawMerchant = row.merchant;
     const merchant = (Array.isArray(rawMerchant) ? rawMerchant[0] : rawMerchant) as
@@ -755,6 +778,7 @@ export async function loadSources(
       marketCode: row.market_code ? String(row.market_code) : '',
       countryCode: row.country_code ? String(row.country_code) : null,
       allowedHosts: host ? [host] : [],
+      allowedCurrencies: izinliParaBirimleri,
       authType: isAuthType(row.auth_type) ? row.auth_type : 'query',
       authSecretRef: row.auth_secret_ref ? String(row.auth_secret_ref) : null,
     };

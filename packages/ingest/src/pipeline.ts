@@ -286,6 +286,7 @@ export async function runSource(
     const { offers, errors } = normalizeRecords(records, source.fieldMapping, {
       defaultCurrency: source.currency,
       allowedHosts: source.allowedHosts,
+      allowedCurrencies: source.allowedCurrencies,
     });
 
     summary.itemsFailed = errors.length;

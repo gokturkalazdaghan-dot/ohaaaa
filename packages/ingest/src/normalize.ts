@@ -23,7 +23,7 @@ const MAX_PRICE_CENTS = 1_000_000_000;
 export function normalizeRecords(
   records: RawRecord[],
   mapping: FieldMapping,
-  options: { defaultCurrency: string; allowedHosts: string[] },
+  options: { defaultCurrency: string; allowedHosts: string[]; allowedCurrencies?: string[] },
 ): NormalizeResult {
   const offers: NormalizedOffer[] = [];
   const errors: NormalizeResult['errors'] = [];
@@ -62,7 +62,7 @@ export function normalizeRecords(
 function normalizeOne(
   record: RawRecord,
   mapping: FieldMapping,
-  options: { defaultCurrency: string; allowedHosts: string[] },
+  options: { defaultCurrency: string; allowedHosts: string[]; allowedCurrencies?: string[] },
   externalId: string,
 ): NormalizedOffer | { reason: string } {
   const title = read(record, mapping.title)?.trim();
@@ -150,15 +150,34 @@ function normalizeOne(
    * Ama feed DOLU bir kod gönderdiyse onu kendi varsayılanımızla değiştirmek,
    * FİYATI YANLIŞ PARA BİRİMİNDE göstermek olurdu: 49 CNY'yi 49 PLN diye
    * yazmak müşteriye yanlış fiyat göstermek ve bizim aleyhimize bir teklif
-   * üretmektir. Biçimi tutmayan satır yazılmaz, sebebiyle birlikte raporlanır.
+   * üretmektir. Satır yazılmaz, sebebiyle birlikte raporlanır.
    *
-   * Burada YALNIZCA biçim denetleniyor (üç büyük harf). Kodun gerçekten
-   * tanınıp tanınmadığına `products_currency_fkey` karar verir -- tek doğru
-   * liste veritabanındaki `currencies` tablosudur ve onu buraya kopyalamak
-   * iki listenin zamanla ayrışması demekti.
+   * ---------------------------------------------------------------------
+   * NEDEN BURADA, `products_currency_fkey`'e BIRAKILMIYOR
+   * ---------------------------------------------------------------------
+   * Bırakılıyordu ve ÖLÇÜLEN bedeli şuydu: yabancı anahtar ihlali TEK
+   * SATIRI değil, PARTİNİN TAMAMINI düşürür. AliExpress PL turunda feed
+   * CNY gönderdi ve 6.719 satırın HEPSİ yazılamadı -- aralarında geçerli
+   * USD satırları olmasına rağmen.
+   *
+   * Tek bozuk satırın bütün turu boşa çıkarması, bu dosyanın en başındaki
+   * kuralın tersi: atlanan kayıt görünür olmalı, bozuk kayıt bütün
+   * katalogu düşürmemeli.
+   *
+   * `allowedCurrencies` veritabanındaki `currencies` tablosundan geliyor;
+   * liste koda KOPYALANMIYOR, okunuyor -- kopya olsaydı iki liste zamanla
+   * ayrışır ve bu hata sessizce geri dönerdi. Liste boş gelirse (eski
+   * çağıranlar, testler) yalnızca biçim denetlenir: yokluğu, her şeyi
+   * reddetmek için bir gerekçe değildir.
    */
   if (!/^[A-Z]{3}$/.test(paraBirimi)) {
     return { reason: `para birimi tanınmadı: "${paraBirimi.slice(0, 16)}"` };
+  }
+
+  if (options.allowedCurrencies && options.allowedCurrencies.length > 0) {
+    if (!options.allowedCurrencies.includes(paraBirimi)) {
+      return { reason: `para birimi desteklenmiyor: ${paraBirimi}` };
+    }
   }
 
   return {

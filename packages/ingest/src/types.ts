@@ -94,6 +94,16 @@ export interface SourceConfig {
   /** Mağazanın izinli alan adları — ürün adresleri buraya ait olmalı. */
   allowedHosts: string[];
   /**
+   * `currencies` tablosundaki kodlar. Feed bu listede OLMAYAN bir para
+   * birimi gönderirse satır elenir.
+   *
+   * NEDEN KAYNAK NESNESINDE: `products.currency` bir yabancı anahtar ve
+   * ihlali TEK SATIRI değil PARTİNİN TAMAMINI düşürüyor. Denetimi yazma
+   * adımına bırakmak, bir bozuk satırın bütün turu boşa çıkarması demekti
+   * (ölçüldü: 6.719 satır, sıfırı yazıldı). Boş dizi = denetim yok.
+   */
+  allowedCurrencies?: string[];
+  /**
    * Kimlik bilgisinin NASIL taşınacağı. Varsayılan `query`: adres
    * şablonundaki ${DEGISKEN} yer tutucusu. `bearer`/`basic` Authorization
    * başlığı kullanır.

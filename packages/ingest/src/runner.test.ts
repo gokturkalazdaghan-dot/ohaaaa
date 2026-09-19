@@ -284,6 +284,17 @@ function sahteYavasSupabase(gecikmeMs: number) {
     },
     from(tablo: string) {
       if (tablo === 'sources') return kaynakSorgusu();
+      /*
+       * `loadSources` artik desteklenen para birimlerini de okuyor:
+       * `products.currency` bir yabanci anahtar ve ihlali TEK SATIRI degil
+       * PARTININ TAMAMINI dusuruyordu. Liste koda kopyalanmiyor, veritabanindan
+       * geliyor -- bu yuzden sahte istemcinin de vermesi gerekiyor.
+       */
+      if (tablo === 'currencies') {
+        return {
+          select: () => Promise.resolve({ data: [{ code: 'GBP' }, { code: 'TRY' }], error: null }),
+        };
+      }
       throw new Error(`Beklenmeyen tablo: ${tablo}`);
     },
   };

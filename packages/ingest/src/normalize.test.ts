@@ -276,6 +276,47 @@ test('yalnızca boşluktan ibaret para birimi de varsayılana düşer', () => {
  * bir kod gönderdiyse onu kendi varsayılanımızla değiştirmek, 49 CNY'yi
  * 49 PLN diye göstermek demek. Müşteriye yanlış fiyat, bize zararına teklif.
  */
+/*
+ * DESTEKLENMEYEN PARA BİRİMİ: BİR SATIR TURU DÜŞÜRMEMELİ.
+ *
+ * Ölçülen hata: AliExpress PL feed'i CNY gönderdi, `products.currency`
+ * yabancı anahtarı reddetti ve ihlal TEK SATIRI değil PARTİNİN TAMAMINI
+ * düşürdü -- aralarında geçerli USD satırları olmasına rağmen 6.719 satırın
+ * hepsi yazılamadı, iki tur üst üste.
+ *
+ * Denetim artık yazma adımından ÖNCE, burada. Testin ölçtüğü şey de bu:
+ * desteklenmeyen satır elenirken GEÇERLİ SATIRIN HAYATTA KALMASI.
+ */
+test('desteklenmeyen para birimi yalnızca O SATIRI eler, geçerli satır yazılır', () => {
+  const mapping: FieldMapping = { ...MAPPING, currency: 'cur' };
+
+  const { offers, errors } = normalizeRecords(
+    [record({ id: 'CNY-1', cur: 'CNY' }), record({ id: 'USD-1', cur: 'USD' })],
+    mapping,
+    { ...OPTIONS, allowedCurrencies: ['USD', 'PLN', 'TRY'] },
+  );
+
+  assert.equal(offers.length, 1, 'geçerli satır hayatta kalmalı');
+  assert.equal(offers[0]?.externalId, 'USD-1');
+  assert.equal(offers[0]?.currency, 'USD');
+
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0]?.externalId, 'CNY-1');
+  assert.match(errors[0]?.reason ?? '', /CNY/, 'hangi para birimi olduğu raporlanmalı');
+});
+
+test('izinli liste boşsa denetim yapılmaz -- yokluğu her şeyi reddetme gerekçesi değil', () => {
+  const mapping: FieldMapping = { ...MAPPING, currency: 'cur' };
+
+  const { offers } = normalizeRecords([record({ cur: 'CNY' })], mapping, {
+    ...OPTIONS,
+    allowedCurrencies: [],
+  });
+
+  assert.equal(offers.length, 1, 'liste yoksa biçimi geçerli kod kabul edilmeli');
+  assert.equal(offers[0]?.currency, 'CNY');
+});
+
 test('tanınmayan biçimdeki para birimi satırı düşürür, varsayılana çevirmez', () => {
   const mapping: FieldMapping = { ...MAPPING, currency: 'cur' };
 
