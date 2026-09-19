@@ -48,11 +48,24 @@ export interface CategoryNode<T extends CategoryLike> {
  * üst seviyeye alınır. Sessizce düşürmek, o kategorideki ürünleri
  * gezinilemez yapardı.
  */
+/**
+ * İkincil yerleşim: `parentId` → o üst kategori altında AYRICA gösterilecek
+ * kategori kimlikleri.
+ *
+ * Kanonik taksonomide bazı kavramlar iki ayrı Seviye-1 altında aranıyor
+ * ("Saat" hem Moda'da hem Takı'da). İkinci bir kategori satırı açmak, aynı
+ * kavramın ürünlerini iki kimliğe bölerdi; bu yüzden kategori tek evinde
+ * kalıyor ve yalnızca menüde ikinci bir yerde daha görünüyor.
+ */
+export type SecondaryPlacements = ReadonlyMap<string, readonly string[]>;
+
 export function buildCategoryTree<T extends CategoryLike>(
   categories: readonly T[],
   ownCounts: ReadonlyMap<string, number>,
+  secondaryPlacements?: SecondaryPlacements,
 ): CategoryNode<T>[] {
   const kimlikler = new Set(categories.map((c) => c.id));
+  const kategoriKimlige = new Map(categories.map((c) => [c.id, c]));
 
   const ustSeviye = categories.filter(
     (c) => c.parentId === null || !kimlikler.has(c.parentId),
@@ -76,9 +89,33 @@ export function buildCategoryTree<T extends CategoryLike>(
       .filter((c) => c.groupCount > 0);
 
     const toplam = kendi + doluCocuklar.reduce((s, c) => s + c.groupCount, 0);
+    /*
+     * TOPLAM YALNIZCA KENDİ DALINDAN HESAPLANIR.
+     *
+     * İkincil yerleşimler bilerek bu toplamın DIŞINDA: "Saat" hem Moda hem
+     * Takı altında görünüyor ama ürünleri tek bir yerde duruyor. İkisine de
+     * eklemek aynı ürünleri iki kez saymak ve kullanıcıya gerçek olmayan bir
+     * sayı göstermek olurdu.
+     *
+     * Aynı sebeple boş bir üst kategori ikincil yerleşimle DİRİLMEZ: kendi
+     * dalı boşsa menüden düşer. Yoksa ürünü olmayan bir sayfaya giden yol
+     * açardık.
+     */
     if (toplam === 0) continue;
 
-    dugumler.push({ category: ust, groupCount: toplam, children: doluCocuklar });
+    const ekCocuklar = (secondaryPlacements?.get(ust.id) ?? [])
+      .map((kimlik) => kategoriKimlige.get(kimlik))
+      .filter((c): c is T => c !== undefined)
+      // Zaten birincil çocuksa iki kez listeleme.
+      .filter((c) => !doluCocuklar.some((d) => d.category.id === c.id))
+      .map((c) => ({ category: c, groupCount: ownCounts.get(c.id) ?? 0 }))
+      .filter((c) => c.groupCount > 0);
+
+    dugumler.push({
+      category: ust,
+      groupCount: toplam,
+      children: [...doluCocuklar, ...ekCocuklar],
+    });
   }
 
   return dugumler;

@@ -96,3 +96,84 @@ test('kardeşler yalnızca aynı üst kategoriyi paylaşanlar', () => {
     ['elektronik', 'moda', 'spor-outdoor', 'kozmetik', 'supermarket'],
   );
 });
+
+// ---------------------------------------------------------------------------
+// İKİNCİL YERLEŞİM
+// ---------------------------------------------------------------------------
+// Kanonik taksonomi bazı kavramları iki Seviye-1 altında arıyor ("Saat" hem
+// Moda'da hem Takı'da). İkinci bir kategori satırı açmak ürünleri iki kimliğe
+// bölerdi; bunun yerine kategori tek evinde kalıyor ve menüde ikinci bir yerde
+// daha görünüyor.
+
+test('ikincil yerleşim kategoriyi ikinci bir üst kategoride de gösterir', () => {
+  // `ev-yasam` kendi dalında dolu (261), yani menüde zaten var. `kulaklik`
+  // oraya ikincil olarak yerleşiyor.
+  const agac = buildCategoryTree(
+    URETIM,
+    SAYILAR,
+    new Map([['ev-yasam', ['kulaklik']]]),
+  );
+
+  const evYasam = agac.find((d) => d.category.slug === 'ev-yasam');
+  assert.ok(evYasam);
+  assert.deepEqual(evYasam.children.map((c) => c.category.slug), ['kulaklik']);
+
+  // Kanonik evinden DÜŞMEZ: hâlâ elektronik altında da duruyor.
+  const elektronik = agac.find((d) => d.category.slug === 'elektronik');
+  assert.ok(elektronik);
+  assert.ok(elektronik.children.some((c) => c.category.slug === 'kulaklik'));
+});
+
+test('ikincil yerleşim üst kategorinin sayısını ŞİŞİRMEZ', () => {
+  // `moda` kendi dalında 0; `kulaklik` 541. İkincil yerleşim sayıya
+  // eklenseydi "Moda: 541" yazardı -- oysa o ürünler Moda'da değil.
+  const agac = buildCategoryTree(
+    URETIM,
+    SAYILAR,
+    new Map([['ev-yasam', ['kulaklik']]]),
+  );
+  const evYasam = agac.find((d) => d.category.slug === 'ev-yasam');
+  assert.ok(evYasam);
+  assert.equal(evYasam.groupCount, 261, 'kendi dalının sayısı korunmalı');
+});
+
+test('boş üst kategori ikincil yerleşimle DİRİLMEZ', () => {
+  // `moda` kendi dalında tamamen boş. Bir ikincil çocuk eklemek onu menüye
+  // geri getirseydi, kullanıcı ürünsüz bir sayfaya gönderilirdi.
+  const bos: K[] = [k('moda'), k('elektronik'), k('kulaklik', 'elektronik')];
+  const sayilar = new Map<string, number>([
+    ['moda', 0], ['elektronik', 0], ['kulaklik', 541],
+  ]);
+  const agac = buildCategoryTree(bos, sayilar, new Map([['moda', ['kulaklik']]]));
+  assert.equal(agac.find((d) => d.category.slug === 'moda'), undefined);
+});
+
+test('ikincil yerleşim birincil çocuğu iki kez listelemez', () => {
+  const agac = buildCategoryTree(
+    URETIM,
+    SAYILAR,
+    new Map([['elektronik', ['kulaklik']]]),
+  );
+  const elektronik = agac.find((d) => d.category.slug === 'elektronik');
+  assert.ok(elektronik);
+  const kulaklikSayisi = elektronik.children.filter(
+    (c) => c.category.slug === 'kulaklik',
+  ).length;
+  assert.equal(kulaklikSayisi, 1);
+});
+
+test('boş ikincil çocuk menüye girmez', () => {
+  const sayilar = new Map(SAYILAR);
+  sayilar.set('kulaklik', 0);
+  const agac = buildCategoryTree(URETIM, sayilar, new Map([['ev-yasam', ['kulaklik']]]));
+  const evYasam = agac.find((d) => d.category.slug === 'ev-yasam');
+  assert.ok(evYasam);
+  assert.ok(!evYasam.children.some((c) => c.category.slug === 'kulaklik'));
+});
+
+test('yerleşim verilmezse ağaç aynen eskisi gibi kurulur', () => {
+  assert.deepEqual(
+    buildCategoryTree(URETIM, SAYILAR),
+    buildCategoryTree(URETIM, SAYILAR, new Map()),
+  );
+});
