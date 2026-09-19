@@ -27,6 +27,10 @@ on:
         description: 'Veritabanına yazmadan dene'
         type: boolean
         default: false
+      awin_feed_listesi:
+        description: 'Awin feed listesini KEŞFET (yalnızca okur, yazmaz)'
+        type: boolean
+        default: false
 
 # ----------------------------------------------------------------------------
 # JETON YETKISI: MINIMUM
@@ -66,6 +70,11 @@ concurrency:
 
 jobs:
   ingest:
+    # KESIF SECILDIYSE ALIM TURU CALISMAZ.
+    # `inputs` yalnizca workflow_dispatch'te doludur; `schedule`
+    # tetiklemesinde bos gelir ve `!` onu true'ya cevirir -- yani
+    # zamanlanmis tur bu kosuldan ETKILENMEZ.
+    if: ${{ !inputs.awin_feed_listesi }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -218,3 +227,50 @@ jobs:
           curl -fsS -X POST "${SITE_URL%/}/api/cron/katalog-tazele" \
             --config "$cfg" -o /dev/null
           echo "Katalog onbellegi bosaltildi."
+
+  # ==========================================================================
+  # AWIN FEED LİSTESİ KEŞFİ -- AYRI İŞ, ALIM YOLUNA DOKUNMAZ
+  # --------------------------------------------------------------------------
+  # NEDEN AYRI İŞ: çalışan alım yolunu değiştirmemek için. Bu iş yalnızca
+  # elle tetiklenir, `concurrency: ingest` grubuna girmez ve alım turuyla
+  # yarışmaz.
+  #
+  # SUPABASE SIRLARI BİLEREK YOK. Keşif hiçbir şey yazmaz; service-role
+  # anahtarını bu işin ortamına koymak, okuma işine yazma yetkisi vermek
+  # olurdu. Sızıntı yüzeyi kadar, yanlışlıkla yazma ihtimali de kapanıyor.
+  # ==========================================================================
+  awin-kesif:
+    if: inputs.awin_feed_listesi
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build --workspace @ohaaaa/shared
+      - run: npm run build --workspace @ohaaaa/ingest
+
+      - name: Awin feed listesini keşfet
+        env:
+          # Alım turunun kullandığı ANAHTARIN AYNISI. `bto-instock` bu
+          # anahtarla 35.556 ürün çekiyor -- yani değerin geçerliliği
+          # üretimde zaten kanıtlı.
+          AWIN_DATAFEED_API_KEY: ${{ secrets.AWIN_DATAFEED_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${AWIN_DATAFEED_API_KEY:-}" ]; then
+            echo "AWIN_DATAFEED_API_KEY depo sirri tanimli degil." >&2
+            exit 1
+          fi
+
+          # Cikti maskelenmis: anahtar yolda durur, redact() onu siler.
+          node packages/ingest/dist/cli.js --awin-feed-listesi
