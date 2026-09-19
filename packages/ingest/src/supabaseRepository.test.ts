@@ -225,22 +225,53 @@ test('idempotent yazma KALICI hatayi yeniden DENEMEZ', async () => {
 // suruyordu -- esigin TAM SINIRINDA. Sonuc tablo boyutuna ve o anki yuke
 // bagli kaliyordu.
 //
+// UCUNCU KEZ TEKRARLADI (2026-09-19, 10:09 turu: "Teklifler yazilamadi")
+// ve sebebi bu kez TESTIN KENDISIYDI: 67 satir/sn sabiti bayatlamisti.
+// Uretimde yeniden olculdu -- upsert'in yazdigi sutunlarla birebir ayni
+// yazma, 100 satir 2.024,8 ms, yani 20,25 ms/satir = 49 satir/sn.
+//
+// Bayat bir olcum, testi bir korumadan bir ONAY MUHURUNE cevirir: sayi
+// yanlis oldugu halde test yesil kalir. Sabit bu yuzden olculen degerle
+// guncellendi ve OLCUMUN TARIHI de yazildi -- bir dahaki sefere neyin
+// eskidigi gorulsun.
+//
 // Bu test sabiti asagi dogru kilitler. Biri onu yeniden yukseltirse test
 // duser ve yeniden OLCMEK zorunda kalir.
 
-test('upsert parti boyutu statement_timeout altinda kaliyor', () => {
-  // Uretimde olculen degerler.
-  const STATEMENT_TIMEOUT_SN = 8;
-  const OLCULEN_HIZ_SATIR_SN = 67;
+test('upsert parti boyutu URETIMDE DUSEN degerin altinda kaliyor', () => {
+  /*
+   * OLCULEN GERCEK, VARSAYILAN MODEL DEGIL.
+   *
+   * Onceki hali "3 kat pay" kuralina dayaniyordu ve o kural YANLIS cikti:
+   * 100 satirlik parti bostaki olcumde 2,02 sn suruyor, yani 8 sn esigine
+   * gore 3 kat payi RAHATLIKLA saglıyordu -- ve buna ragmen uretimde
+   * zaman asimina ugradi.
+   *
+   * Sebep: olcum bosta yapiliyor, alim ise ayni anda kendi yazmalarini da
+   * surduruyor. BOSTAKI PAY, YUK ALTINDAKI PAY DEGILDIR. Bir carpani
+   * buyutmek de ayni hatayi yapmak olurdu: sayiyi gozlemden degil
+   * tahminden turetmek.
+   *
+   * Bu yuzden sinir artik bir formul degil, bir OLCUM: 100 dustu. Tavan
+   * onun yarisi.
+   */
+  const URETIMDE_DUSEN_PARTI = 100;
 
-  const partiSuresiSn = UPSERT_BATCH_SIZE / OLCULEN_HIZ_SATIR_SN;
-
-  // En az 3 kat pay istiyoruz: yuk ve tablo buyumesi hizi dusurur.
   assert.ok(
-    partiSuresiSn * 3 < STATEMENT_TIMEOUT_SN,
-    `parti ${UPSERT_BATCH_SIZE} satir -> ~${partiSuresiSn.toFixed(2)} sn; `
-      + `${STATEMENT_TIMEOUT_SN} sn esigine karsi 3 kat pay yok. `
-      + 'Yukseltmeden ONCE gercek yazma hizini yeniden olcun.',
+    UPSERT_BATCH_SIZE <= URETIMDE_DUSEN_PARTI / 2,
+    `parti ${UPSERT_BATCH_SIZE} satir. ${URETIMDE_DUSEN_PARTI} satir `
+      + 'URETIMDE zaman asimina ugradi (2026-09-19 10:09 turu, '
+      + '"Teklifler yazilamadi"). Tavan onun yarisi. '
+      + 'Yukseltmek icin once YUK ALTINDA olcun, bosta degil.',
+  );
+
+  // Bostaki sure yine de yazili kalsin: bir dahaki olcumde karsilastirma
+  // noktasi olur.
+  const OLCULEN_HIZ_SATIR_SN = 49; // uretim, 2026-09-19: 100 satir -> 2.024,8 ms
+  const partiSuresiSn = UPSERT_BATCH_SIZE / OLCULEN_HIZ_SATIR_SN;
+  assert.ok(
+    partiSuresiSn < 8,
+    `parti bostaki olcumde bile ${partiSuresiSn.toFixed(2)} sn -- esigin ustunde`,
   );
 });
 
