@@ -12,6 +12,7 @@
 --   4) `anon` ÇAĞIRAMAMALI
 --   5) fonksiyon kendi süre tavanını TAŞIMALI
 --   6) çakışma indeksi KISMİ OLMAMALI
+--   7) dizi ve null tipleri DOĞRU dönüşmeli
 --
 -- (3) özellikle önemli: sütun listesi gönderilen JSON'dan türetiliyor. O
 -- esnekliğin bedeli, yanlış yazılmış bir alan adının sessizce yok sayılması
@@ -55,7 +56,16 @@ begin
       'currency',    'TRY',
       'stock',       5,
       'status',      'active',
-      'market_code', 'TR'
+      'market_code', 'TR',
+      -- TIP DONUSUMU: gercek payload bir JSON dizisi gonderiyor ve sutun
+      -- `text[]`. `jsonb_populate_recordset` bunu cevirmek zorunda; ceviremezse
+      -- HER gercek parti duser. Testte olmasaydi bu bosluk ancak uretimde
+      -- gorunurdu.
+      'image_urls',  jsonb_build_array('https://example.invalid/1.jpg',
+                                       'https://example.invalid/2.jpg'),
+      -- NULL da gecmeli: opsiyonel alanlar payload'da null olarak gider.
+      'brand',       null,
+      'compare_at_price_cents', null
     )
   ));
 
@@ -70,6 +80,31 @@ begin
   if v_fiyat is distinct from 10000 or v_baslik is distinct from 'Ilk hali' then
     raise exception 'EKLENEN SATIR YANLIS: fiyat=%, baslik=%', v_fiyat, v_baslik;
   end if;
+
+  -- 7) DIZI VE NULL TIPLERI
+  declare
+    v_gorseller text[];
+    v_marka     text;
+  begin
+    select image_urls, brand into v_gorseller, v_marka
+      from public.products
+     where merchant_id = v_merchant and external_id = 'rpc-1';
+
+    if v_gorseller is null or array_length(v_gorseller, 1) is distinct from 2 then
+      raise exception
+        'DIZI DONUSUMU BOZUK: image_urls = % (iki elemanli olmaliydi). '
+        'JSON dizisi text[] sutununa cevrilemiyorsa her gercek parti duser.',
+        v_gorseller;
+    end if;
+
+    if v_gorseller[1] is distinct from 'https://example.invalid/1.jpg' then
+      raise exception 'DIZI ICERIGI YANLIS: %', v_gorseller[1];
+    end if;
+
+    if v_marka is not null then
+      raise exception 'NULL DONUSUMU BOZUK: brand null olmaliydi, % geldi', v_marka;
+    end if;
+  end;
 
   -- --------------------------------------------------------------------
   -- 2) VAR OLAN TEKLİF GÜNCELLENMELİ
