@@ -6,7 +6,7 @@
 -- her alani uydurma degerle dolduran bir goc de gecerdi -- ve bu gocun tum
 -- meselesi tam olarak o alanlari DOLDURMAMAKTI.
 begin;
-select plan(13);
+select plan(14);
 
 -- --- 1-4: dordu de dogru MID ile var ------------------------------------
 select is(
@@ -117,15 +117,44 @@ select throws_ok(
 -- ilgisi olmayan bir sebepten dustu. Sayim, buyuyen bir tabloda kararsiz
 -- bir olcudur.
 --
--- Kararli olan degismez su: `terms_verified_at` yalnizca 20260905120000'in
--- dizin kanitiyla doldurdugu 14 firmada dolu. Yeni eklenen hicbir kayit onu
--- DEVRALMAZ; devralsaydi merchants_active_needs_verified_terms kapisi o
--- kayitlar icin sessizce acilirdi.
+-- Kararli olan degismez su: `terms_verified_at` yalnizca KENDI KANITI olan
+-- kayitlarda dolu. Yeni eklenen hicbir kayit onu DEVRALMAZ; devralsaydi
+-- merchants_active_needs_verified_terms kapisi o kayitlar icin sessizce
+-- acilirdi.
+--
+-- SAYIM YINE YETMEDI. Yukaridaki not sayimin kararsizligini zaten bir kez
+-- ogrenmisti (24 -> 14) ama coz olarak yine bir sayim kondu ve AliExpress PL
+-- eklendiginde ayni sebepten yeniden dustu. Sayim, "kendi kanitiyla eklendi"
+-- ile "sessizce devraldi" arasindaki farki OLCEMEZ -- ikisi de sayiyi bir
+-- artirir.
+--
+-- Olculen sey artik su: dogrulanmis her kayit ACIKCA LISTELENMIS olmali.
+-- Listeye eklemek bilincli bir istir; tabloya yayilan bir dogrulama ise
+-- listede olmayan satirlar uretir ve test onlari ADIYLA soyler.
+select is_empty(
+  $$select slug::text from public.merchants
+     where network = 'awin' and terms_verified_at is not null
+       and slug::text not in (
+         -- 20260905120000: dizin kanitiyla doldurulan 14 firma
+         'aosom-uk', 'avant-skincare', 'best-direct-uk', 'humanic-de',
+         'interflora', 'joe-nimble-de', 'make-my-blinds', 'panda-london',
+         'prive-by-zalando-es', 'schuh', 'sharkninja-uk',
+         'the-knitting-network', 'velivery-de', 'viovet',
+         -- 20260919160000: Awin'in yayimlanmis oran karti + feed listesinden
+         -- dogrulanan uyelik. Kendi kaniti var, devralmadi.
+         'aliexpress-pl'
+       )$$,
+  '12) dogrulama yalnizca ACIKCA listelenen kayitlarda -- devralan yok');
+
+-- Listelenenler dogrulamayi KAYBETMEMIS olmali: yukaridaki iddia yalnizca
+-- fazlasini yakalar, eksigini degil. `terms_verified_at` toplu bir gocle
+-- silinseydi orasi bos kalir ve (12) yine gecerdi.
 select is(
   (select count(*)::int from public.merchants
-    where network = 'awin' and terms_verified_at is not null),
-  14,
-  '12) dogrulanmis sart sayisi hala 14 -- yeni kayitlar dogrulama devralmadi');
+    where network = 'awin' and terms_verified_at is not null
+      and slug::text in ('aosom-uk', 'schuh', 'viovet', 'aliexpress-pl')),
+  4,
+  '12b) ornek dogrulanmis kayitlar dogrulamayi kaybetmedi');
 
 select * from finish();
 rollback;

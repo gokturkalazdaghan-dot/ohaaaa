@@ -88,16 +88,19 @@ select throws_ok(
   '23514', null,
   '8) sablon/dogrulanmis sart olmadan yayina alinamiyor');
 
--- --- 9: mevcut kayitlarin dogrulamasi devralinmadi -----------------------
--- Toplam sayim BILEREK kullanilmiyor: tablo her yeni advertiser'da buyur ve
--- sayima bagli bir iddia, gocla ilgisiz bir sebepten duserdi. Kararli olan
--- degismez, `terms_verified_at`in yalnizca dizin kanitiyla doldurulmus 14
--- firmada dolu olmasi.
+-- --- 9: SIMPLE PROJECT dogrulamayi devralmadi ----------------------------
+-- Ustteki not "toplam sayim BILEREK kullanilmiyor" diyordu ama iddia yine
+-- bir sayimdi (14) ve AliExpress PL kendi kanitiyla eklendiginde -- bu
+-- gocla hicbir ilgisi olmayan bir sebepten -- dustu. Ayni ders ikinci kez.
+--
+-- Bu dosyanin iddiasi zaten TEK BIR KAYIT hakkinda: Simple Project'in
+-- komisyonu dogrulanmadi, bu yuzden `terms_verified_at` BOS kalmali.
+-- Dogrudan onu olcmek hem kararli (baska advertiser eklenmesi etkilemez)
+-- hem de iddianin gercek anlamina birebir denk.
 select is(
-  (select count(*)::int from public.merchants
-    where network = 'awin' and terms_verified_at is not null),
-  14,
-  '9) dogrulanmis sart sayisi hala 14 -- Simple Project dogrulama devralmadi');
+  (select terms_verified_at from public.merchants where slug = 'simple-project'),
+  null,
+  '9) Simple Project dogrulamayi devralmadi -- komisyonu bildirilmemisti');
 
 
 /*
