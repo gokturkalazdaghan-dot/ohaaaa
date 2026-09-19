@@ -154,6 +154,73 @@ async function main(): Promise<void> {
         `${sonuc.worker.failed} başarısız`,
     );
 
+    /*
+     * ======================================================================
+     * SESSİZ ÖLÜM ARTIK YEŞİL RAPORLAMIYOR
+     * ======================================================================
+     * ÖLÇÜLEN ARIZA: alım hattı 12 Eylül'den 19 Eylül'e kadar HİÇ çalışmadı
+     * ama zamanlanmış iş her turda "success" verdi. Altı gün boyunca
+     * katalog dondu ve hiçbir sinyal çıkmadı.
+     *
+     * Sebep tam olarak bu satırdı: çıkış kodu YALNIZCA `worker.failed`e
+     * bakıyordu. Hat bir ölü mektubun arkasında tıkandığında ise:
+     *   claimed = 0, completed = 0, failed = 0
+     * Yani "hiçbir şey başarısız olmadı" -- çünkü hiçbir şey DENENMEDİ.
+     * Ölü bir hat ile boşta duran sağlıklı bir hat aynı görünüyordu.
+     *
+     * Bu dosyanın üstündeki iş akışı "çöktüğünde sessizce durup kimsenin
+     * fark etmediği şey odur" diye yazıyor. Tam da o oldu.
+     *
+     * ----------------------------------------------------------------------
+     * AYRIM: "YAPACAK İŞ YOKTU" ile "İŞ VARDI AMA İLERLEMEDİ"
+     * ----------------------------------------------------------------------
+     * Boşta geçen bir tur normaldir ve kırmızı olmamalı: kaynakların hiçbiri
+     * vadesi gelmemişse yapacak iş yoktur. Kırmızı olması gereken durum,
+     * YAPILACAK İŞ VARKEN hiçbir ilerleme olmamasıdır.
+     *
+     * İki işaret aranıyor:
+     *   • ölü mektuptaki iş  -> denemeler tükenmiş, kimse elle dokunmadıkça
+     *                           hat o kaynakta bir daha ilerlemez
+     *   • kaynak kuyruğa alındı ama worker hiçbir şey alamadı
+     *                        -> iş var, ama alınamıyor (takılı kira, tıkalı
+     *                           kuyruk); tam olarak altı gün süren durum
+     */
+    const { data: oluMektuplar, error: oluHata } = await supabase
+      .from('jobs')
+      .select('id, kind, last_error, created_at')
+      .eq('status', 'olu_mektup');
+
+    if (oluHata) {
+      /*
+       * Kontrolün kendisi düşerse turu düşürmüyoruz: bu bir SAĞLIK
+       * kontrolü, alımın kendisi değil. Ama sessiz de kalmıyor -- yoksa
+       * bu kez kontrolün ölümü fark edilmezdi.
+       */
+      console.error(`  ! olu mektup kontrolu basarisiz: ${oluHata.message}`);
+    } else if ((oluMektuplar?.length ?? 0) > 0) {
+      console.error(
+        `\n✗ ${oluMektuplar!.length} is OLU MEKTUP'ta: denemeleri tukendi ve ` +
+          'elle mudahale edilmedikce hat bu kaynaklarda ILERLEMEZ.',
+      );
+      for (const is of oluMektuplar!) {
+        console.error(`  · ${is.kind} (${is.created_at}): ${is.last_error ?? 'sebep yok'}`);
+      }
+      process.exit(1);
+    }
+
+    /*
+     * Kaynak kuyruğa alındı ama worker hiçbir iş alamadıysa, arada bir
+     * tıkanıklık var. `scheduled` boşsa bu kontrol hiç çalışmaz -- yani
+     * gerçekten boşta geçen turlar yeşil kalır.
+     */
+    if (sonuc.scheduled.length > 0 && sonuc.worker.claimed === 0) {
+      console.error(
+        `\n✗ ${sonuc.scheduled.length} kaynak kuyruga alindi ama worker HICBIR is alamadi. ` +
+          'Kuyruk tikali: takili kira ya da alinamayan is olabilir.',
+      );
+      process.exit(1);
+    }
+
     process.exit(sonuc.worker.failed > 0 ? 1 : 0);
   }
 
