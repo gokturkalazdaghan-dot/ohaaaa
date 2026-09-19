@@ -6,7 +6,6 @@ import Link from 'next/link';
 
 import { DataUnavailable } from '@/components/DataUnavailable';
 import { FlashDeals } from '@/components/FlashDeals';
-import { categoryIcon } from '@/components/Icons';
 import { SearchBar } from '@/components/SearchBar';
 import { getRequestLocale } from '@/lib/locale';
 import { t, type Locale } from '@ohaaaa/shared';
@@ -111,7 +110,6 @@ export default async function HomePage() {
   const ipuclari = ipucuRes.ok ? ipucuRes.value : undefined;
   const deals = dealsRes.ok ? dealsRes.value : [];
   const vitrin = vitrinRes.ok ? vitrinRes.value : [];
-  const categories = categoriesRes.ok ? categoriesRes.value : [];
   const vendors = vendorsRes.ok ? vendorsRes.value : [];
   /*
    * VITRINDEKI URUNLER BU IZGARADA TEKRAR ETMEZ.
@@ -211,56 +209,28 @@ export default async function HomePage() {
         </div>
 
         {/*
-          Kategori çipleri artık İKONLU.
+          ANA SAYFADA KATEGORİ ÇİPİ YOK -- BİLEREK.
+          -------------------------------------------------------------
+          Burada bir çip ızgarası vardı ve ölçülen sonucu şuydu: mobilde
+          (390x844) İLK ÜRÜN 883 pikselde başlıyordu. Yani ziyaretçi tam
+          bir ekran boyu gezinme geçmeden tek bir ürün görmüyordu.
 
-          İkonlar çizilmişti ve `categories.icon` alanı veritabanından ta
-          buraya kadar taşınıyordu — ama hiçbir yerde kullanılmıyordu; çipler
-          düz metindi. Bir ızgarada aranan kategoriyi bulmak, kelimeyi
-          okumaktan çok şekli tanımakla olur; ikon burada süs değil,
-          tarama hızıdır.
+          Üstelik AYNI gezinme zaten iki yerdeydi: üst çubuktaki
+          `CategoryNav` şeridi her sayfada duruyor ve telefonda da
+          görünüyor (yatay kaydırmalı, tek satır). Ana sayfadaki ızgara
+          onun sarmalanmış, dört yüz piksellik kopyasıydı.
 
-          İkon `aria-hidden`: adı zaten yanında yazıyor, ekran okuyucuya iki
-          kez söylemek gürültüdür. İkonu olmayan kategori sorunsuz şekilde
-          yalnızca metinle çizilir.
+          Önce çipler 28'den 7'ye indirildi (üst kategori + bütün alt
+          kategorileri düz basan `flatMap` kaldırıldı). Yetmedi: ekran
+          görüntüsü hâlâ arama kutusunun altını baştan aşağı kategori
+          gösteriyordu. Sayıyı azaltmak yanlış katmandı; sorun ana
+          sayfanın kategori DİZİNİ gibi davranmasıydı.
+
+          KAYBOLAN BİR YOL YOK: üst şerit aynı kategorileri veriyor, üst
+          kategori sayfası alt kategori ürünlerini de kapsıyor
+          (`search_products`, 20260830100200) ve arama kutusu hemen
+          yukarıda duruyor. Ana sayfanın işi ürüne götürmek.
         */}
-        {categories.length > 0 && (
-          <nav aria-label={t(contentLocale, 'ev.kategoriler')} className="mt-6">
-            <ul className="flex flex-wrap gap-2">
-              {/*
-                Üst kategori ve alt kategorileri BİRLİKTE. Kataloğun
-                neredeyse tamamı alt kategorilerde duruyor (bilgisayar
-                32.894 grup -- ölçüldü); yalnızca üstleri göstermek en çok
-                ürünü olan yolları gizlemekti. Ürün sayısı çipte yazılıyor
-                çünkü ölçülmüş bir değer ve kullanıcı hangi kategorinin
-                dolu olduğunu böyle görür.
-              */}
-              {categories.flatMap((node) => [
-                <li key={node.category.id}>
-                  <Link href={`/kategori/${node.category.slug}`} className="chip">
-                    {(() => {
-                      const Icon = categoryIcon(node.category);
-                      return Icon ? <Icon className="h-4 w-4 text-brand" aria-hidden="true" /> : null;
-                    })()}
-                    {node.category.name}
-                    <span className="tabular text-2xs text-subtle">
-                      {node.groupCount.toLocaleString('tr-TR')}
-                    </span>
-                  </Link>
-                </li>,
-                ...node.children.map((child) => (
-                  <li key={child.category.id}>
-                    <Link href={`/kategori/${child.category.slug}`} className="chip">
-                      {child.category.name}
-                      <span className="tabular text-2xs text-subtle">
-                        {child.groupCount.toLocaleString('tr-TR')}
-                      </span>
-                    </Link>
-                  </li>
-                )),
-              ])}
-            </ul>
-          </nav>
-        )}
       </section>
 
       {catalogUnavailable && (
