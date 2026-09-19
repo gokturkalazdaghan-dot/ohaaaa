@@ -406,11 +406,34 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
         offer_checked_at: now,
       }));
 
+      /*
+       * ==================================================================
+       * YAZMA DOĞRUDAN DEĞİL, KENDİ SÜRE TAVANINI TAŞIYAN RPC ÜZERİNDEN
+       * ==================================================================
+       * `supabase.from('products').upsert(...)` PostgREST üzerinden gider
+       * ve `authenticator` rolünün `statement_timeout = 8s` tavanına tabidir
+       * (üretimde ölçüldü). O tavan bir API isteği için DOĞRU: bir sayfa
+       * sorgusu sekiz saniye sürüyorsa zaten bir şey yanlıştır.
+       *
+       * Ama bu bir API isteği değil -- kendi sunucumuzun toplu yazması. Ve
+       * ölçüm şunu söylüyordu:
+       *
+       *   boşta 50 satırlık parti ..... 1.171 ms  (eşiğin %14,6'sı)
+       *   üretimde aynı parti ......... 8 sn'yi aşıyor
+       *
+       * Aradaki ~7 kat turun kendi yükünden geliyor. Parti boyutunu
+       * küçültmek bu uçurumun kenarında geriye çekilmekti; `ingest_upsert_
+       * offers` uçurumu kaldırıyor: fonksiyon-yerel `statement_timeout`
+       * yalnızca kendi gövdesi boyunca geçerli, roller değişmiyor.
+       *
+       * ÖNCE İŞ AZALTILDI: tetikleyici kapsamı (~283 sn boşa giden hesap)
+       * ve hiç taranmayan üç indeks (1,68 kat) kaldırıldıktan SONRA bu
+       * adım atıldı. Ters sırada yapılsaydı, süreyi uzatmak gereksiz işi
+       * gizlemek olurdu.
+       */
       for (const batch of chunk(payload, UPSERT_BATCH_SIZE)) {
         const { error } = await idempotentYazmayiYenidenDene(() =>
-          supabase
-            .from('products')
-            .upsert(batch, { onConflict: 'merchant_id,external_id' }),
+          supabase.rpc('ingest_upsert_offers', { p_rows: batch }),
         );
 
         if (error) throw new Error(`Teklifler yazılamadı: ${error.message}`);
