@@ -21,6 +21,7 @@ import { runSource } from './pipeline.js';
 import { runScheduledIngest } from './runner.js';
 import { createSupabaseRepository, loadSources } from './supabaseRepository.js';
 import { createPoliteClient } from './http/politeClient.js';
+import { awinFeedListesiniGetir, kesfiYazdir } from './awinKesif.js';
 import { redact, redactError } from './http/redact.js';
 import type { IngestSummary } from './types.js';
 
@@ -39,14 +40,20 @@ interface CliOptions {
    * yerine geçmiyor, yanına ekleniyor.
    */
   schedule: boolean;
+  /**
+   * Awin feed listesi keşfi. YALNIZCA OKUR: eksik olan `fid` ve üyelik
+   * durumunu basar, veritabanına hiçbir şey yazmaz.
+   */
+  awinFeedListesi: boolean;
 }
 
 function parseArgs(argv: string[]): CliOptions {
-  const options: CliOptions = { dryRun: false, schedule: false };
+  const options: CliOptions = { dryRun: false, schedule: false, awinFeedListesi: false };
 
   for (const arg of argv) {
     if (arg === '--dry-run') options.dryRun = true;
     else if (arg === '--schedule') options.schedule = true;
+    else if (arg === '--awin-feed-listesi') options.awinFeedListesi = true;
     else if (arg.startsWith('--source=')) options.sourceSlug = arg.slice('--source='.length);
     else if (arg === '--help' || arg === '-h') {
       console.log(
@@ -57,10 +64,13 @@ function parseArgs(argv: string[]): CliOptions {
           '  --schedule        Zamanlayıcı kipi: due kaynakları kuyruğa al',
           '                    ve kuyruktaki işleri çalıştır',
           '  --dry-run         Veritabanına yazmadan dene',
+          '  --awin-feed-listesi  Awin feed listesini indir ve YAZDIR',
+          '                    (yalnızca okur; AWIN_DATAFEED_API_KEY ister)',
           '  --help            Bu yardım',
           '',
           'Ortam değişkenleri:',
           '  SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY  (zorunlu)',
+          '  AWIN_DATAFEED_API_KEY                    (--awin-feed-listesi için)',
           '  OHAAAA_USER_AGENT                        (isteğe bağlı)',
         ].join('\n'),
       );
@@ -73,6 +83,40 @@ function parseArgs(argv: string[]): CliOptions {
 
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
+
+  /*
+   * AWIN FEED LİSTESİ KEŞFİ -- SUPABASE GEREKTİRMEZ.
+   *
+   * Bu dal veritabanına DOKUNMAZ, bu yüzden Supabase kimlik kontrolünden
+   * ÖNCE duruyor: keşfi çalıştırmak için service-role anahtarı istemek,
+   * okuma işi için yazma yetkisi istemek olurdu.
+   *
+   * Yazma adımı bilerek YOK. Ayrıştırıcı gerçek bir Awin yanıtıyla henüz
+   * çalışmadı; ilk turda 38 programın satırlarını yazmak, doğrulanmamış
+   * bir okumaya dayanarak toplu veri yazmak demekti. Önce çıktı görülür.
+   */
+  if (options.awinFeedListesi) {
+    const kesifIstemcisi = createPoliteClient({
+      userAgent: USER_AGENT,
+      minDelayMs: 0,
+      timeoutMs: 60_000,
+      maxRetries: 2,
+      circuitBreakerThreshold: 3,
+    });
+
+    try {
+      const sonuc = await awinFeedListesiniGetir(async (url) => {
+        const yanit = await kesifIstemcisi.get(url);
+        return { body: yanit.body, status: yanit.status };
+      });
+      kesfiYazdir(sonuc);
+      process.exit(0);
+    } catch (error) {
+      // redactError: anahtar hata metnine girmiş olsa bile silinir.
+      console.error(`Awin feed listesi alınamadı: ${redactError(error)}`);
+      process.exit(1);
+    }
+  }
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
