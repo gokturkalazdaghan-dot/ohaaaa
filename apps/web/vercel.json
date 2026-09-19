@@ -20,7 +20,7 @@
         },
         {
           "key": "strict-transport-security",
-          "value": "max-age=31536000; includeSubDomains"
+          "value": "max-age=31536000; includeSubDomains; preload"
         },
         {
           "key": "permissions-policy",

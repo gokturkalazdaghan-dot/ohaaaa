@@ -191,6 +191,41 @@ async function recordClick(input: {
   if (!isSupabaseConfigured()) return;
 
   try {
+    /*
+     * ==================================================================
+     * HIZ SINIRI KAYDI ATLAR, YÖNLENDİRMEYİ ENGELLEMEZ
+     * ==================================================================
+     * Bu uç nokta kimlik doğrulaması olmadan `clicks` tablosuna yazıyor.
+     * Sınırsız bırakıldığında tablo sınırsız büyür ve -- daha kötüsü --
+     * EPC ile dönüşüm atıfı bozulur; ikisi de para ile ilgili veridir.
+     *
+     * Ama sınırı YÖNLENDİRMEYE uygulamak yanlış olurdu: o zaman bir
+     * sayaç arızası ya da agresif bir tavan, gerçek kullanıcının
+     * alışverişini durdururdu. Bu dosyanın aşağıdaki hata yolu da aynı
+     * kararı veriyor: "kullanıcının alışverişi, bizim telemetrimizden
+     * önemlidir."
+     *
+     * Bu yüzden sınır YALNIZCA yazmayı kesiyor. Kullanıcı ürüne gider,
+     * biz o tıklamayı saymayız.
+     *
+     * `olculemedi` BURADA SINIR SAYILMAZ: sayaç da kayıt da aynı
+     * veritabanında. Sayaç okunamıyorsa kayıt da düşecektir ve onun
+     * hata yolu sebebi çok daha iyi anlatır.
+     */
+    const { tuketButce } = await import('@/lib/rateBudget');
+    const butce = await tuketButce('tiklama', input.request.headers);
+    if (!butce.izin && butce.sebep !== 'olculemedi') {
+      console.warn(
+        JSON.stringify({
+          level: 'warn',
+          msg: 'Tıklama hız sınırına takıldı — kayıt atlandı, yönlendirme sürüyor',
+          sebep: butce.sebep,
+          offer_id: input.offerId,
+        }),
+      );
+      return;
+    }
+
     const { getServiceClient } = await import('@/lib/supabase/service');
     const supabase = getServiceClient();
 

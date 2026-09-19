@@ -36,10 +36,17 @@ import { hashedClientIp } from '@/lib/clientHash';
  * Sınırlanan iş türü.
  *
  * `arama` / `gorsel` model çağrısı yapar (maliyet). `giris` / `kayit` kaba
- * kuvvet ve credential stuffing'e karşı korunur (güvenlik). İkisi de aynı
- * sayaçta ama AYRI kovalarda: birinin dolması diğerini kapatmaz.
+ * kuvvet ve credential stuffing'e karşı korunur (güvenlik). `tiklama`
+ * ortaklık tıklaması sayar (veri bütünlüğü). Hepsi aynı sayaçta ama AYRI
+ * kovalarda: birinin dolması diğerini kapatmaz.
  */
-export type RateFeature = 'arama' | 'gorsel' | 'giris' | 'kayit';
+export type RateFeature =
+  | 'arama'
+  | 'gorsel'
+  | 'giris'
+  | 'kayit'
+  | 'tiklama'
+  | 'iletisim';
 
 interface Tavan {
   /** Kişi başı pencere içindeki en fazla çağrı. */
@@ -81,6 +88,52 @@ function tavanlar(feature: RateFeature): Tavan {
       kisiBasi: sayi('KAYIT_IP_SAATLIK', 5),
       kisiPencereSaniye: 3600,
       kuresel: sayi('KAYIT_GUNLUK', 2000),
+    };
+  }
+
+  if (feature === 'iletisim') {
+    /*
+     * İLETİŞİM FORMU.
+     *
+     * Burada daha önce BELLEKTE bir `Map` vardı ve dosyanın kendi başlığı
+     * koşulu yazıyordu: "tek örnekli kurulumda yeterlidir". Üretim Vercel
+     * sunucusuz -- yani o koşul hiçbir zaman sağlanmadı. Sayaç her soğuk
+     * başlangıçta sıfırlanıyor ve eşzamanlı örnekler birbirini görmüyordu.
+     * Yani ortada uygulanmayan ama uygulanıyormuş gibi duran bir sınır
+     * vardı; bu, hiç sınır olmamasından daha kötüdür çünkü bakan kişiyi
+     * yanıltır.
+     *
+     * Değerler eski niyetle aynı tutuldu (saatte 5): değişen şey sayacın
+     * NEREDE durduğu.
+     */
+    return {
+      kisiBasi: sayi('ILETISIM_IP_SAATLIK', 5),
+      kisiPencereSaniye: 3600,
+      kuresel: sayi('ILETISIM_GUNLUK', 500),
+    };
+  }
+
+  if (feature === 'tiklama') {
+    /*
+     * ORTAKLIK TIKLAMASI — MALİYET DEĞİL, VERİ BÜTÜNLÜĞÜ.
+     *
+     * `/git/[offerId]` her istekte `clicks` tablosuna satır yazıyor ve
+     * kimlik doğrulaması YOK. Sınırsız bırakıldığında iki şey oluyor:
+     * tablo sınırsız büyüyor ve EPC/dönüşüm atıfı bozuluyor -- ikincisi
+     * doğrudan para ile ilgili bir veri.
+     *
+     * TAVAN NEDEN BU KADAR GENİŞ: fiyat karşılaştıran bir kullanıcı tek
+     * oturumda onlarca teklife tıklar. Saatte 120, gerçek kullanıcıyı
+     * hiçbir zaman görmeyeceği bir tavandır; bir betiği ise ilk dakikada
+     * durdurur.
+     *
+     * KÜRESEL TAVAN GÜNLÜK TRAFİĞİN ÇOK ÜSTÜNDE: burada amaç maliyet
+     * kısmak değil, tek bir kaynaktan gelen kitlesel yazmayı kesmek.
+     */
+    return {
+      kisiBasi: sayi('TIKLAMA_IP_SAATLIK', 120),
+      kisiPencereSaniye: 3600,
+      kuresel: sayi('TIKLAMA_GUNLUK', 200_000),
     };
   }
 
