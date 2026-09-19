@@ -45,8 +45,31 @@ import { redact } from './http/redact.js';
  *
  * BEDELİ: daha fazla tur (62 -> 310 istek). Toplam süre bir miktar artar
  * ama alım TAMAMLANIR; yarım kalan bir alımın maliyeti daha yüksek.
+ *
+ * ======================================================================
+ * 100 -> 50: ÖLÇÜM BAYATLAMIŞTI
+ * ======================================================================
+ * 100 değeri, "67 satır/sn" ölçümüne dayanıyordu ve o sayı artık doğru
+ * değil. Üretimde yeniden ölçüldü (2026-09-19, upsert'in yazdığı
+ * sütunlarla birebir aynı yazma):
+ *
+ *   100 satır -> 2.024,8 ms  =  20,25 ms/satır  =  49 satır/sn
+ *
+ * Yani gerçek hız varsayılanın %73'ü. Boşta 100'lük parti 2,02 sn sürüyor
+ * ve 8 sn eşiğine 4 kat pay bırakıyor gibi görünüyor -- ama ÜRETİMDE
+ * zaman aşımına uğradı (10:09 turu, `Teklifler yazılamadı`). Sebep:
+ * ölçüm boştaki veritabanında yapılıyor, alım ise aynı anda kendi
+ * yazmalarını da sürdürüyor. Boştaki pay, yük altındaki payla aynı şey
+ * değil.
+ *
+ * 50 satır -> ~1,01 sn: eşiğe 8 kat pay. Tur sayısı 69'dan 138'e çıkıyor;
+ * bu, yarım kalan bir alımın yanında ucuz.
+ *
+ * SAYIYI YÜKSELTMEDEN ÖNCE YENİDEN ÖLÇÜN. Testteki hız sabiti de bu
+ * ölçümle güncellendi; ikisi birlikte değişmeli, yoksa test bayat bir
+ * sayıyı korumaya devam eder.
  */
-export const UPSERT_BATCH_SIZE = 100;
+export const UPSERT_BATCH_SIZE = 50;
 
 /**
  * GEÇİCİ SUPABASE HATALARINDA YENİDEN DENEME -- YALNIZCA OKUMALARDA.
