@@ -455,7 +455,38 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
           supabase.rpc('ingest_upsert_offers', { p_rows: batch }),
         );
 
-        if (error) throw new Error(`Teklifler yazılamadı: ${error.message}`);
+        if (error) {
+          /*
+           * YABANCI ANAHTAR HATASI HANGİ DEĞERİ REDDETTİĞİNİ SÖYLEMELİ.
+           *
+           * Postgres'in mesajı yalnızca kısıtın ADINI veriyor
+           * ("violates foreign key constraint products_currency_fkey") --
+           * hangi değerin reddedildiğini DEĞİL. Ölçüldü: AliExpress PL turu
+           * bu mesajla düştü ve sebebi bulmak için koda bakmak gerekti.
+           *
+           * Parti elimizde; reddedilen sütunun o partideki AYRIK değerlerini
+           * yazmak, bir sonraki teşhisi tek bakışa indiriyor. Değerler ürün
+           * verisi (para birimi kodu, pazar kodu) -- sır değil.
+           */
+          const eslesme = /foreign key constraint "?products_([a-z_]+)_fkey"?/.exec(error.message);
+          const sutun = eslesme?.[1];
+          let ek = '';
+
+          if (sutun) {
+            const ayrik = [
+              ...new Set(
+                batch.map((satir) => {
+                  const deger = (satir as Record<string, unknown>)[sutun];
+                  return deger === null || deger === undefined ? '<bos>' : String(deger);
+                }),
+              ),
+            ].slice(0, 10);
+
+            ek = ` (partideki "${sutun}" değerleri: ${ayrik.join(', ')})`;
+          }
+
+          throw new Error(`Teklifler yazılamadı: ${error.message}${ek}`);
+        }
       }
 
       const created = rows.filter((row) => !existing.has(row.externalId)).length;

@@ -241,6 +241,57 @@ test('para birimi büyük harfe normalize edilir ve boşluk kırpılır', () => 
 });
 
 /*
+ * BOŞ PARA BİRİMİ: BÜTÜN PARTİYİ DÜŞÜREN HATA BUYDU.
+ *
+ * `??` yalnızca null/undefined'ı yakalar; boş dizgi `null` DEĞİLDİR, bu
+ * yüzden varsayılana düşmüyor ve `products.currency`'ye `""` yazılmaya
+ * çalışılıyordu. Sonuç `products_currency_fkey` ihlali -- ve yabancı anahtar
+ * ihlali TEK SATIRI değil, PARTİNİN TAMAMINI düşürür.
+ *
+ * Ölçüldü (AliExpress PL ilk turu, 2026-09-19): 6.719 satır okundu,
+ * `items_created = 0`. Alan eksik olsaydı test zaten geçiyordu; alanın BOŞ
+ * olduğu hâl kapsanmamıştı.
+ */
+test('para birimi BOŞ gelirse kaynağın para birimine düşer', () => {
+  const mapping: FieldMapping = { ...MAPPING, currency: 'cur' };
+
+  const { offers, errors } = normalizeRecords([record({ cur: '' })], mapping, OPTIONS);
+
+  assert.equal(errors.length, 0, 'boş para birimi satırı düşürmemeli');
+  assert.equal(offers[0]?.currency, 'TRY');
+});
+
+test('yalnızca boşluktan ibaret para birimi de varsayılana düşer', () => {
+  const mapping: FieldMapping = { ...MAPPING, currency: 'cur' };
+
+  const { offers } = normalizeRecords([record({ cur: '   ' })], mapping, OPTIONS);
+
+  assert.equal(offers[0]?.currency, 'TRY');
+});
+
+/*
+ * DOLU AMA TANINMAYAN KOD VARSAYILANA ÇEVRİLMEZ -- SATIR DÜŞER.
+ *
+ * Bu, yukarıdakinin TERSİ durum ve karıştırılması pahalı olurdu: feed dolu
+ * bir kod gönderdiyse onu kendi varsayılanımızla değiştirmek, 49 CNY'yi
+ * 49 PLN diye göstermek demek. Müşteriye yanlış fiyat, bize zararına teklif.
+ */
+test('tanınmayan biçimdeki para birimi satırı düşürür, varsayılana çevirmez', () => {
+  const mapping: FieldMapping = { ...MAPPING, currency: 'cur' };
+
+  const { offers, errors } = normalizeRecords(
+    [record({ cur: 'ZLOTY' }), record({ id: 'SKU-2', cur: '12' })],
+    mapping,
+    OPTIONS,
+  );
+
+  assert.equal(offers.length, 0, 'hiçbiri yazılmamalı');
+  assert.equal(errors.length, 2);
+  assert.match(errors[0]?.reason ?? '', /para birimi tanınmadı/);
+  assert.match(errors[0]?.reason ?? '', /ZLOTY/, 'reddedilen değer raporlanmalı');
+});
+
+/*
  * GTIN BİÇİM PARİTESİ -- JS ile SQL aynı değeri üretmeli.
  *
  * `public.normalize_gtin` sonucu `lpad(s, 14, '0')` döndürür ve

@@ -128,14 +128,46 @@ function normalizeOne(
     ? parseMoneyToCents(read(record, mapping.shipping_fee) ?? '') ?? 0
     : 0;
 
+  /*
+   * PARA BİRİMİ: `??` DEĞİL `||`.
+   *
+   * `??` yalnızca null/undefined'ı yakalar. Feed'in `currency` sütunu BOŞ
+   * geldiğinde `read` boş dizgi döndürüyordu; `""` null olmadığı için
+   * varsayılana DÜŞMÜYOR ve `products.currency`'ye boş dizgi yazılmaya
+   * çalışılıyordu. Sonuç `products_currency_fkey` ihlali ve BÜTÜN partinin
+   * düşmesi -- ölçüldü (AliExpress PL ilk turu: 6.719 satır okundu, sıfırı
+   * yazıldı). `brand` zaten `|| null` kullanıyordu; tutarsızlık yalnızca bu
+   * satırdaydı ve yabancı anahtarı olan sütun da buydu.
+   */
+  const paraBirimi =
+    (mapping.currency ? read(record, mapping.currency) : null)?.trim().toUpperCase()
+    || options.defaultCurrency;
+
+  /*
+   * TANINMAYAN PARA BİRİMİ SATIRI DÜŞÜRÜR -- VARSAYILANA ÇEVİRMEZ.
+   *
+   * Boş bir değer "bilinmiyor"dur ve kaynağın para birimine düşer (yukarıda).
+   * Ama feed DOLU bir kod gönderdiyse onu kendi varsayılanımızla değiştirmek,
+   * FİYATI YANLIŞ PARA BİRİMİNDE göstermek olurdu: 49 CNY'yi 49 PLN diye
+   * yazmak müşteriye yanlış fiyat göstermek ve bizim aleyhimize bir teklif
+   * üretmektir. Biçimi tutmayan satır yazılmaz, sebebiyle birlikte raporlanır.
+   *
+   * Burada YALNIZCA biçim denetleniyor (üç büyük harf). Kodun gerçekten
+   * tanınıp tanınmadığına `products_currency_fkey` karar verir -- tek doğru
+   * liste veritabanındaki `currencies` tablosudur ve onu buraya kopyalamak
+   * iki listenin zamanla ayrışması demekti.
+   */
+  if (!/^[A-Z]{3}$/.test(paraBirimi)) {
+    return { reason: `para birimi tanınmadı: "${paraBirimi.slice(0, 16)}"` };
+  }
+
   return {
     externalId,
     title: title.slice(0, 300),
     productUrl,
     priceCents,
     compareAtPriceCents,
-    currency: (mapping.currency ? read(record, mapping.currency) : null)?.trim().toUpperCase()
-      ?? options.defaultCurrency,
+    currency: paraBirimi,
     stock,
     gtin,
     brand: (mapping.brand ? read(record, mapping.brand) : null)?.trim().slice(0, 120) || null,
