@@ -169,3 +169,52 @@ jobs:
           fi
 
           node packages/ingest/dist/cli.js "${args[@]}"
+
+      # ----------------------------------------------------------------------
+      # KATALOG ÖNBELLEĞİNİ BOŞALT
+      # ----------------------------------------------------------------------
+      # `/api/cron/katalog-tazele` deponun içinde VARDI ama onu çağıran
+      # hiçbir yer yoktu: Vercel cron listesinde değil (Hobby'de iki slot
+      # var, ikisi de dolu) ve bu iş akışında da yoktu. Yani `katalog`
+      # etiketi üretimde HİÇ boşaltılmıyordu.
+      #
+      # Ölçülen bedeli `apps/web/src/data/onbellek.ts` başında yazılı:
+      # 34.722 ürün grubu yeni kategorilerine taşındıktan ve site iki kez
+      # yeniden dağıtıldıktan SONRA bile üst çubuk eski ağacı sunmaya devam
+      # etti. Vercel'in veri önbelleği dağıtımla temizlenmiyor; elde
+      # beklemekten başka kaldıraç yoktu.
+      #
+      # ALIMDAN SONRA, ÇÜNKÜ SIRALAMA ÖNEMLİ: önce boşaltılsaydı önbellek
+      # ESKİ veriyle yeniden dolardı ve hiçbir şey kazanılmazdı.
+      #
+      # SIR YOKSA ATLANIR AMA SUSULMAZ. `CRON_SECRET` depo sırrı olarak
+      # tanımlı değilse adım açık bir satır yazıp geçer. Sessizce atlamak,
+      # tam da bu dosyanın düzelttiği arıza türü olurdu: "çalışıyor görünen
+      # ama hiçbir şey yapmayan adım".
+      #
+      # SIR ARGÜMANA GİRMİYOR. `curl --config` ile dosyadan okunuyor;
+      # komut satırına yazılsaydı değer, çalıştırıcıdaki süreç listesinde
+      # görünebilirdi. GitHub log maskelemesi bir savunma katmanıdır,
+      # tek katman değil.
+      - name: Katalog önbelleğini boşalt
+        if: success()
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ vars.OHAAAA_SITE_URL || 'https://www.ohaaaa.com' }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET depo sirri tanimli degil -- onbellek bosaltma ATLANDI."
+            echo "Katalog degisiklikleri vitrine ancak onbellek suresi dolunca yansir."
+            exit 0
+          fi
+
+          cfg="${RUNNER_TEMP}/katalog-tazele.curl"
+          umask 077
+          printf 'header = "authorization: Bearer %s"\n' "$CRON_SECRET" > "$cfg"
+          trap 'rm -f "$cfg"' EXIT
+
+          curl -fsS -X POST "${SITE_URL%/}/api/cron/katalog-tazele" \
+            --config "$cfg" -o /dev/null
+          echo "Katalog onbellegi bosaltildi."
