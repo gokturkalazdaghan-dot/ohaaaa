@@ -5,14 +5,23 @@
  * doğrudan curl ile de çağrılabilir. Bu yüzden aynı şema burada tekrar
  * uygulanır.
  *
- * Kaba bir hız sınırı vardır: bellekte, IP başına. Tek örnekli kurulumda
- * yeterlidir; ölçeklenince Redis'e taşınmalıdır (bkz. docs/architecture.md §6).
+ * HIZ SINIRI VERİTABANINDA, BELLEKTE DEĞİL.
+ *
+ * Burada bellekte IP başına bir `Map` vardı ve yorumu koşulu yazıyordu:
+ * "tek örnekli kurulumda yeterlidir". Üretim Vercel sunucusuz -- o koşul
+ * hiçbir zaman sağlanmadı: her soğuk başlangıç sayacı sıfırlar ve
+ * eşzamanlı örnekler birbirini görmez. Yani uygulanmayan ama uygulanıyor
+ * görünen bir sınırdı; bu hiç sınır olmamasından daha kötüdür, çünkü
+ * bakan kişiyi yanıltır.
+ *
+ * Artık `tuketButce` kullanılıyor: sayaç `consume_rate_budget` ile
+ * veritabanında ve bütün örnekler aynı sayacı görüyor.
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 
-import { hashedClientIp } from '@/lib/clientHash';
+import { tuketButce } from '@/lib/rateBudget';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,16 +32,10 @@ const contactSchema = z.object({
   message: z.string().min(20).max(4000),
 });
 
-/** IP özeti → son gönderim zamanları. */
-const recentSubmissions = new Map<string, number[]>();
-
-const WINDOW_MS = 60 * 60 * 1000; // 1 saat
-const MAX_PER_WINDOW = 5;
-
 export async function POST(request: NextRequest) {
-  const ipHash = hashIp(request);
+  const butce = await tuketButce('iletisim', new Headers(request.headers));
 
-  if (!allowSubmission(ipHash)) {
+  if (!butce.izin) {
     return NextResponse.json(
       {
         error: {
@@ -92,42 +95,4 @@ export async function POST(request: NextRequest) {
   );
 
   return NextResponse.json({ data: { received: true } }, { status: 200 });
-}
-
-function allowSubmission(key: string): boolean {
-  const now = Date.now();
-  const timestamps = (recentSubmissions.get(key) ?? []).filter(
-    (time) => now - time < WINDOW_MS,
-  );
-
-  if (timestamps.length >= MAX_PER_WINDOW) {
-    recentSubmissions.set(key, timestamps);
-    return false;
-  }
-
-  timestamps.push(now);
-  recentSubmissions.set(key, timestamps);
-
-  // Bellek sızıntısını önlemek için ara sıra temizle.
-  if (recentSubmissions.size > 10_000) {
-    for (const [candidate, times] of recentSubmissions) {
-      if (times.every((time) => now - time >= WINDOW_MS)) {
-        recentSubmissions.delete(candidate);
-      }
-    }
-  }
-
-  return true;
-}
-
-/*
- * Ziyaretçi özeti ortak yardımcıdan gelir.
- *
- * Buradaki eski hâli TUZSUZ bir sha256(ip) idi. IPv4 uzayı 2^32'dir; tuzsuz
- * bir özet sıradan bir makinede tamamen taranıp geri çözülebilir, yani
- * adresi saklamaz. Ortak yardımcı günlük dönen tuz kullanır: aynı gün
- * içindeki tekilleştirme korunur, günler arası takip mümkün olmaz.
- */
-function hashIp(request: NextRequest): string {
-  return hashedClientIp(new Headers(request.headers));
 }

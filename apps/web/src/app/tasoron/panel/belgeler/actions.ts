@@ -15,6 +15,8 @@
 
 import { revalidatePath } from 'next/cache';
 
+import { IMZA_ICIN_GEREKEN_BAYT, yuklemeTuruGecerli } from '@ohaaaa/shared';
+
 import { createClient } from '@/lib/supabase/server';
 
 const KOVA = 'satici-belgeleri';
@@ -54,6 +56,28 @@ export async function uploadVendorDocument(
   }
   if (file.size > MAX_BAYT) {
     return { error: 'Dosya 8 MB’tan büyük olamaz.' };
+  }
+
+  /*
+   * ==================================================================
+   * BEYAN YETMEZ: DOSYANIN KENDİ BAYTLARI DA DENETLENİYOR
+   * ==================================================================
+   * Yukarıdaki `file.type` denetimi İSTEMCİNİN BEYANINA bakar.
+   * `curl -F 'file=@zararli.html;type=application/pdf'` yazan biri için o
+   * alan ne derse odur -- yani tek başına, kimliğe bakmayan bir kapı
+   * görevlisidir.
+   *
+   * Aşağıdaki denetim dosyanın ilk baytlarını okuyup gerçek biçimini
+   * çözüyor ve BEYANLA UYUŞMASINI şart koşuyor. Uyuşma şart, çünkü
+   * Storage'a yazılan `contentType` beyandan geliyor: ayrışmaya izin
+   * vermek, dosyanın indirilirken yanlış türle sunulması demekti.
+   *
+   * Yalnızca baş kısım okunuyor; 8 MB'lık bir dosyayı imza için belleğe
+   * almak gereksiz.
+   */
+  const bas = new Uint8Array(await file.slice(0, IMZA_ICIN_GEREKEN_BAYT).arrayBuffer());
+  if (!yuklemeTuruGecerli(file.type, bas)) {
+    return { error: 'Dosya içeriği türüyle uyuşmuyor. PDF, JPEG veya PNG yükleyin.' };
   }
 
   /*

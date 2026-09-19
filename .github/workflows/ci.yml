@@ -112,6 +112,28 @@ jobs:
       - name: Sir taramasi
         run: npm run verify:secrets
 
+      # ----------------------------------------------------------------------
+      # BAGIMLILIK ACIGI KAPISI
+      # ----------------------------------------------------------------------
+      # Dependabot zaten haftalik PR aciyordu, ama bir PR ONERIDIR: aciklı bir
+      # paket tasiyan bir dal, kimse PR'i birlestirmeden de yesil gecip
+      # birlesebiliyordu. Yani acik taramasi vardi, acik KAPISI yoktu.
+      #
+      # ESIK `high`: `moderate` ve altindakiler transitif gelistirme
+      # bagimliliklarinda surekli gurultu uretir ve gurultulu bir kapi,
+      # kapatilan bir kapidir. `high` ve `critical` ise gercek bir karar
+      # gerektirir.
+      #
+      # `--omit=dev` YOK, BILINCLI: derleme zinciri de saldiri yuzeyidir
+      # (bu depo eylemleri tam da bu yuzden SHA'ya sabitliyor). Gelistirme
+      # bagimliliginda kod calistiran bir acik, uretim paketine giren kodu
+      # uretir.
+      #
+      # Acik cikarsa yapilacak sey `--force` ile guncellemek DEGIL: surum
+      # yukseltmesi kirici olabilir. Kapi kirmizi kalir ve insan karar verir.
+      - name: Bagimlilik acigi taramasi
+        run: npm audit --audit-level=high
+
       - name: Birim testleri
         run: npm test
 
