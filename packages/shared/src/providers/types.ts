@@ -87,10 +87,45 @@ export class ProviderError extends Error {
   }
 }
 
+/**
+ * Dönüşüm bu ağdan BİZE mi gelir, yoksa biz mi ÇEKERİZ?
+ *
+ * NEDEN SÖZLEŞMEDE
+ * Postback sırrı zorunluluğu şimdiye kadar ağdan bağımsız uygulanıyordu ve
+ * bu, bir varsayımdı: "her ağ imzalı bildirim gönderir". Awin için YANLIŞ --
+ * Awin'in yayıncı bildirimi imzasız (resmî doküman: callback URL'i panele
+ * yazılır, imza/HMAC yoktur) ve asıl yol Transactions API'sinden ÇEKMEKTİR.
+ *
+ * Bu alan o varsayımı sözleşmeye taşır: her ağ kendi yolunu söyler, route
+ * da ona göre davranır. Böylece Awin'den sır beklenmez, imzalı ağların
+ * (direct, ileride CJ/Impact) doğrulaması ise hiç gevşemez.
+ */
+export type ConversionSource = 'postback' | 'pull';
+
+/**
+ * Ağın raporundan ÇEKİLMİŞ dönüşüm.
+ *
+ * `NormalizedConversion`'dan tek farkı: hangi reklamverene ait olduğunu da
+ * taşır. Postback'te bunu URL'deki mağaza söyler; çekmede tek bir istek
+ * birçok reklamvereni birden döndürür, dolayısıyla satırın kendisi
+ * söylemelidir.
+ */
+export interface PulledConversion extends NormalizedConversion {
+  /** Ağın reklamveren kimliği (Awin'de `advertiserId`). */
+  networkMerchantId: string;
+  /** Tıklama zamanı — ağ biliyorsa. Atıf penceresi denetimi için. */
+  clickedAt: string | null;
+}
+
 export interface AffiliateProvider {
   /** `merchants.network` sütunundaki değer. */
   readonly network: string;
   readonly displayName: string;
+  /**
+   * Dönüşümlerin geliş yolu. `'pull'` olan ağlarda postback ucu KAPALIDIR
+   * ve `postback_secret` aranmaz -- o ağ zaten bildirim göndermiyor.
+   */
+  readonly conversionSource: ConversionSource;
 
   /**
    * Bildirimin bu ağdan geldiğini doğrular.
