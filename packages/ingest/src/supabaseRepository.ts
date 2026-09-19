@@ -72,6 +72,19 @@ import { redact } from './http/redact.js';
 export const UPSERT_BATCH_SIZE = 50;
 
 /**
+ * Görülme damgası turunda tek çağrıda gönderilecek kimlik sayısı.
+ *
+ * `UPSERT_BATCH_SIZE`den ÇOK daha büyük ve bu doğru: damga yalnızca dört
+ * zaman damgası yazıyor (teklif yazmanın aksine başlık, açıklama ve görsel
+ * taşımıyor) ve artık kendi süre tavanını taşıyan bir RPC üzerinden gidiyor.
+ *
+ * Sınırı belirleyen şey süre değil, GÖVDE BOYUTU: tek istekte 35 bin kimlik
+ * göndermek istemci ve sunucu tarafında gereksiz bir bellek tepe noktası
+ * üretir. 5.000 ile 35.591 kimlik 216 tur yerine 8 turda gidiyor.
+ */
+export const DAMGA_BATCH_SIZE = 5_000;
+
+/**
  * GEÇİCİ SUPABASE HATALARINDA YENİDEN DENEME -- YALNIZCA OKUMALARDA.
  *
  * Ölçüldü (üretim, 35.767 ürünlük BTO feed'i): eşleştirme aşaması tek bir
@@ -168,11 +181,17 @@ export const okumayiYenidenDene = geciciyeDayanikliCagri;
  *
  * BU DEPODA HANGİSİ HANGİSİ (ölçüldü):
  *
- *   upsertOffers  .upsert({ onConflict: 'merchant_id,external_id' })  GÜVENLİ
- *   touchSeen     .update(...).eq(...).in(...)                        GÜVENLİ
- *   markStale     .update(...)                                        GÜVENLİ
- *   planRefresh   .update(...).eq('id', ...)                          GÜVENLİ
- *   createGroups  .insert(...)  -- çakışma hedefi YOK                 GÜVENSİZ
+ *   upsertOffers  rpc ingest_upsert_offers      -- on conflict do update  GÜVENLİ
+ *   touchSeen     rpc ingest_touch_seen         -- aynı damgayı yazar     GÜVENLİ
+ *   markStale     rpc ingest_mark_stale_offers  -- status='active' koşullu GÜVENLİ
+ *   planRefresh   .update(...).eq('id', ...)                              GÜVENLİ
+ *   createGroups  .insert(...)  -- çakışma hedefi YOK                     GÜVENSİZ
+ *
+ * ÜÇ TOPLU YAZMA ARTIK RPC: idempotentlik argümanı DEĞİŞMEDİ, yalnızca
+ * çağrı biçimi değişti. `ingest_upsert_offers` hâlâ `on conflict do update`
+ * yapıyor, `ingest_touch_seen` aynı damgayı yeniden yazıyor ve
+ * `ingest_mark_stale_offers` yalnızca `status = 'active'` olanlara
+ * dokunuyor -- yani ikinci çağrı sıfır satır etkiler.
  *
  * `createGroups` bilinçli olarak SARILMADI. Çakışma hedefi olmayan bir
  * insert'i yeniden denemek mükerrer satır üretir; bu depoda tam olarak o
@@ -499,18 +518,30 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
 
       const damga = checkedAt.toISOString();
 
-      for (const batch of chunkByUrlBudget(externalIds)) {
+      /*
+       * ==================================================================
+       * PARÇALAMA ARTIK ADRES UZUNLUĞUNA DEĞİL, GÖVDEYE GÖRE
+       * ==================================================================
+       * Eski hâli `chunkByUrlBudget` kullanıyordu ve o sınır bir SÜRE
+       * kararı değil, bir ADRES UZUNLUĞU kararıydı: `.in(...)` değerleri
+       * GET adresine giriyor. RPC ise POST gövdesiyle çağrılır, o sınır
+       * ortadan kalkar.
+       *
+       * Ölçülen bedeli: 35.591 kimlik / 166 = 216 ayrı HTTP turu ve turun
+       * 408 saniyesinin ~205'i bu adımda geçiyordu.
+       *
+       * Parça yine de sonsuz değil: tek bir gövdede 35 bin kimlik
+       * göndermek istemci ve sunucu tarafında gereksiz bellek tepe
+       * noktası üretir. 5.000 ikisinin arasında duruyor -- 216 tur yerine
+       * 8 tur.
+       */
+      for (const batch of chunk(externalIds, DAMGA_BATCH_SIZE)) {
         const { error } = await idempotentYazmayiYenidenDene(() =>
-          supabase
-            .from('products')
-            .update({
-              last_seen_at: damga,
-              price_checked_at: damga,
-              stock_checked_at: damga,
-              offer_checked_at: damga,
-            })
-            .eq('source_id', sourceId)
-            .in('external_id', batch),
+          supabase.rpc('ingest_touch_seen', {
+            p_source_id: sourceId,
+            p_external_ids: batch,
+            p_checked_at: damga,
+          }),
         );
 
         if (error) throw new Error(`Görülme damgası yazılamadı: ${error.message}`);
@@ -522,18 +553,28 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
        * Silme geri alınamaz; stoksuz işaretleme bir sonraki başarılı alımda
        * kendiliğinden düzelir.
        */
+      /*
+       * TEK İFADE, KENDİ SÜRE TAVANIYLA.
+       *
+       * Bu adım zincirin SONUNCUSU ve tek bir toplu UPDATE: bir turda
+       * 1.766 satır ölçüldü, ~20 ms/satır ile yaklaşık 35 saniye -- 8
+       * saniyelik `authenticator` tavanının dört katı. Parçalamak
+       * mümkün değil, çünkü koşul bir KİMLİK LİSTESİ değil
+       * ("bu turda görülmeyenler"); RPC ise tavanı kendi taşıyor.
+       *
+       * `.select('id')` de kalktı: yalnızca SAYI gerekiyordu ve binlerce
+       * kimliği ağdan geri çekmek o sayıyı öğrenmenin pahalı yoluydu.
+       * RPC `row_count` döndürüyor.
+       */
       const { data, error } = await idempotentYazmayiYenidenDene(() =>
-        supabase
-          .from('products')
-          .update({ status: 'out_of_stock', stock: 0 })
-          .eq('source_id', sourceId)
-          .lt('last_seen_at', runStartedAt.toISOString())
-          .eq('status', 'active')
-          .select('id'),
+        supabase.rpc('ingest_mark_stale_offers', {
+          p_source_id: sourceId,
+          p_run_started_at: runStartedAt.toISOString(),
+        }),
       );
 
       if (error) throw new Error(`Bayat teklifler işaretlenemedi: ${error.message}`);
-      return data?.length ?? 0;
+      return typeof data === 'number' ? data : 0;
     },
 
     async saveRefreshPlan(sourceId, plan) {
