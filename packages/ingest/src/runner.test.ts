@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { runScheduledIngest } from './runner.js';
+import { runScheduledIngest, VARSAYILAN_IS_ZAMAN_ASIMI_MS } from './runner.js';
 import type { Fetcher } from './pipeline.js';
 
 /* =========================================================================
@@ -214,4 +214,160 @@ test('sonuc sure ve worker ozetini tasiyor', async () => {
   assert.equal(typeof sonuc.durationMs, 'number');
   assert.equal(typeof sonuc.worker.claimed, 'number');
   assert.equal(typeof sonuc.worker.failed, 'number');
+});
+
+/* =========================================================================
+ * §49 — İŞ ZAMAN AŞIMI
+ * -------------------------------------------------------------------------
+ * ÜRETİMDE YAŞANAN ARIZANIN KİLİDİ.
+ *
+ * `runWorkerOnce`'ın kendi varsayılanı 30 sn ve bu çağrı onu GEÇMİYORDU.
+ * Ölçülen tam senkron ise 373,6 sn (ingest_runs, 2026-09-12 16:30, 35.762
+ * kalem). Sonuç: her deneme 30. saniyede `is_zaman_asimi` ile düştü, iş
+ * beş denemede ölü mektuba gitti ve katalog altı gün dondu.
+ *
+ * Aşağıdaki testler DEĞERİN AKTARILDIĞINI davranışla ölçüyor, "bir şey
+ * geçiliyor mu" diye bakmıyor: yalnızca çözülen sayıyı loglayan bir test
+ * yazıldı ve `runWorkerOnce` çağrısından `jobTimeoutMs` silinince YİNE
+ * GEÇTİ -- yani hiçbir şey korumuyordu. Ölçüt, işin HANGİ SEBEPLE
+ * düştüğü olmalı.
+ * ========================================================================= */
+
+/**
+ * Kaynak okuması YAVAŞ olan sahte Supabase.
+ *
+ * Gecikme `from('sources')` tarafında: handler kaynağı çözmeden hiçbir şey
+ * yapamaz, dolayısıyla işin süresi buradan kontrol edilebiliyor ve ağa
+ * hiç çıkılmıyor.
+ */
+function sahteYavasSupabase(gecikmeMs: number) {
+  const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
+
+  const kaynakSorgusu = () => {
+    // PostgREST oluşturucusu "thenable"dır: zincirin sonunda await edilir.
+    const zincir = {
+      select: () => zincir,
+      eq: () => zincir,
+      then: (
+        cozum: (v: { data: unknown[]; error: null }) => unknown,
+      ) => new Promise((r) => setTimeout(r, gecikmeMs)).then(() =>
+        // Boş dizi = "kaynak bulunamadı": handler PermanentJobError atar.
+        // Zaman aşımından FARKLI bir mesaj, ayrımı ölçebilmemizin sebebi bu.
+        cozum({ data: [], error: null }),
+      ),
+    };
+    return zincir;
+  };
+
+  const client = {
+    rpc(name: string, args?: Record<string, unknown>) {
+      rpcCalls.push({ name, args: args ?? {} });
+
+      if (name === 'schedule_due_sources') return Promise.resolve({ data: [], error: null });
+      if (name === 'recover_orphaned_jobs') return Promise.resolve({ data: 0, error: null });
+      if (name === 'claim_jobs') {
+        return Promise.resolve({
+          data: [
+            {
+              id: 'job-yavas',
+              kind: 'SOURCE_SYNC',
+              payload: { source_id: 'src-yavas' },
+              attempt: 1,
+              source_id: 'src-yavas',
+              market_code: 'UK',
+            },
+          ],
+          error: null,
+        });
+      }
+      return Promise.resolve({ data: null, error: null });
+    },
+    from(tablo: string) {
+      if (tablo === 'sources') return kaynakSorgusu();
+      throw new Error(`Beklenmeyen tablo: ${tablo}`);
+    },
+  };
+
+  /** İşin başarısız işaretlenme SEBEBİ. */
+  const dusmeSebebi = () =>
+    String(rpcCalls.find((c) => c.name === 'fail_job')?.args.p_error ?? '');
+
+  return { client: client as never, rpcCalls, dusmeSebebi };
+}
+
+// Tavanın ALTINDA kalan iş, zaman aşımına UĞRAMAMALI.
+// Bu test, düzeltme geri alındığında düşen testtir: `jobTimeoutMs`
+// aktarılmazsa 30 sn varsayılanı geçerli olur ve 20 ms'lik tavan hiç
+// uygulanmaz.
+test('is zaman asimi worker\'a AKTARILIYOR: dar tavan isi kesiyor', async () => {
+  const { client, dusmeSebebi } = sahteYavasSupabase(120);
+
+  const sonuc = await runScheduledIngest({
+    supabase: client,
+    fetcher: cagrilmamaliFetcher,
+    jobTimeoutMs: 20,
+  });
+
+  assert.equal(sonuc.worker.failed, 1, 'is basarisiz sayilmali');
+  assert.match(
+    dusmeSebebi(),
+    /is_zaman_asimi/,
+    '20 ms tavan 120 ms suren isi KESMELIYDI -- kesmediyse tavan worker\'a hic ulasmiyor',
+  );
+});
+
+// Aynı iş, GENİŞ tavanla zaman aşımına uğramamalı: yoksa yukarıdaki test
+// "her hâlükârda zaman aşımı" diye de geçerdi ve hiçbir şey kanıtlamazdı.
+test('genis tavanda ayni is zaman asimina UGRAMIYOR', async () => {
+  const { client, dusmeSebebi } = sahteYavasSupabase(120);
+
+  await runScheduledIngest({
+    supabase: client,
+    fetcher: cagrilmamaliFetcher,
+    jobTimeoutMs: 5_000,
+  });
+
+  const sebep = dusmeSebebi();
+  assert.doesNotMatch(sebep, /is_zaman_asimi/, 'genis tavanda zaman asimi olmamali');
+  assert.match(sebep, /Kaynak bulunamadı/, 'is kendi gercek sebebiyle dusmeli');
+});
+
+// Bütçesiz çağıran (CLI / GitHub Actions) ölçülen senkrona yeten tavanı alır.
+test('butcesiz cagiran olculen senkrona yeten varsayilani aliyor', async () => {
+  const { client } = sahteSupabase({ scheduled: [] });
+  const olaylar: Array<Record<string, unknown>> = [];
+
+  await runScheduledIngest({
+    supabase: client,
+    fetcher: cagrilmamaliFetcher,
+    log: (_event, veri) => olaylar.push(veri),
+  });
+
+  const baslatma = olaylar.find((o) => 'jobTimeoutMs' in o);
+  assert.ok(baslatma, 'worker baslatma olayi zaman asimini yazmali');
+  assert.equal(baslatma.jobTimeoutMs, VARSAYILAN_IS_ZAMAN_ASIMI_MS);
+
+  // Ölçülen tam senkron 373,6 sn. Tavan bunun altına inerse alım yine
+  // sessizce ölür; sayıyı doğrudan sınırlıyoruz.
+  assert.ok(
+    VARSAYILAN_IS_ZAMAN_ASIMI_MS > 374_000,
+    'varsayilan, olculen tam senkrondan (373,6 sn) uzun olmali',
+  );
+});
+
+// Serverless çağıran için tavan BÜTÇE olmalı: aksi halde iş, kendisini
+// çalıştıran fonksiyondan uzun yaşar, çağrı öldürülür ve iş kira dolana
+// kadar asılı kalır.
+test('butce bildiren cagiranda is butceyi asamiyor', async () => {
+  const { client } = sahteSupabase({ scheduled: [] });
+  const olaylar: Array<Record<string, unknown>> = [];
+
+  await runScheduledIngest({
+    supabase: client,
+    fetcher: cagrilmamaliFetcher,
+    budgetMs: 45_000,
+    log: (_event, veri) => olaylar.push(veri),
+  });
+
+  assert.equal(olaylar.find((o) => 'jobTimeoutMs' in o)?.jobTimeoutMs, 45_000);
 });

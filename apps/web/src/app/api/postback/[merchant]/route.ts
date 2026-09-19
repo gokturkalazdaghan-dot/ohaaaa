@@ -23,7 +23,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { ProviderError, getProvider } from '@ohaaaa/shared/providers';
+import { ProviderError, getProvider, isKnownNetwork } from '@ohaaaa/shared/providers';
 
 import { getServiceClient } from '@/lib/supabase/service';
 
@@ -53,6 +53,36 @@ export async function POST(
 
   if (!merchant) {
     return json({ error: { code: 'not_found', message: 'Mağaza bulunamadı.' } }, 404);
+  }
+
+  /*
+   * ÇEKMELİ AĞLAR BU UÇTAN GEÇMEZ.
+   *
+   * Sır zorunluluğu şimdiye kadar AĞDAN BAĞIMSIZ uygulanıyordu; bu bir
+   * varsayımdı: "her ağ imzalı bildirim gönderir". Awin için yanlış --
+   * dönüşümleri Transactions API'sinden ÇEKİYORUZ ve Awin'in yayıncı
+   * callback'i zaten imzasız.
+   *
+   * O yüzden çekmeli bir ağda sır ARANMAZ (yanlış varsayım kalktı) ama
+   * imzasız bir yazma yolu da AÇILMAZ: istek burada, gövde ayrıştırılmadan
+   * reddedilir. Aksi hâlde uç noktayı bilen herkes sahte komisyon
+   * yazabilirdi.
+   *
+   * Kontrol sır denetiminden ÖNCE: böylece Awin'e "sır tanımlı değil" gibi
+   * yanıltıcı bir hata dönmüyor, gerçek sebep yazıyor.
+   */
+  const saglayici = isKnownNetwork(merchant.network) ? getProvider(merchant.network) : null;
+
+  if (saglayici?.conversionSource === 'pull') {
+    return json(
+      {
+        error: {
+          code: 'not_supported',
+          message: `${saglayici.displayName} dönüşümleri bildirimle değil, ağın raporundan çekilir.`,
+        },
+      },
+      501,
+    );
   }
 
   // Sırrı tanımlanmamış bir mağaza için postback KABUL EDİLMEZ.

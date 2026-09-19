@@ -61,6 +61,8 @@ export function verifyHmacSha256(
 export const directProvider: AffiliateProvider = {
   network: 'direct',
   displayName: 'Doğrudan anlaşma',
+  // Doğrudan anlaşmada mağaza BİZE imzalı bildirim gönderir; sır zorunlu.
+  conversionSource: 'postback',
 
   verifyPostback(context: PostbackContext): boolean {
     const signature =
