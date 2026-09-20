@@ -3,6 +3,11 @@
 Bu belge, Ohaaaa'nın **katalogda olmayan** ürünleri kullanıcı aradığı anda
 bir dış sağlayıcıdan getirme yolunu anlatır.
 
+> **DURUM: HAZIRLIK — ÜRETİME BAĞLI DEĞİL.**
+> Uç noktanın erişilebilir olduğu ve geçersiz Bearer token ile 401
+> döndüğü doğrulandı. **Gerçek ürün sorgusu henüz doğrulanmadı**; gerçek
+> credential yok. Ayrıntı: [Doğrulama durumu](#doğrulama-durumu-2026-09-20).
+
 ## Bu sistem neyin yerine GEÇMEZ
 
 Hiçbir şeyin. Özellikle:
@@ -37,28 +42,63 @@ yalnızca `@ohaaaa/shared/product-search` alt yolundan erişilir. Sebep:
 içinde API anahtarı taşıyan bir HTTP istemcisi var ve ana pakete koymak,
 istemci bileşenlerinin onu paketlerine çekme riskini doğururdu.
 
-## API sözleşmesi: ne doğrulandı, ne doğrulanmadı
+## DOĞRULAMA DURUMU (2026‑09‑20)
 
-### Doğrulandı (canlı ölçüm, 2026‑09‑20)
+Bu bölüm entegrasyonun **bugünkü gerçek durumudur**. Aşağıdaki tablonun
+dışındaki hiçbir şey doğrulanmış sayılmaz.
+
+| # | Durum | |
+| --- | --- | --- |
+| 1 | Uç nokta erişilebilir | ✅ **DOĞRULANDI** |
+| 2 | 401 authentication kontrolü | ✅ **DOĞRULANDI** |
+| 3 | Gerçek credential | ❌ **YOK** |
+| 4 | Gerçek ürün yanıtı (200 + ürün) | ❌ **HENÜZ DOĞRULANMADI** |
+| 5 | Request sözleşmesi (alan adları, gövde) | ❌ **HENÜZ DOĞRULANMADI** |
+| 6 | Response sözleşmesi (sarmalayıcı, alan adları) | ❌ **HENÜZ DOĞRULANMADI** |
+| 7 | Filtre sözleşmesi (pazar/ülke/para birimi/ağ/satıcı) | ❌ **HENÜZ DOĞRULANMADI** |
+| 8 | Deeplink yer tutucu sözleşmesi (`@@@` / `###`) | ❌ **HENÜZ DOĞRULANMADI** |
+
+**Kabul kriterinin doğru ifadesi:** *"Endpoint erişilebilir ve geçersiz
+Bearer token ile 401 döndüğü doğrulandı; gerçek ürün sorgusu henüz
+doğrulanmadı."*
+
+"POST /v1/products server-side çalışıyor" demek bugün için **yanlış**
+olurdu: server-side istek yolu kuruludur ve 401'e kadar gider, ama
+başarılı bir ürün sorgusu hiç yapılmamıştır.
+
+### 1–2. Ne doğrulandı — canlı ölçüm
+
+Geçersiz bir jetonla tek bir istek yapıldı:
 
 ```
 POST https://api.affiliate.com/v1/products
-Authorization: Bearer <anahtar>
+Authorization: Bearer <geçersiz deneme jetonu>
 Content-Type: application/json
+{"query":"kulaklik","limit":1}
+
+→ HTTP 401   content-type: application/json
+  {"message":"Unauthenticated.","error":"Authentication is required to access this resource."}
 ```
 
-Geçersiz jetonla yapılan istek:
+Bundan **yalnızca** şunlar çıkar: uç nokta vardır, POST'u kabul eder,
+JSON döner ve yetkilendirme **Bearer** şemasıyladır. Kimlik doğrulama
+katmanı, istek gövdesi doğrulanmadan ÖNCE çalıştığı için bu ölçüm gövde
+sözleşmesi hakkında **hiçbir şey söylemez**.
 
-```
-HTTP 401  content-type: application/json
-{"message":"Unauthenticated.","error":"Authentication is required to access this resource."}
-```
+### 3. Gerçek credential yok
 
-Yani: uç nokta **vardır**, POST kabul eder, JSON döner ve yetkilendirme
-**Bearer** şemasıyladır.
+`AFFILIATE_COM_API_KEY` sağlanmadı. Bu yüzden:
 
-### DOĞRULANMADI
+- Sistem **kapalıdır** — hiçbir ağ isteği yapılmaz.
+- `disKaynaktaAra()` **hiçbir sayfadan çağrılmıyor**; üretim arama akışına
+  **bağlanmadı** ve bu bilinçli bir karardır.
+- Mock/örnek veriyle "çalışıyor gibi" gösterilmedi. Sahte ürün, gerçek
+  fiyat ve gerçek stok sanılır; bir karşılaştırma sitesinde bu, kullanıcıya
+  doğrudan yalan söylemektir.
 
+### 4–8. DOĞRULANMADI
+
+- Başarılı (200) bir ürün yanıtı **hiç görülmedi**
 - İstek gövdesindeki alan adları (`query`? `q`? `search`?)
 - Filtre sözlüğü — pazar, ülke, para birimi, ağ, satıcı
 - Sayfalama biçimi
@@ -176,12 +216,19 @@ sağlayıcıya gider.
 429 yanıtındaki `Retry-After` hem saniye hem HTTP tarihi biçiminde
 okunur ve hataya alan olarak taşınır.
 
-## Gerçek anahtarla doğrulama
+## Gerçek anahtar geldiğinde İLK VE TEK iş
 
 ```bash
 npm run build --workspace @ohaaaa/shared
 AFFILIATE_COM_API_KEY=... npm run dis-arama:deneme -- "oyuncu kulaklık"
 ```
+
+Bu komut çalıştırılıp **gerçek yanıt raporlanmadan** başka hiçbir adım
+atılmaz: kod değişikliği yok, üretime bağlama yok, filtre açma yok.
+
+Sebep sıralamada: yukarıdaki 4–8 numaralı sözleşmelerin hepsinin cevabı
+bu tek yanıttadır. Yanıtı görmeden yapılacak her düzenleme, tahmin
+üzerine tahmin biriktirmek olur.
 
 Betik bir kez gerçek çağrı yapar, HTTP durumunu ve normalize edilmiş ilk
 ürünleri yazdırır. Anahtar çıktıya **girmez** (yalnızca karakter sayısı).
@@ -190,14 +237,24 @@ CI bu betiği çalıştırmaz ve çalıştırmamalıdır: `.github/workflows/ci.
 içinde hiçbir sır yoktur ve bu korunması gereken bir özelliktir
 (çatal PR'ları aynı iş akışını çalıştırır).
 
-## Bağlanma noktası — HENÜZ BAĞLI DEĞİL
+## Bağlanma noktası — HENÜZ BAĞLI DEĞİL (CTO kararı)
 
-`disKaynaktaAra()` bugün hiçbir sayfadan çağrılmıyor. Bu bilinçli: gerçek
-kimlik bilgisi doğrulanmadan üretim arama akışına bağlamak, en iyi
-ihtimalle görünmez bir ölü kod, en kötü ihtimalle kullanıcıya sahte ürün
-göstermek olurdu.
+`disKaynaktaAra()` **üretimde çağrılmıyor** ve bu bir eksiklik değil,
+alınmış bir karardır. Gerçek kimlik bilgisi doğrulanmadan üretim arama
+akışına bağlamak, en iyi ihtimalle görünmez bir ölü kod, en kötü
+ihtimalle kullanıcıya sahte ürün göstermek olurdu.
 
-Anahtar alındığında bağlanacağı yer `apps/web/src/app/arama/page.tsx`
+Karara bağlı olarak bugün **değişmeyecek** olanlar:
+
+- Awin dönüşüm/deeplink sağlayıcısı ve feed alımı
+- Katalog araması (`search_products`, `catalog.ts`)
+- Supabase şeması
+- Üretim arama akışı (`arama/page.tsx`)
+- Önbellek mimarisi (`onbellek.ts`, `KATALOG_SURUMU`)
+
+Aşağıdaki kod örneği **yapılacak iş değil**, gerçek yanıt raporlandıktan
+sonra değerlendirilecek bağlanma noktasının kaydıdır. Bağlanacağı yer
+`apps/web/src/app/arama/page.tsx`
 içindeki `Promise.all` bloğudur — `searchProducts` ve `getSearchFacets`
 ile **yan yana**, kendi `catch`'iyle, tıpkı filtre şeridinin bugün
 yapıldığı gibi:
