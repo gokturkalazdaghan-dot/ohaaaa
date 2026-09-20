@@ -661,6 +661,106 @@
 
   /*
    * ---------------------------------------------------------------------
+   * KATEGORİ ÇEKMECESİ — kenardan sürüklenen menü (yalnızca telefon)
+   * ---------------------------------------------------------------------
+   * Sepet panelinden AYRILAN yer: bu panel parmakla SÜRÜKLENİYOR, yani
+   * konumu bir CSS geçişi değil, her karede JavaScript'in yazdığı bir
+   * değer. Geçiş kullanılsaydı kullanıcı panele yarı yoldayken dokunup
+   * geri çeviremezdi -- geçiş bitmeden yeni hedefe gidilmez ve hareket
+   * "duvara çarpmış" gibi görünür.
+   *
+   * `--k` panelin AÇIKLIK ORANI: 0 tamamen kapalı, 1 tamamen açık.
+   * Sürükleme sırasında parmakla 1:1, bırakınca yay (spring) ile. Tek bir
+   * sayı hem paneli hem örtüyü sürüyor, böylece ikisi asla ayrışmıyor.
+   */
+  .kategori-dialog {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    width: 100vw;
+    height: 100dvh;
+    max-width: 100vw;
+    max-height: 100dvh;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    overflow: hidden;
+  }
+
+  /*
+   * Tarayıcının kendi örtüsü KULLANILMIYOR. `::backdrop` bir özel
+   * özelliği (custom property) her tarayıcıda devralmıyor; sürükleme
+   * oranını ona bağlayamazdık ve örtü panelden kopuk kalırdı.
+   */
+  .kategori-dialog::backdrop {
+    background: transparent;
+  }
+
+  .kategori-dialog .kategori-ortu {
+    background-color: rgb(0 0 0 / 0.55);
+    backdrop-filter: blur(4px);
+    /* Örtü, panelin açıklığıyla AYNI sayıdan besleniyor. */
+    opacity: var(--k, 0);
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .kategori-dialog .kategori-ortu {
+      backdrop-filter: none;
+      background-color: rgb(0 0 0 / 0.85);
+    }
+  }
+
+  .kategori-dialog .kategori-panel {
+    /* k=1 -> 0 (açık), k=0 -> -100% (soldan tamamen dışarıda). */
+    transform: translate3d(calc((var(--k, 0) - 1) * 100%), 0, 0);
+    will-change: transform;
+    /*
+     * Dikey kaydırma tarayıcıda kalır, yatay hareket bize gelir. `none`
+     * yazmak panelin içindeki listeyi kaydırılamaz yapardı.
+     */
+    touch-action: pan-y;
+  }
+
+  /*
+   * KENAR TUTAMACI.
+   *
+   * Ekranın en solundan başlayan bir sürükleme iOS Safari'de TARAYICININ
+   * geri gitme hareketidir ve bastırılamaz. Bu yüzden sürükleme, ekranın
+   * kenarından değil GÖRÜNEN bir tutamaçtan başlıyor: `touch-action: none`
+   * ile üzerindeki hareket bize ait olur, çakışma kalmaz. Görünür olması
+   * ayrıca gizli bir hareketi keşfedilebilir yapıyor -- kimse olduğunu
+   * bilmediği bir hareketi denemez.
+   */
+  .kategori-tutamac {
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /*
+   * Panelin sağ kenarındaki tutma çubuğu: "burası çekilir" demenin
+   * metin kullanmayan yolu.
+   */
+  .kategori-tutma-cubugu {
+    touch-action: none;
+  }
+
+  /*
+   * Hareket azaltıldığında panel KAYMAZ, açılır/kapanır. Sürükleme yine
+   * çalışır (kullanıcının kendi hareketi baş döndürmez; rahatsız eden,
+   * kendiliğinden hareket eden arayüzdür) ama bırakıldığında yay yerine
+   * anında yerine oturur; bunu bileşen `matchMedia` ile okuyor.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    .kategori-dialog .kategori-panel {
+      transition: opacity 160ms ease;
+    }
+  }
+
+
+  /*
+   * ---------------------------------------------------------------------
    * Hareketi azaltılmış mod — TÜM SİTE
    * ---------------------------------------------------------------------
    * Bu bir zevk meselesi değil: vestibüler rahatsızlığı olan kullanıcılarda

@@ -18,6 +18,8 @@ export const TR = {
   'ortak.siralama': 'Sıralama',
   'ortak.anaSayfa': 'Ana sayfa',
   'ortak.tumu': 'Tümü',
+  'ortak.tumunuGor': 'Tümünü gör',
+  'ortak.kapat': 'Kapat',
   'ortak.firsatlar': 'Fırsatlar',
   'ortak.giris': 'Giriş',
   'ortak.sayfaYolu': 'Sayfa yolu',
@@ -47,6 +49,7 @@ export const TR = {
   'ev.karsilastirdigimizMagazalar': 'Karşılaştırdığımız mağazalar',
   'ev.listelenemiyor': 'Ürünleri şu an listeleyemiyoruz',
   'ev.kategoriler': 'Kategoriler',
+  'ev.kategorilerGez': 'Kategorilerde gez',
 
 
   // --- Kullanıcı değeri bölümü ---
