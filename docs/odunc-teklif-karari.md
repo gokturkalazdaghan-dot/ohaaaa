@@ -93,19 +93,68 @@ Aynı yükü her aramada ödemek, çözdüğümüz sorunu daha kötü bir yere t
 - Supabase kalıcı verinin kayıt otoritesi olarak **olduğu gibi kalır**.
 - Cache, otorite değildir; kaybı veri kaybı sayılmaz.
 
-### OPEN DECISION 1 — Cache altyapısı
+### KARAR 1 — Cache altyapısı (eski OPEN DECISION 1, kapandı)
 
-Karar verilen: Postgres dışında, açık TTL'li, açık anahtarlı bir KV.
-Karar verilmeyen: hangisi.
+**Karar: HTTP/REST erişimli, Redis uyumlu bir KV (Upstash Redis ve dengi).
+Next.js Data Cache değil; salt TCP'li klasik Redis de değil.**
 
-| Aday | Lehte | Aleyhte |
+Bu karar trafik verisi beklemedi, çünkü Data Cache'i eleyen gerekçeler
+**hacimsel değil yapısal** çıktı. Beşinin herhangi biri tek başına yeterli:
+
+| # | Gereksinim | Next.js Data Cache | Sonuç |
+|---|---|---|---|
+| 1 | Kota defteri atomik artırma istiyor (§6) | Memoizasyon deposu, sayaç deposu değil | **Eler** |
+| 2 | Bayat sunumda tazeleme arızası **sayılmalı** (§4) | Arızayı **yutuyor** — `onbellek.ts:26-44`, bu depoda ölçüldü | **Eler** |
+| 3 | Partner başına seçici tahliye | Etiket hep-ya-hiç: `revalidateTag('katalog')` her şeyi düşürür | Eler |
+| 4 | Anahtar bizim tasarladığımız, incelenebilir bir dizge (§3) | Anahtarı fonksiyon argümanlarından kendi türetir; tek girdi aranamaz, süresi dolduralamaz | Eler |
+| 5 | Kullanıcıya yakın okuma | Dağıtıma ve bölgeye bağlı; `vercel.json` → `regions: ["fra1"]` | Zayıflatır |
+
+2. satır özellikle bağlayıcı: §4'te **"başarısız tazeleme sayılır, yutulmaz"**
+diye karar verdik. Data Cache bu sözü yapısal olarak tutamaz. Aynı aracı
+seçmek, ödediğimiz dersi ikinci kez satın almak olurdu.
+
+### Neden salt TCP'li Redis de değil
+
+Serverless çağrı başına yeni bağlantı açar; havuz tutamaz. Klasik bir Redis
+istemcisi bu modelde çağrı başına el sıkışma ve bağlantı tükenmesi üretir.
+HTTP/REST arayüzü bu sorunu tanım gereği yaşamaz — seçimin teknik ekseni budur,
+sağlayıcı markası değil.
+
+### Boyut: ürünü değil, paketi belirler
+
+Ölçüm sorusu düştü sayılmaz; yalnızca **hangi ürün** sorusundan **hangi paket**
+sorusuna indi. Depodaki olgulardan kaba bir sınır:
+
+- Aktif pazar: 27 AB + 6 Körfez ≈ **34** (`20260914041000_phase1_country_markets.sql`)
+- Desteklenen dil: **3** (`locales.is_supported = true` → tr, de, en)
+- Para birimi pratikte pazardan türüyor (`markets.default_currency`)
+- Partner: **6**, sayfa: **≤3**
+
+Bir kullanıcı isteği tek pazar, tek dil, tek para birimidir. Yani çarpan
+teorik `6 × 34 × 3 × 3` değil; **benzersiz sorgu başına gerçekçi olarak 3–5
+girdi** (sorgulanan partner sayısı × bakılan sayfa).
+
+Belge boyutu: normalize bir teklif (başlık, fiyat, para birimi, satıcı,
+görsel, deeplink, GTIN, gözlem zamanı) ≈ 300–600 B; ~10 teklifli bir sonuç
+kümesi ≈ **5 KB**.
+
+Yerleşik küme, TTL tavanı 24 saat olduğu için **son 24 saatin benzersiz
+anahtarı** kadardır:
+
+| Günlük benzersiz sorgu | Anahtar | Yerleşik küme |
 |---|---|---|
-| Next.js Data Cache (`unstable_cache`) | Zaten var, ek maliyet yok | `onbellek.ts:26-44`'te belgelenen arıza: bayat girdi arka planda tazelenirken **hata yutuluyor** ve bayat değer dönmeye devam ediyor. Anahtar listelenemiyor, seçici tahliye yok. |
-| Vercel KV / Upstash Redis | Açık TTL, atomik sayaç (kota defteri için), çok bölgeli okuma | Ek servis, ek maliyet |
+| 10.000 | ~40.000 | ~200 MB |
+| 50.000 | ~200.000 | ~1 GB |
+| 200.000 | ~800.000 | ~4 GB |
 
-Karar kriteri: **kota defteri atomik sayaç istiyor** (§5). Bunu Data Cache
-veremez. Bu tek başına Redis'e işaret ediyor, ama maliyet verisi depoda yok.
-Ölçülecek: tahmini günlük benzersiz `cache_key` sayısı ve ortalama belge boyutu.
+Yani ilk sürüm ücretsiz/giriş paketine sığar ve büyüme doğrusaldır.
+Sürpriz bir eşik yok — bu da kararı ertelemek için sebep kalmadığını gösteriyor.
+
+### Bu kararın getirdiği tek yeni bağımlılık
+
+Bir KV servisi. Karşılığında §4 ve §6'daki iki sözü (arıza sayımı, kota
+defteri) tutulabilir kılıyor. Başka hiçbir şey eklemiyor: ORM yok, çerçeve
+yok, soyutlama katmanı yok.
 
 ---
 
@@ -395,13 +444,16 @@ Gereksiz soyutlamadan kaçınmak için, bu kararın **içermediği** şeyler:
 
 ## 9. Açık kararlar özeti
 
-| # | Konu | Neyi bekliyor |
-|---|---|---|
-| 1 | Cache altyapısı (Data Cache vs Redis/KV) | Günlük benzersiz anahtar sayısı ve belge boyutu tahmini; kota sayacı atomiklik gereksinimi Redis'e işaret ediyor |
-| 2 | Partner başına TTL tavanı | Sözleşme doğrulaması (`affiliate_networks.contract_verified`). O zamana kadar tavan 24 saat |
-| 3 | Terfi eşiği | Trafik ölçümü. İlk sürümde terfi kapalı olabilir |
-| 4 | Talep kaydı nereye (Postgres vs log drain) | Günlük ıska hacmi |
-| 5 | Ödünç teklif liste sıralamasını etkilesin mi | Ödünç fiyatın feed fiyatını yenme sıklığı |
+| # | Konu | Durum | Neyi bekliyor |
+|---|---|---|---|
+| 1 | Cache altyapısı | **KAPANDI** (§2) | — HTTP/REST erişimli Redis uyumlu KV. Data Cache yapısal olarak elendi |
+| 2 | Partner başına TTL tavanı | Açık | Sözleşme doğrulaması (`affiliate_networks.contract_verified`). O zamana kadar tavan 24 saat |
+| 3 | Terfi eşiği | Açık | Trafik ölçümü. İlk sürümde terfi kapalı olabilir |
+| 4 | Talep kaydı nereye (Postgres vs log drain) | Açık | Günlük ıska hacmi |
+| 5 | Ödünç teklif liste sıralamasını etkilesin mi | Açık | Ödünç fiyatın feed fiyatını yenme sıklığı |
+
+Kalan dördü de **ölçüm ya da sözleşme** bekliyor; hiçbiri masa başında
+kapatılamaz. 1 numara kapatılabildi çünkü gerekçesi hacimsel değil yapısaldı.
 
 ---
 
@@ -423,8 +475,11 @@ Doğrulanabilir liste — hiçbiri bu belgeden etkilenmez:
 
 DECISION:
 Ödünç (on-demand) partner teklifleri `products` tablosuna ve genel olarak
-Postgres'e **hiç yazılmaz**; Postgres dışında bir KV cache'te, `cache_key`
-başına tek bir normalize JSON belgesi olarak yaşarlar. Anahtar
+Postgres'e **hiç yazılmaz**; Postgres dışında, HTTP/REST erişimli Redis
+uyumlu bir KV'de, `cache_key` başına tek bir normalize JSON belgesi olarak
+yaşarlar. Next.js Data Cache yapısal olarak elendi: kota defterinin istediği
+atomik sayacı veremiyor ve bu depoda ölçülmüş biçimde tazeleme arızasını
+yutuyor — oysa §4 o arızanın sayılmasını şart koşuyor. Anahtar
 `ob:{v}:{partner}:{market}:{currency}:{locale}:{page}:{sha256(query_norm)[0..15]}`
 biçimindedir; sıralama ve filtreler anahtara girmez. TTL tek parçadır:
 15 dakika taze, sonrasında sözleşme doğrulanana kadar 24 saatlik tavana
@@ -452,8 +507,8 @@ feed'i hem arama API'si olan partner'ların ikisini birden kullanabilmesini
 sağlar ve Awin'i mevcut feed yolunda hiç dokunmadan bırakır.
 
 NEXT SINGLE IMPLEMENTATION STEP:
-OPEN DECISION 1'i kapat: cache altyapısı için günlük benzersiz `cache_key`
-sayısını ve ortalama belge boyutunu tahmin eden tek sayfalık bir ölçüm notu
-çıkar ve Next Data Cache ile Redis/KV arasında kararı yaz. Diğer dört açık
-karar ölçüm ya da sözleşme bekliyor; bu ilki beklemiyor ve kod yazılacak ilk
-satırın nereye yazılacağını belirleyen tek karar bu.
+`ProductSearchProvider` sözleşmesini yaz — `AffiliateProvider`'ın **yanına**,
+ayrı ve küçük: tek metot (normalize sorgu + pazar + para birimi + dil + sayfa
+→ normalize teklif listesi) ve partner'a özgü hiçbir alan taşımayan tek bir
+dönüş biçimi. `AffiliateProvider`, `providers/registry.ts`, postback yolu ve
+`Fetcher` değişmez. Bu, kod yazılan ilk adımdır; bundan öncesi bitti.
