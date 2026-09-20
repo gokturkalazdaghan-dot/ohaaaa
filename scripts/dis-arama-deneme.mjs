@@ -65,12 +65,29 @@ if (apiKey === '') {
 
 const sorguMetni = process.argv.slice(2).join(' ').trim() || 'kulaklık';
 
+/*
+ * PAZAR DARALTMASI: sözleşmede `market`/`country` diye bir arama alanı
+ * yok. Kapsam para birimi ve AĞ kimliğiyle kurulur (ağlar bölgeseldir).
+ * Ağ kimlikleri UYDURULMAZ; `GET /v1/networks` ile bulunup verilir.
+ */
+const sayilar = (ham) =>
+  (ham ?? '')
+    .split(',')
+    .map((p) => Number(p.trim()))
+    .filter((n) => Number.isInteger(n) && n > 0);
+
+const paraBirimleri = (process.env.DENEME_PARA_BIRIMLERI ?? '')
+  .split(',')
+  .map((p) => p.trim().toUpperCase())
+  .filter(Boolean);
+
 const sorgu = {
   query: sorguMetni,
-  market: process.env.DENEME_PAZAR?.trim() || undefined,
-  country: process.env.DENEME_ULKE?.trim() || undefined,
-  currency: process.env.DENEME_PARA_BIRIMI?.trim() || undefined,
-  limit: 5,
+  currencies: paraBirimleri,
+  networkIds: sayilar(process.env.DENEME_AG_KIMLIKLERI),
+  merchantIds: sayilar(process.env.DENEME_SATICI_KIMLIKLERI),
+  poolId: process.env.DENEME_HAVUZ?.trim() || undefined,
+  perPage: 5,
 };
 
 console.log('\nAffiliate.com ürün arama denemesi');
@@ -99,11 +116,24 @@ try {
       console.error(
         [
           '',
-          '  422/400 = isteğimiz sağlayıcının sözleşmesine uymadı.',
-          '  Bu BEKLENEN bir sonuçtur: istek gövdesinin alan adları resmî',
-          '  dokümanla doğrulanmadı (bkz. affiliateCom.ts dosya başlığı).',
-          '  Doğru gövde öğrenildiğinde yapılacak iş buildRequest içinde',
-          '  tek bir satırdır.',
+          '  400/422 = isteğimiz sağlayıcının sözleşmesine uymadı.',
+          '  Gövde resmî dokümana göre kuruldu (search[] + per_page) ama',
+          '  CANLI doğrulanmadı. Yanıttaki alan adını not edip',
+          '  affiliateCom.ts -> buildRequest içinde düzeltin.',
+        ].join('\n'),
+      );
+    }
+
+    if (error.code === 'quota_exhausted') {
+      console.error(
+        [
+          '',
+          '  422 = ABONELİK KOTASI tükendi — kodda düzeltilecek bir şey YOK.',
+          '  Plan yükseltilmeli ya da fatura dönemi beklenmeli.',
+          '',
+          '  Not: bu ayrım yanıt METNİNDEN çıkarılan bir sezgidir; doküman',
+          '  iki durumu aynı kodla anlatıp ayırt edici bir alan vermiyor.',
+          '  Yanlış sınıflandırıldıysa client.ts -> KOTA_KALIBI güncellenir.',
         ].join('\n'),
       );
     }
@@ -114,7 +144,10 @@ try {
   throw error;
 }
 
-console.log(`\n  BAŞARILI — ${sonuc.products.length} ürün normalize edildi.\n`);
+console.log(
+  `\n  BAŞARILI — ${sonuc.products.length} ürün normalize edildi` +
+    ` (toplam eşleşme: ${sonuc.totalCount ?? 'bildirilmedi'}).\n`,
+);
 
 for (const urun of sonuc.products.slice(0, 3)) {
   console.log(JSON.stringify(urun, null, 2));

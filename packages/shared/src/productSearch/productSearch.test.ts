@@ -5,70 +5,119 @@ import {
   affiliateComProvider,
   cozulmemisYerTutucuVar,
   normalizeAffiliateComProduct,
+  AFFILIATE_COM_DEFAULT_PER_PAGE,
   AFFILIATE_COM_ENDPOINT,
-  AFFILIATE_COM_MAX_LIMIT,
+  AFFILIATE_COM_MAX_PER_PAGE,
 } from './affiliateCom.js';
 import { normalizeSearchQuery, productSearchCacheKey } from './cacheKey.js';
 import { fetchExternalProducts, retryAfterSaniye } from './client.js';
 import { ProductSearchError } from './types.js';
 
-// ---------------------------------------------------------------------------
-// Normalizasyon
-// ---------------------------------------------------------------------------
-
-/** Doğrulanmamış sözleşmenin "en olası" hâli -- yalnızca ÖRNEK, kural değil. */
+/**
+ * Resmî doküman (`/concepts/products`, `/api-reference/products/search`)
+ * alan alan takip edilerek kurulmuş ham ürün.
+ *
+ * CANLI YANIT DEĞİLDİR -- gerçek kimlik bilgisi yok, 200 dönen bir yanıt
+ * hiç görülmedi. Testler sözleşmeye uyumu ölçer, gerçeği değil.
+ */
 const ORNEK_URUN = {
-  id: 'p-4821',
-  barcode: '5 099206 039292',
+  id: 'prd_01hxyz',
+  barcode: '5099206039292',
   name: '  Logitech G Pro X Kulaklık  ',
   description: 'Oyuncu kulaklığı',
-  commission_url: 'https://track.affiliate.com/click?pid=9&url=https%3A%2F%2Fmagaza.com%2Fp%2F1',
+  commissionable_status: 'commissionable',
+  urls: {
+    outclick: 'https://outclick.co/a/ENCRYPTED_TOKEN',
+    direct: 'https://magaza.com/p/1',
+    affiliate: 'https://partners.ornek-ag.com/click?merchant=12345&aff=@@@',
+  },
+  commission_url: 'https://partners.ornek-ag.com/click?merchant=12345&aff=@@@&sub=###',
   direct_url: 'https://magaza.com/p/1',
   image_url: 'https://cdn.magaza.com/1.jpg',
   currency: 'try',
-  regular_price: '1.899,00',
+  regular_price: 1899.0,
   final_price: 1299.9,
-  availability: 'in stock',
-  stock_quantity: '12',
+  on_sale: true,
+  availability: 'InStock',
+  stock_quantity: 12,
   sku: 'LG-PROX-1',
+  mpn: 'MPN-991',
+  identifiers: { barcode: '5099206039292', ean: '5099206039292', sku: 'LG-PROX-1' },
   brand: 'Logitech',
   model: 'G Pro X',
-  category: 'Kulaklık',
-  country: 'tr',
-  condition: 'New',
-  network: 'affiliate-com',
-  merchant: 'Örnek Mağaza',
+  category: 'Electronics > Audio > Headphones',
+  country: 'China',
+  condition: 'new',
+  network: { id: 329, name: 'Awin UK', logo_url: 'https://img.affiliate.com/n.png' },
+  merchant: { id: 54419, name: 'Örnek Mağaza', logo_url: 'https://img.affiliate.com/m.png' },
   updated_at: '2026-09-01T10:00:00Z',
-  added_at: '2026-08-01T10:00:00.000Z',
+  started_at: '2026-08-01T10:00:00.000Z',
 };
+
+// ---------------------------------------------------------------------------
+// Normalizasyon
+// ---------------------------------------------------------------------------
 
 test('ham ürün Ohaaaa modeline normalize edilir', () => {
   const urun = normalizeAffiliateComProduct(ORNEK_URUN);
   assert.ok(urun);
 
-  assert.equal(urun.providerId, 'p-4821');
+  assert.equal(urun.providerId, 'prd_01hxyz');
   assert.equal(urun.name, 'Logitech G Pro X Kulaklık');
-  // Barkod yalnızca rakamlara indirgenir: 14 haneye DOLDURULMAZ, kontrol
-  // basamağı burada doğrulanmaz (o kural ingest ve veritabanında).
-  assert.equal(urun.barcode, '5099206039292');
   assert.equal(urun.sku, 'LG-PROX-1');
   assert.equal(urun.currency, 'TRY');
-  assert.equal(urun.country, 'TR');
   assert.equal(urun.availability, 'in_stock');
   assert.equal(urun.condition, 'new');
   assert.equal(urun.stockQuantity, 12);
+  assert.equal(urun.category, 'Electronics > Audio > Headphones');
   assert.equal(urun.source, 'affiliate-com');
-  assert.equal(urun.unresolvedLinkPlaceholders, false);
 });
 
-test('fiyatlar KURUŞA çevrilir -- hem metin hem sayı biçiminden', () => {
+test('network ve merchant OBJE olarak gelir; adları okunur', () => {
+  /*
+   * GERİLEME TESTİ. Önceki sürümde ortak bir "ilk dolu değer" yardımcısı
+   * `network` adayını görüp OBJEYİ döndürüyor, metin okuyucusu objeyi
+   * okuyamayıp null veriyor ve `network.name` adayına HİÇ ulaşılmıyordu.
+   * Gerçek yanıtta ağ ve satıcı adı daima boş çıkardı.
+   */
   const urun = normalizeAffiliateComProduct(ORNEK_URUN);
-  assert.ok(urun);
 
-  // "1.899,00" -> Türkçe biçim, binlik nokta / ondalık virgül.
-  assert.equal(urun.regularPriceCents, 189_900);
+  assert.equal(urun?.network, 'Awin UK');
+  assert.equal(urun?.merchant, 'Örnek Mağaza');
+});
+
+test('addedAt kaynağı started_at; added_at diye bir alan YOK', () => {
+  const urun = normalizeAffiliateComProduct(ORNEK_URUN);
+  assert.equal(urun?.addedAt, '2026-08-01T10:00:00.000Z');
+  assert.equal(urun?.updatedAt, '2026-09-01T10:00:00.000Z');
+
+  // `added_at` gönderilse bile okunmaz: sözleşmede yanıt alanı değil.
+  const sadeceAddedAt = normalizeAffiliateComProduct({
+    id: '1',
+    name: 'Ü',
+    added_at: '2026-01-01T00:00:00Z',
+  });
+  assert.equal(sadeceAddedAt?.addedAt, null);
+});
+
+test('fiyatlar KURUŞA çevrilir', () => {
+  const urun = normalizeAffiliateComProduct(ORNEK_URUN);
+  assert.equal(urun?.regularPriceCents, 189_900);
   // 1299.9 -> kayan nokta; 129_989.99... değil 129_990 olmalı.
-  assert.equal(urun.finalPriceCents, 129_990);
+  assert.equal(urun?.finalPriceCents, 129_990);
+});
+
+test('sale_discount BİLEREK okunmuyor -- doküman kendi içinde çelişiyor', () => {
+  /*
+   * /concepts/products      : "para birimi cinsinden indirim TUTARI" (float)
+   * /api-reference/.../search: "regular_price'a uygulanan YÜZDE" (integer)
+   *
+   * Birini seçmek varsayım olurdu; ₺150 indirimi %150 diye basmak
+   * kullanıcıya doğrudan yanlış bilgi vermektir. Alan modele hiç girmiyor.
+   */
+  const urun = normalizeAffiliateComProduct({ ...ORNEK_URUN, sale_discount: 150 });
+  assert.equal('saleDiscount' in (urun ?? {}), false);
+  assert.equal('saleDiscountPercent' in (urun ?? {}), false);
 });
 
 test('kimlik ya da ad yoksa ürün düşürülür -- uydurulmaz', () => {
@@ -85,78 +134,149 @@ test('eksik alanlar null kalır; varsayılan DEĞER konmaz', () => {
   assert.equal(urun.currency, null);
   assert.equal(urun.finalPriceCents, null);
   assert.equal(urun.regularPriceCents, null);
-  assert.equal(urun.country, null);
+  assert.equal(urun.originCountry, null);
   assert.equal(urun.merchant, null);
-  // "Bilmiyoruz" ile "stokta yok" ayrı: tanınmayan/eksik değer `unknown`.
+  assert.equal(urun.network, null);
+  // "Bilmiyoruz" ile "stokta yok" ayrı: eksik değer `unknown`.
   assert.equal(urun.availability, 'unknown');
   assert.equal(urun.condition, 'unknown');
 });
 
-test('tanınmayan stok etiketi out_of_stock SAYILMAZ', () => {
-  const urun = normalizeAffiliateComProduct({ id: '1', name: 'Ürün', availability: 'kismen' });
-  assert.equal(urun?.availability, 'unknown');
+// ---------------------------------------------------------------------------
+// Sözleşmenin sabit değer kümeleri
+// ---------------------------------------------------------------------------
+
+test('availability: InStock / OutOfStock / Unknown açık eşleme', () => {
+  const durum = (value: unknown) =>
+    normalizeAffiliateComProduct({ id: '1', name: 'Ü', availability: value })?.availability;
+
+  assert.equal(durum('InStock'), 'in_stock');
+  assert.equal(durum('OutOfStock'), 'out_of_stock');
+  assert.equal(durum('Unknown'), 'unknown');
+  assert.equal(durum(null), 'unknown');
+  // Tanınmayan etiket out_of_stock SAYILMAZ -- satılabilir ürün gizlenmez.
+  assert.equal(durum('kismen'), 'unknown');
 });
 
-test('boolean stok alanı da okunur', () => {
+test('condition: open-box kendi adıyla taşınır, used a katlanmaz', () => {
+  const durum = (value: string) =>
+    normalizeAffiliateComProduct({ id: '1', name: 'Ü', condition: value })?.condition;
+
+  assert.equal(durum('new'), 'new');
+  assert.equal(durum('used'), 'used');
+  assert.equal(durum('refurbished'), 'refurbished');
+  assert.equal(durum('open-box'), 'open-box');
+  assert.equal(durum('Open-Box'), 'open-box');
+  assert.equal(durum('tasnif-disi'), 'unknown');
+});
+
+test('country MENŞE ülkedir; biçim dayatılmaz', () => {
+  // "China" gibi bir ülke ADI da geçerli veridir. İki harf dayatmak onu
+  // sessizce silerdi -- doküman biçimi söylemiyor.
+  assert.equal(normalizeAffiliateComProduct(ORNEK_URUN)?.originCountry, 'China');
   assert.equal(
-    normalizeAffiliateComProduct({ id: '1', name: 'Ü', in_stock: true })?.availability,
-    'in_stock',
+    normalizeAffiliateComProduct({ id: '1', name: 'Ü', country: 'TR' })?.originCountry,
+    'TR',
   );
-  assert.equal(
-    normalizeAffiliateComProduct({ id: '1', name: 'Ü', in_stock: false })?.availability,
-    'out_of_stock',
-  );
-});
-
-test('iç içe alanlar (urls.outclick, price.final) okunur', () => {
-  const urun = normalizeAffiliateComProduct({
-    id: '9',
-    name: 'İç içe',
-    urls: { outclick: 'https://track.affiliate.com/c/9', direct: 'https://magaza.com/9' },
-    price: { final: 49.5, regular: 59.5, currency: 'EUR' },
-  });
-
-  assert.ok(urun);
-  assert.equal(urun.commissionUrl, 'https://track.affiliate.com/c/9');
-  assert.equal(urun.directUrl, 'https://magaza.com/9');
-  assert.equal(urun.finalPriceCents, 4950);
-  assert.equal(urun.currency, 'EUR');
-});
-
-test('biçimi bozuk para birimi taşınmaz', () => {
-  const urun = normalizeAffiliateComProduct({ id: '1', name: 'Ü', currency: 'Türk Lirası' });
-  assert.equal(urun?.currency, null);
 });
 
 // ---------------------------------------------------------------------------
-// Yer tutucular -- VARSAYIM YAPILMAZ
+// Barkod -- ham değer korunur
+// ---------------------------------------------------------------------------
+
+test('barkod HAM hâliyle korunur; rakam süzgecinden geçirilmez', () => {
+  const urun = normalizeAffiliateComProduct(ORNEK_URUN);
+  assert.equal(urun?.barcode, '5099206039292');
+  assert.equal(urun?.barcodeDigits, '5099206039292');
+});
+
+test('ISBN-10 un X kontrol basamağı SİLİNMEZ', () => {
+  /*
+   * Doküman `barcode` alanının ISBN de olabileceğini ve büyük/küçük harfe
+   * DUYARLI olduğunu söylüyor. Rakam süzgeci `X`'i silip geçersiz, hiçbir
+   * şeyle eşleşmeyen bir kod üretirdi.
+   */
+  const urun = normalizeAffiliateComProduct({ id: '1', name: 'Kitap', barcode: '043970818X' });
+
+  assert.equal(urun?.barcode, '043970818X');
+  // Rakam dışı karakter var: kolaylık alanı boş kalır, YARIM kod üretmez.
+  assert.equal(urun?.barcodeDigits, null);
+});
+
+// ---------------------------------------------------------------------------
+// Adres önceliği ve yer tutucular
 // ---------------------------------------------------------------------------
 
 test('çözülmemiş yer tutucu kalıbı tanınır', () => {
-  assert.equal(cozulmemisYerTutucuVar('https://track.affiliate.com/c?sub=@@@'), true);
-  assert.equal(cozulmemisYerTutucuVar('https://track.affiliate.com/c?sub=###'), true);
-  assert.equal(cozulmemisYerTutucuVar('https://track.affiliate.com/c?sub={subid}'), true);
+  assert.equal(cozulmemisYerTutucuVar('https://x.com/c?sub=@@@'), true);
+  assert.equal(cozulmemisYerTutucuVar('https://x.com/c?sub=###'), true);
+  assert.equal(cozulmemisYerTutucuVar('https://x.com/c?sub={SUB_ID}'), true);
   // Tek `#` gerçek bir adres parçasıdır (fragment); yanlış alarm vermez.
   assert.equal(cozulmemisYerTutucuVar('https://magaza.com/p/1#aciklama'), false);
 });
 
-test('yer tutuculu komisyon adresi DÜŞÜRÜLÜR ve işaretlenir', () => {
+test('URL önceliği: outclick > affiliate; direct ASLA tracking olmaz', () => {
+  const urun = normalizeAffiliateComProduct(ORNEK_URUN);
+  assert.ok(urun);
+
+  // outclick yer tutucu taşımaz ve tıklamayı kaydeden tek adrestir.
+  assert.equal(urun.trackingUrl, 'https://outclick.co/a/ENCRYPTED_TOKEN');
+  assert.equal(urun.trackingUrlKind, 'outclick');
+  assert.equal(urun.outclickUrl, 'https://outclick.co/a/ENCRYPTED_TOKEN');
+  // urls.affiliate `@@@` taşıyordu: düşürüldü ve işaretlendi.
+  assert.equal(urun.affiliateUrl, null);
+  assert.equal(urun.unresolvedLinkPlaceholders, true);
+  assert.equal(urun.directUrl, 'https://magaza.com/p/1');
+});
+
+test('outclick yoksa temiz affiliate adresi kullanılır', () => {
+  const urun = normalizeAffiliateComProduct({
+    id: '1',
+    name: 'Ü',
+    urls: { affiliate: 'https://partners.ornek-ag.com/click?aff=3074081&sub=abc' },
+  });
+
+  assert.equal(urun?.trackingUrl, 'https://partners.ornek-ag.com/click?aff=3074081&sub=abc');
+  assert.equal(urun?.trackingUrlKind, 'affiliate');
+  assert.equal(urun?.unresolvedLinkPlaceholders, false);
+});
+
+test('legacy commission_url yalnızca urls.affiliate yoksa okunur', () => {
+  const urun = normalizeAffiliateComProduct({
+    id: '1',
+    name: 'Ü',
+    commission_url: 'https://legacy.ornek-ag.com/click?aff=3074081',
+  });
+
+  assert.equal(urun?.affiliateUrl, 'https://legacy.ornek-ag.com/click?aff=3074081');
+  assert.equal(urun?.trackingUrlKind, 'affiliate');
+});
+
+test('YER TUTUCULU ADRES HİÇBİR KOŞULDA DIŞARI VERİLMEZ', () => {
   /*
-   * NEDEN DOLDURMAYA ÇALIŞMIYORUZ: yer tutucunun gerçek API kullanımında
-   * nasıl doldurulduğu doğrulanmadı. Tahminle doldurulan bir link geçerli
-   * GÖRÜNÜR, yönlendirme çalışır ve tıklama atıfsız kalır -- sessiz gelir
-   * kaybı. Boş link ise görünür bir eksiktir.
+   * Resmî rapor dokümanı: doldurulmamış @@@ / ### tıklama kaydına HARFİ
+   * HARFİNE geçer ve hiçbir raporla eşleşmez. Link geçerli GÖRÜNÜR ama
+   * tıklama atıfsız kalır -- sessiz gelir kaybı.
    */
   const urun = normalizeAffiliateComProduct({
     id: '1',
     name: 'Ürün',
-    commission_url: 'https://track.affiliate.com/click?subid=@@@&url=###',
+    urls: { affiliate: 'https://partners.ornek-ag.com/click?aff=@@@&sub=###' },
+    commission_url: 'https://legacy.ornek-ag.com/click?aff=@@@',
     direct_url: 'https://magaza.com/p/1',
   });
 
   assert.ok(urun);
-  assert.equal(urun.commissionUrl, null);
+  assert.equal(urun.affiliateUrl, null);
+  assert.equal(urun.trackingUrl, null);
+  assert.equal(urun.trackingUrlKind, null);
   assert.equal(urun.unresolvedLinkPlaceholders, true);
+
+  // Hiçbir alan yer tutucu taşımamalı.
+  for (const deger of [urun.trackingUrl, urun.affiliateUrl, urun.outclickUrl, urun.directUrl]) {
+    if (deger !== null) assert.equal(cozulmemisYerTutucuVar(deger), false);
+  }
+
   // Doğrudan adres etkilenmez: ürün yine gösterilebilir.
   assert.equal(urun.directUrl, 'https://magaza.com/p/1');
 });
@@ -169,53 +289,103 @@ test('http/https dışındaki şema reddedilir', () => {
   });
 
   assert.equal(urun?.directUrl, null);
-  // Yer tutucu yoktu; "bozuk" değil "yok" olarak raporlanır.
   assert.equal(urun?.unresolvedLinkPlaceholders, false);
 });
 
 // ---------------------------------------------------------------------------
-// İstek gövdesi ve yanıt ayrıştırma
+// İstek gövdesi -- resmî sözleşme
 // ---------------------------------------------------------------------------
 
-test('istek gövdesi YALNIZCA doğrulanmış alanları taşır', () => {
-  const govde = affiliateComProvider.buildRequest({
-    query: '  oyuncu kulaklık ',
-    market: 'TR',
-    country: 'TR',
-    currency: 'TRY',
-    network: 'x',
-    merchant: 'y',
-    limit: 10,
+test('istek gövdesi search[] + per_page biçimindedir', () => {
+  const govde = affiliateComProvider.buildRequest({ query: '  oyuncu kulaklık ' });
+
+  assert.deepEqual(govde, {
+    search: [{ field: 'any', value: 'oyuncu kulaklık', operator: 'LIKE' }],
+    per_page: AFFILIATE_COM_DEFAULT_PER_PAGE,
   });
 
-  assert.deepEqual(govde, { query: 'oyuncu kulaklık', limit: 10 });
-  // Doğrulanmamış filtreler tel üzerine YAZILMAZ (bkz. DOGRULANMAMIS_FILTRELER).
-  for (const alan of ['market', 'country', 'currency', 'network', 'merchant']) {
-    assert.equal(alan in govde, false, `${alan} gövdeye yazılmamalı`);
-  }
+  // Eski (yanlış) biçimden hiçbir iz kalmamalı.
+  assert.equal('query' in govde, false);
+  assert.equal('limit' in govde, false);
 });
 
-test('limit üst sınıra kırpılır', () => {
-  assert.equal(affiliateComProvider.buildRequest({ query: 'a', limit: 5000 }).limit, AFFILIATE_COM_MAX_LIMIT);
-  assert.equal(affiliateComProvider.buildRequest({ query: 'a', limit: 0 }).limit, 1);
-  assert.equal(affiliateComProvider.buildRequest({ query: 'a' }).limit, AFFILIATE_COM_MAX_LIMIT);
+test('para birimi ve ağ/satıcı filtreleri search[] içine koşul olarak girer', () => {
+  const govde = affiliateComProvider.buildRequest({
+    query: 'kulaklık',
+    currencies: ['try', 'eur'],
+    networkIds: [329, 12],
+    merchantIds: [54419],
+    perPage: 10,
+  });
+
+  assert.deepEqual(govde.search, [
+    { field: 'any', value: 'kulaklık', operator: 'LIKE' },
+    // Aynı value içinde `||` = VEYA; ayrı objeler = VE.
+    { field: 'currency', value: 'TRY||EUR', operator: '=' },
+    { field: 'network.id', value: '329||12', operator: '=' },
+    { field: 'merchant.id', value: '54419', operator: '=' },
+  ]);
+  assert.equal(govde.per_page, 10);
 });
 
-test('yanıt sarmalayıcısının adı bilinmiyor; adaylar denenir', () => {
+test('boş filtre dizileri gövdeye koşul EKLEMEZ', () => {
+  const govde = affiliateComProvider.buildRequest({
+    query: 'kulaklık',
+    currencies: [],
+    networkIds: [],
+    merchantIds: [],
+  });
+
+  assert.equal((govde.search as unknown[]).length, 1);
+});
+
+test('page yalnızca istendiğinde gönderilir', () => {
+  assert.equal('page' in affiliateComProvider.buildRequest({ query: 'a' }), false);
+  assert.equal(affiliateComProvider.buildRequest({ query: 'a', page: 3 }).page, 3);
+  assert.equal(affiliateComProvider.buildRequest({ query: 'a', page: 0 }).page, 1);
+});
+
+test('per_page üst sınıra kırpılır', () => {
+  assert.equal(
+    affiliateComProvider.buildRequest({ query: 'a', perPage: 5000 }).per_page,
+    AFFILIATE_COM_MAX_PER_PAGE,
+  );
+  assert.equal(affiliateComProvider.buildRequest({ query: 'a', perPage: 0 }).per_page, 1);
+});
+
+test('pool_id çıplak ULID olarak geçer; önek sessizce kırpılmaz', () => {
+  // `pool_` önekli hâl 422 döndürüyor. Düzeltmek yanlış yapılandırmayı
+  // gizlemek olurdu; çağıran doğru değeri verir.
+  assert.equal(
+    affiliateComProvider.buildRequest({ query: 'a', poolId: '01HXYZ' }).pool_id,
+    '01HXYZ',
+  );
+  assert.equal('pool_id' in affiliateComProvider.buildRequest({ query: 'a' }), false);
+});
+
+// ---------------------------------------------------------------------------
+// Yanıt ayrıştırma
+// ---------------------------------------------------------------------------
+
+test('ürünler data dizisinden okunur', () => {
   const urun = { id: '1', name: 'Ürün' };
 
-  assert.equal(affiliateComProvider.parseResponse({ products: [urun] }).length, 1);
   assert.equal(affiliateComProvider.parseResponse({ data: [urun] }).length, 1);
-  assert.equal(affiliateComProvider.parseResponse({ results: [urun] }).length, 1);
+  // Savunma adayları -- sözleşmedeki ad `data`.
+  assert.equal(affiliateComProvider.parseResponse({ products: [urun] }).length, 1);
   assert.equal(affiliateComProvider.parseResponse([urun]).length, 1);
-  // Hiçbiri tutmazsa BOŞ döner -- fırlatmaz. Bir tur sonuçsuz kalır,
-  // Ohaaaa katalog araması etkilenmez.
+  // Hiçbiri tutmazsa BOŞ döner -- fırlatmaz.
   assert.deepEqual(affiliateComProvider.parseResponse({ tuhaf: 1 }), []);
+});
+
+test('meta.total okunur; yoksa null', () => {
+  assert.equal(affiliateComProvider.parseTotalCount({ meta: { total: 4821 } }), 4821);
+  assert.equal(affiliateComProvider.parseTotalCount({ data: [] }), null);
 });
 
 test('okunamayan TEK ürün bütün turu düşürmez', () => {
   const sonuc = affiliateComProvider.parseResponse({
-    products: [{ id: '1', name: 'İyi' }, null, { adsiz: true }, { id: '2', name: 'İyi 2' }],
+    data: [{ id: '1', name: 'İyi' }, null, { adsiz: true }, { id: '2', name: 'İyi 2' }],
   });
 
   assert.equal(sonuc.length, 2);
@@ -226,26 +396,45 @@ test('okunamayan TEK ürün bütün turu düşürmez', () => {
 // ---------------------------------------------------------------------------
 
 test('aynı arama aynı anahtarı üretir', () => {
-  const a = productSearchCacheKey('affiliate-com', { query: ' Oyuncu   Kulaklık ', market: 'TR' });
-  const b = productSearchCacheKey('affiliate-com', { market: 'TR', query: 'oyuncu kulaklık' });
+  const a = productSearchCacheKey('affiliate-com', {
+    query: ' Oyuncu   Kulaklık ',
+    currencies: ['TRY'],
+  });
+  const b = productSearchCacheKey('affiliate-com', {
+    currencies: ['TRY'],
+    query: 'oyuncu kulaklık',
+  });
 
   assert.equal(a, b);
 });
 
-test('pazar/para birimi/satıcı anahtarı DEĞİŞTİRİR', () => {
+test('küme alanlarında SIRA anahtarı değiştirmez', () => {
+  // `[3,1]` ile `[1,3]` aynı aramadır: sözleşmede `||` ile VEYA'lanıyorlar.
+  assert.equal(
+    productSearchCacheKey('affiliate-com', { query: 'a', networkIds: [3, 1] }),
+    productSearchCacheKey('affiliate-com', { query: 'a', networkIds: [1, 3] }),
+  );
+  assert.equal(
+    productSearchCacheKey('affiliate-com', { query: 'a', currencies: ['EUR', 'TRY'] }),
+    productSearchCacheKey('affiliate-com', { query: 'a', currencies: ['TRY', 'EUR'] }),
+  );
+});
+
+test('para birimi / ağ / satıcı / havuz / sayfalama anahtarı DEĞİŞTİRİR', () => {
   const temel = { query: 'kulaklık' };
 
   const anahtarlar = new Set([
     productSearchCacheKey('affiliate-com', temel),
-    productSearchCacheKey('affiliate-com', { ...temel, market: 'TR' }),
-    productSearchCacheKey('affiliate-com', { ...temel, market: 'EU' }),
-    productSearchCacheKey('affiliate-com', { ...temel, currency: 'EUR' }),
-    productSearchCacheKey('affiliate-com', { ...temel, merchant: 'x' }),
-    productSearchCacheKey('affiliate-com', { ...temel, network: 'x' }),
-    productSearchCacheKey('affiliate-com', { ...temel, limit: 5 }),
+    productSearchCacheKey('affiliate-com', { ...temel, currencies: ['TRY'] }),
+    productSearchCacheKey('affiliate-com', { ...temel, currencies: ['EUR'] }),
+    productSearchCacheKey('affiliate-com', { ...temel, networkIds: [329] }),
+    productSearchCacheKey('affiliate-com', { ...temel, merchantIds: [54419] }),
+    productSearchCacheKey('affiliate-com', { ...temel, poolId: '01HXYZ' }),
+    productSearchCacheKey('affiliate-com', { ...temel, perPage: 5 }),
+    productSearchCacheKey('affiliate-com', { ...temel, page: 2 }),
   ]);
 
-  assert.equal(anahtarlar.size, 7);
+  assert.equal(anahtarlar.size, 8);
 });
 
 test('sağlayıcı kimliği anahtarı ayırır', () => {
@@ -256,19 +445,15 @@ test('sağlayıcı kimliği anahtarı ayırır', () => {
 });
 
 test('anahtar normalizasyonu Türkçe karakteri ASCII yapmaz', () => {
-  // "kulaklık" ile "kulaklik" AYNI arama değildir.
   assert.notEqual(normalizeSearchQuery('kulaklık'), normalizeSearchQuery('kulaklik'));
 });
 
 // ---------------------------------------------------------------------------
-// HTTP istemcisi -- hata yolları
+// HTTP istemcisi
 // ---------------------------------------------------------------------------
 
-function sahteFetch(response: Response | (() => never)): typeof fetch {
-  return (async () => {
-    if (typeof response === 'function') response();
-    return response;
-  }) as unknown as typeof fetch;
+function sahteFetch(response: Response): typeof fetch {
+  return (async () => response) as unknown as typeof fetch;
 }
 
 function jsonYanit(body: unknown, init?: ResponseInit): Response {
@@ -294,15 +479,16 @@ async function hataKodu(fetchImpl: typeof fetch, apiKey = 'gizli-anahtar'): Prom
   return 'hata-yok';
 }
 
-test('başarılı yanıt normalize edilmiş ürünleri döndürür', async () => {
+test('başarılı yanıt ürünleri ve toplamı döndürür', async () => {
   const sonuc = await fetchExternalProducts({
     provider: affiliateComProvider,
     apiKey: 'gizli-anahtar',
     query: { query: 'kulaklık' },
-    fetchImpl: sahteFetch(jsonYanit({ products: [ORNEK_URUN] })),
+    fetchImpl: sahteFetch(jsonYanit({ meta: { total: 91 }, data: [ORNEK_URUN] })),
   });
 
   assert.equal(sonuc.source, 'affiliate-com');
+  assert.equal(sonuc.totalCount, 91);
   assert.equal(sonuc.products.length, 1);
   assert.equal(sonuc.products[0]?.name, 'Logitech G Pro X Kulaklık');
 });
@@ -336,12 +522,30 @@ test('boş sorgu kota harcamaz', async () => {
   assert.equal(cagrildi, false);
 });
 
-test('429 / 422 / 503 / 401 ayrı kodlara düşer', async () => {
-  assert.equal(await hataKodu(sahteFetch(jsonYanit({}, { status: 429 }))), 'rate_limited');
-  assert.equal(await hataKodu(sahteFetch(jsonYanit({}, { status: 422 }))), 'invalid_request');
-  assert.equal(await hataKodu(sahteFetch(jsonYanit({}, { status: 503 }))), 'unavailable');
+test('401 / 403 / 400 / 429 / 5xx ayrı kodlara düşer', async () => {
   assert.equal(await hataKodu(sahteFetch(jsonYanit({}, { status: 401 }))), 'unauthorized');
+  assert.equal(await hataKodu(sahteFetch(jsonYanit({}, { status: 403 }))), 'unauthorized');
+  assert.equal(await hataKodu(sahteFetch(jsonYanit({}, { status: 400 }))), 'invalid_request');
+  assert.equal(await hataKodu(sahteFetch(jsonYanit({}, { status: 429 }))), 'rate_limited');
+  assert.equal(await hataKodu(sahteFetch(jsonYanit({}, { status: 503 }))), 'unavailable');
+  assert.equal(await hataKodu(sahteFetch(jsonYanit({}, { status: 500 }))), 'unavailable');
   assert.equal(await hataKodu(sahteFetch(jsonYanit({}, { status: 418 }))), 'bad_response');
+});
+
+test('422: PARAMETRE HATASI ile KOTA TÜKENMESİ ayrılır', async () => {
+  /*
+   * Resmî doküman aynı kodu iki olay için kullanıyor ve ayırt edici bir
+   * alan tanımlamıyor. İkisi operatörden bambaşka şey ister: biri kodda
+   * düzeltme, diğeri plan yükseltmesi.
+   */
+  const parametre = jsonYanit({ message: 'The facets must be an array.' }, { status: 422 });
+  assert.equal(await hataKodu(sahteFetch(parametre)), 'invalid_request');
+
+  const kota = jsonYanit(
+    { message: 'You exceeded the total usage limit for your subscription plan' },
+    { status: 422 },
+  );
+  assert.equal(await hataKodu(sahteFetch(kota)), 'quota_exhausted');
 });
 
 test('429 Retry-After saniyeye çevrilir ve hataya taşınır', async () => {
@@ -390,7 +594,8 @@ test('ağ hatası zaman aşımından ayrılır', async () => {
 });
 
 test('JSON olmayan gövde bad_response', async () => {
-  const fetchImpl = (async () => new Response('<html>hata</html>', { status: 200 })) as unknown as typeof fetch;
+  const fetchImpl = (async () =>
+    new Response('<html>hata</html>', { status: 200 })) as unknown as typeof fetch;
   assert.equal(await hataKodu(fetchImpl), 'bad_response');
 });
 
@@ -407,19 +612,21 @@ test('aşırı büyük gövde OKUNMAZ', async () => {
 test('API ANAHTARI HATA METİNLERİNE SIZMAZ', async () => {
   const anahtar = 'cok-gizli-anahtar-123456';
 
-  for (const durum of [401, 422, 429, 503, 418]) {
+  for (const durum of [401, 403, 400, 422, 429, 503, 418]) {
     try {
       await fetchExternalProducts({
         provider: affiliateComProvider,
         apiKey: anahtar,
         query: { query: 'kulaklık' },
-        fetchImpl: sahteFetch(jsonYanit({ error: `bearer ${anahtar} reddedildi` }, { status: durum })),
+        fetchImpl: sahteFetch(
+          jsonYanit({ error: `bearer ${anahtar} reddedildi` }, { status: durum }),
+        ),
       });
       assert.fail('fırlatmalıydı');
     } catch (error) {
       assert.ok(error instanceof Error);
-      // Ne mesaj ne yığın izi anahtarı taşımalı; sağlayıcının GÖVDESİ de
-      // hataya girmemeli (gövde isteğimizi yankılayabilir).
+      // 422 yolunda gövde OKUNUYOR (kota ayrımı için) -- ama hiçbir yere
+      // yazılmamalı: ne mesaja, ne yığın izine.
       assert.equal(error.message.includes(anahtar), false);
       assert.equal(String(error.stack ?? '').includes(anahtar), false);
     }
@@ -435,7 +642,7 @@ test('anahtar Authorization başlığına Bearer olarak yazılır', async () => 
     gorulenUrl = String(url);
     gorulenYontem = String(init.method);
     gorulenBaslik = (init.headers as Record<string, string>).authorization ?? null;
-    return jsonYanit({ products: [] });
+    return jsonYanit({ data: [] });
   }) as unknown as typeof fetch;
 
   await fetchExternalProducts({

@@ -76,12 +76,15 @@ const ETIKET = 'dis-arama';
 function kanonikSorgu(sorgu: ProductSearchQuery): ProductSearchQuery {
   return {
     query: sorgu.query.trim(),
-    market: sorgu.market,
-    country: sorgu.country,
-    currency: sorgu.currency,
-    network: sorgu.network,
-    merchant: sorgu.merchant,
-    limit: sorgu.limit,
+    // Küme alanları SIRALANIR: `[3,1]` ile `[1,3]` aynı aramadır
+    // (sözleşmede `||` ile VEYA'lanıyorlar), farklı iki önbellek girdisi
+    // açmamaları gerekir.
+    currencies: [...(sorgu.currencies ?? [])].map((c) => c.toUpperCase()).sort(),
+    networkIds: [...(sorgu.networkIds ?? [])].sort((a, b) => a - b),
+    merchantIds: [...(sorgu.merchantIds ?? [])].sort((a, b) => a - b),
+    poolId: sorgu.poolId,
+    perPage: sorgu.perPage,
+    page: sorgu.page,
   };
 }
 

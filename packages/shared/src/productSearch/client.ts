@@ -97,8 +97,33 @@ export function retryAfterSaniye(header: string | null): number | undefined {
   return fark > 0 ? fark : 0;
 }
 
+/**
+ * 422'NİN İKİ ANLAMINI AYIRAN SEZGİ.
+ *
+ * Resmî doküman aynı durum koduna iki ayrı olay yüklüyor:
+ *   • parametre doğrulama hatası (`sort_by`, `facets`, `pool_id` …)
+ *   • ABONELİK KOTASININ TÜKENMESİ ("You exceeded the total usage limit
+ *     for your subscription plan")
+ *
+ * ...ama ikisini ayıracak bir ALAN tanımlamıyor. Tek ayırt edici işaret
+ * yanıt metnidir, dolayısıyla bu bir SEZGİDİR ve gerçek anahtarla
+ * doğrulanması gerekir.
+ *
+ * Ayrım yine de yapılmalı, çünkü iki durum operatörden BAMBAŞKA bir şey
+ * ister: biri kodda düzeltme, diğeri plan yükseltmesi. Tek kodda
+ * birleştirmek, olmayan bir hatayı aratmak olurdu.
+ *
+ * GÖVDE SADECE BURADA, BELLEKTE OKUNUR. Hiçbir yere yazılmaz, hiçbir
+ * hata metnine girmez, günlüğe düşmez -- yalnızca bu kalıpla eşleştirilir.
+ */
+const KOTA_KALIBI = /usage limit|subscription|quota|plan limit|exceeded the total/i;
+
 /** HTTP durum kodunu tipli hataya çevirir. */
-function durumdanHata(status: number, retryAfter: number | undefined): ProductSearchError {
+function durumdanHata(
+  status: number,
+  retryAfter: number | undefined,
+  govdeIpucu = '',
+): ProductSearchError {
   if (status === 401 || status === 403) {
     return new ProductSearchError(
       'Dis urun arama saglayicisi kimligi reddetti.',
@@ -107,13 +132,21 @@ function durumdanHata(status: number, retryAfter: number | undefined): ProductSe
     );
   }
 
+  if (status === 422 && KOTA_KALIBI.test(govdeIpucu)) {
+    return new ProductSearchError(
+      'Dis urun arama saglayicisinin abonelik kotasi tukendi.',
+      'quota_exhausted',
+      status,
+    );
+  }
+
   if (status === 422 || status === 400) {
     /*
-     * 422 = "istegimiz sozlesmeye uymadi".
+     * "Istegimiz sozlesmeye uymadi."
      *
-     * Bu, sagalayicinin degil BIZIM hatamizdir ve tekrar denemek
-     * duzeltmez. Cagiran tarafin bunu 503'ten ayirabilmesi gerekir:
-     * 503 beklenir, 422 duzeltilir.
+     * Bu, saglayicinin degil BIZIM hatamizdir ve tekrar denemek
+     * duzeltmez. Cagiran tarafin bunu 5xx'ten ayirabilmesi gerekir:
+     * 5xx beklenir, bu duzeltilir.
      */
     return new ProductSearchError(
       'Dis urun arama istegi saglayicinin sozlesmesine uymadi.',
@@ -177,7 +210,7 @@ export async function fetchExternalProducts(
 
   if (query.query.trim() === '') {
     // Bos sorgu kotayi harcar ve anlamli sonuc getirmez.
-    return { products: [], source: provider.id };
+    return { products: [], source: provider.id, totalCount: 0 };
   }
 
   const endpoint = request.endpoint?.trim() || provider.endpoint;
@@ -213,7 +246,32 @@ export async function fetchExternalProducts(
   }
 
   if (!response.ok) {
-    throw durumdanHata(response.status, retryAfterSaniye(response.headers.get('retry-after')));
+    /*
+     * 422 ICIN -- VE YALNIZCA ONUN ICIN -- GOVDEYE BAKILIR.
+     *
+     * Sebep `KOTA_KALIBI` basliginda yazili: ayni kod iki ayri olayi
+     * anlatiyor ve ayirt edici tek isaret metin. Okunan sey bellekte
+     * kalir, hicbir yere yazilmaz. Okuma basarisiz olursa ayrim yapilmaz
+     * ve varsayilan `invalid_request` gecerli olur.
+     *
+     * Kirpma kasitli: kota mesaji kisa; uzun bir govdeyi belleğe almak
+     * burada hicbir sey kazandirmaz.
+     */
+    let govdeIpucu = '';
+
+    if (response.status === 422) {
+      try {
+        govdeIpucu = (await response.text()).slice(0, 512);
+      } catch {
+        govdeIpucu = '';
+      }
+    }
+
+    throw durumdanHata(
+      response.status,
+      retryAfterSaniye(response.headers.get('retry-after')),
+      govdeIpucu,
+    );
   }
 
   const uzunluk = Number(response.headers.get('content-length') ?? '');
@@ -236,7 +294,11 @@ export async function fetchExternalProducts(
     );
   }
 
-  return { products: provider.parseResponse(payload), source: provider.id };
+  return {
+    products: provider.parseResponse(payload),
+    source: provider.id,
+    totalCount: provider.parseTotalCount(payload),
+  };
 }
 
 /** Bu istek için önbellek anahtarı (`cacheKey.ts` kuralı). */

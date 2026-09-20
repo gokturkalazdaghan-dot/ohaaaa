@@ -17,6 +17,7 @@ export type {
   ProductSearchProvider,
   ProductSearchQuery,
   ProductSearchResult,
+  TrackingUrlKind,
 } from './types.js';
 export { ProductSearchError } from './types.js';
 
@@ -24,10 +25,10 @@ export {
   affiliateComProvider,
   cozulmemisYerTutucuVar,
   normalizeAffiliateComProduct,
+  AFFILIATE_COM_DEFAULT_PER_PAGE,
   AFFILIATE_COM_ENDPOINT,
   AFFILIATE_COM_ID,
-  AFFILIATE_COM_MAX_LIMIT,
-  DOGRULANMAMIS_FILTRELER,
+  AFFILIATE_COM_MAX_PER_PAGE,
 } from './affiliateCom.js';
 
 export { normalizeSearchQuery, productSearchCacheKey } from './cacheKey.js';

@@ -49,14 +49,19 @@ dışındaki hiçbir şey doğrulanmış sayılmaz.
 
 | # | Durum | |
 | --- | --- | --- |
-| 1 | Uç nokta erişilebilir | ✅ **DOĞRULANDI** |
-| 2 | 401 authentication kontrolü | ✅ **DOĞRULANDI** |
+| 1 | Uç nokta erişilebilir | ✅ **CANLI DOĞRULANDI** |
+| 2 | 401 authentication kontrolü | ✅ **CANLI DOĞRULANDI** |
 | 3 | Gerçek credential | ❌ **YOK** |
 | 4 | Gerçek ürün yanıtı (200 + ürün) | ❌ **HENÜZ DOĞRULANMADI** |
-| 5 | Request sözleşmesi (alan adları, gövde) | ❌ **HENÜZ DOĞRULANMADI** |
-| 6 | Response sözleşmesi (sarmalayıcı, alan adları) | ❌ **HENÜZ DOĞRULANMADI** |
-| 7 | Filtre sözleşmesi (pazar/ülke/para birimi/ağ/satıcı) | ❌ **HENÜZ DOĞRULANMADI** |
-| 8 | Deeplink yer tutucu sözleşmesi (`@@@` / `###`) | ❌ **HENÜZ DOĞRULANMADI** |
+| 5 | Request sözleşmesi (alan adları, gövde) | 📘 **DOKÜMANDAN OKUNDU** — canlı değil |
+| 6 | Response sözleşmesi (sarmalayıcı, alan adları) | 📘 **DOKÜMANDAN OKUNDU** — canlı değil |
+| 7 | Filtre sözleşmesi (para birimi / ağ / satıcı / havuz) | 📘 **DOKÜMANDAN OKUNDU** — canlı değil |
+| 8 | Deeplink yer tutucu sözleşmesi (`@@@` / `###`) | 📘 **DOKÜMANDAN OKUNDU** — canlı değil |
+| 9 | `sale_discount` birimi (tutar mı yüzde mi) | ⚠️ **DOKÜMAN KENDİ İÇİNDE ÇELİŞİYOR** — okunmuyor |
+| 10 | 422'nin kota/parametre ayrımı | ⚠️ **SEZGİ** — yanıt metnine bakılıyor, doğrulanmalı |
+
+📘 = resmî dokümandan (https://guides.affiliate.com) okundu ve koda geçirildi;
+başarılı bir yanıtla ölçülmedi.
 
 **Kabul kriterinin doğru ifadesi:** *"Endpoint erişilebilir ve geçersiz
 Bearer token ile 401 döndüğü doğrulandı; gerçek ürün sorgusu henüz
@@ -96,43 +101,96 @@ sözleşmesi hakkında **hiçbir şey söylemez**.
   fiyat ve gerçek stok sanılır; bir karşılaştırma sitesinde bu, kullanıcıya
   doğrudan yalan söylemektir.
 
-### 4–8. DOĞRULANMADI
+### 4. Hâlâ doğrulanmayan tek şey: başarılı bir yanıt
 
-- Başarılı (200) bir ürün yanıtı **hiç görülmedi**
-- İstek gövdesindeki alan adları (`query`? `q`? `search`?)
-- Filtre sözlüğü — pazar, ülke, para birimi, ağ, satıcı
-- Sayfalama biçimi
-- Yanıt sarmalayıcısının adı (`products`? `data`? `results`?)
-- Alan adlandırması (`commission_url` mu `urls.outclick` mu)
-- `@@@` / `###` yer tutucularının **nasıl doldurulduğu**
+Başarılı (200) bir ürün yanıtı **hiç görülmedi**. Aşağıdaki sözleşme
+resmî dokümandan okundu ve koda geçirildi, ama **ölçülmedi**.
 
-Kod bu boşlukları **uydurmaz**. Aldığı üç önlem:
+### 5–8. Dokümandan okunan sözleşme
 
-1. **İstek gövdesi bilerek dar.** Yalnızca `query` ve `limit` gönderilir.
-   Pazar/ülke/para birimi/ağ/satıcı filtreleri sözleşmede (`ProductSearchQuery`)
-   ve önbellek anahtarında vardır ama tel üzerine yazılmaz. Liste tek
-   yerde: `affiliateCom.ts` → `DOGRULANMAMIS_FILTRELER`. Bir filtre
-   doğrulandığında yapılacak iş o listeden adı silmek ve `buildRequest`
-   içine bir satır eklemektir.
+**İstek** (`/first-request`, `/api-reference/products/search`):
 
-   *Neden:* doğrulanmamış bir filtre iki şekilde başarısız olur, ikisi de
-   sessizdir — ya yok sayılır (kullanıcı "Türkiye sonuçları" sanıp dünya
-   geneli sonuç görür) ya da 422 alınır (arama hiç çalışmaz).
+```jsonc
+{
+  "search": [ { "field": "any", "value": "oyuncu kulaklık", "operator": "LIKE" } ],
+  "per_page": 24,
+  "page": 2,            // istendiğinde
+  "pool_id": "01HXYZ"   // ÇIPLAK ULID; `pool_` öneki 422 döndürür
+}
+```
 
-2. **Yanıt savunmacı okunur.** Her alan için birkaç aday yol denenir
-   (`commission_url`, `urls.outclick`, …). Aday listesinde olmayan hiçbir
-   şey uydurulmaz; alan `null` kalır. Okunamayan tek bir ürün turu
-   düşürmez, o satır atlanır.
+`search` bir **dizidir**; elemanlar **VE** ile birleşir, aynı `value`
+içindeki `||` ise **VEYA**'dır. `any` alanı yalnızca `LIKE` kabul eder.
 
-3. **Çözülmemiş yer tutucu taşıyan adres DÜŞÜRÜLÜR.** `@@@`, `###` ya da
-   `{...}` içeren bir link `null` olur ve ürün `unresolvedLinkPlaceholders:
-   true` ile işaretlenir.
+**Pazar daraltması** — `market` diye bir alan **YOKTUR**. Kapsam iki
+mekanizmayla kurulur:
 
-   *Neden doldurmaya çalışmıyoruz:* aynı hata bu depoda bir kez ölçüldü ve
-   `packages/shared/src/affiliate.ts` içinde yazılı — çözülmemiş bir yer
-   tutucu adres dilbilgisini bozmaz. Link geçerli **görünür**, yönlendirme
-   çalışır, kullanıcı mağazaya varır ve tıklama **atıfsız** kalır. Sessiz
-   gelir kaybı. Boş link ise gürültülüdür: arayüz düğmeyi çizmez.
+- `currency` (`=`, `"TRY||EUR||AED"`)
+- `network.id` / `merchant.id` — **ağlar bölgeseldir** ("Awin UK",
+  "Impact US"; `region` ve `country` taşırlar). Hangi ağın hangi ülkeye
+  ait olduğu `GET /v1/networks` ile öğrenilir; bu depo o listeyi
+  **tahmin etmez**.
+- `pool_id` — ağ/satıcı kümesi Affiliate.com'da adlandırılıp saklanır.
+
+Ürünün `country` alanı **MENŞE ÜLKEDİR**, pazar değil.
+
+**Yanıt:** `{ meta, facets?, data: [...] }` — `meta.total` toplam eşleşme.
+
+**Adresler** (`/concepts/products`):
+
+| Link | Durum |
+| --- | --- |
+| `urls.outclick` | **Tercih edilen.** Yer tutucu yok; Affiliate.com'un tıklamayı **kaydettiği tek adres** |
+| `urls.affiliate` | Ağın linki — `@@@`/`###` doldurulmalı |
+| `commission_url` | `urls.affiliate`'in **legacy** adı |
+| `urls.direct` | Takipsiz, **komisyon yok** |
+
+**`@@@` = affiliate ID'niz, `###` = sub ID'niz.** `networks` parametresi
+gönderilirse API bunları otomatik doldurur.
+
+Kod bu sözleşmeyi uygular ve boşlukları **uydurmaz**:
+
+1. **Adres önceliği:** `urls.outclick` → `urls.affiliate`/`commission_url`
+   → yoksa `null`. `direct_url` bu zincire **hiç girmez**: komisyonsuz bir
+   adresi ortaklık linki diye sunmak, trafiği bedavaya vermektir.
+
+2. **Yanıt savunmacı okunur.** Sözleşmedeki ad denenir, tutmazsa alan
+   `null` kalır. Okunamayan tek bir ürün turu düşürmez, o satır atlanır.
+
+3. **Çözülmemiş yer tutucu taşıyan adres DÜŞÜRÜLÜR.** `@@@`, `###`,
+   `{SUB_ID}` içeren bir link `null` olur ve ürün
+   `unresolvedLinkPlaceholders: true` ile işaretlenir.
+
+   *Bu artık bir sezgi değil:* `/api-reference/reports/outclick` sayfası
+   açıkça yazıyor — doldurulmamış yer tutucular tıklama kaydına **harfi
+   harfine** geçer (`sub_id` alanı `{SUB_ID}` olur) ve hiçbir raporla
+   eşleşmez. Link geçerli **görünür**, kullanıcı mağazaya varır, tıklama
+   **atıfsız** kalır. Sessiz gelir kaybı.
+
+### 9. `sale_discount` — doküman kendi içinde çelişiyor
+
+| Sayfa | Tanım |
+| --- | --- |
+| `/concepts/products` | "Discount **amount** in the product's currency" (float, **para**) |
+| `/api-reference/products/search` | "Discount **percentage** applied to `regular_price`" (integer, **yüzde**) |
+
+Birini seçmek varsayım olurdu ve yanlış seçim doğrudan yanlış bilgi
+demektir (₺150 indirimi "%150" diye basmak). Alan, gerçek bir yanıtla
+ölçülene kadar modele **hiç girmiyor** — `affiliateCom.ts` içinde TODO
+olarak duruyor. Eksik bir alan görünür; yanlış bir alan değil.
+
+### 10. 422'nin iki anlamı — ayrım bir SEZGİ
+
+`/authentication` sayfası 422'yi **abonelik kotasının tükenmesi** olarak
+tanımlıyor; `/api-reference/products/search` ise aynı kodu **parametre
+doğrulama** hataları için kullanıyor (`facets` dizi değil, `sort_by`
+tanınmıyor, `pool_id` önekli…).
+
+İkisi operatörden bambaşka şey ister: biri kodda düzeltme, diğeri plan
+yükseltmesi. Doküman ayırt edici bir alan tanımlamadığı için ayrım
+**yanıt metninden** yapılıyor (`client.ts` → `KOTA_KALIBI`) ve gerçek
+anahtarla doğrulanmalıdır. Gövde yalnızca bu eşleştirme için, bellekte
+okunur; hiçbir yere yazılmaz.
 
 ## Veri nerede durur
 
@@ -154,10 +212,22 @@ sonuç göstermektir.
 
 ## GTIN / barkod eşleştirmesi
 
-`ExternalProduct.barcode` yalnızca **rakamlara indirgenmiş** hâldir. 14
-haneye doldurulmaz ve GS1 kontrol basamağı burada doğrulanmaz.
+İki alan vardır ve ayrı olmaları kasıtlıdır:
 
-Sebep: o kural zaten iki yerde yazılı ve ikisi de burayı önceler —
+| Alan | İçerik |
+| --- | --- |
+| `barcode` | Sağlayıcının gönderdiği **ham** değer, harfi harfine |
+| `barcodeDigits` | Yalnızca rakamlardan oluşuyorsa aynı değer; **aksi hâlde `null`** |
+
+**Ham değer neden korunuyor:** resmî doküman `barcode` alanının UPC, EAN,
+GTIN **ya da ISBN** olabileceğini ve **büyük/küçük harfe duyarlı**
+olduğunu söylüyor. ISBN-10'un kontrol basamağı `X` olabilir; bir rakam
+süzgeci onu sessizce siler ve geriye geçersiz, hiçbir şeyle eşleşmeyen
+bir kod bırakır. Sağlayıcıya geri sorgu atarken (`barcode` alanı, `=`
+operatörü) kullanılacak olan da ham değerdir.
+
+`barcodeDigits` 14 haneye **doldurulmaz** ve GS1 kontrol basamağı burada
+doğrulanmaz: o kural zaten iki yerde yazılı ve ikisi de burayı önceler —
 `packages/ingest/src/normalize.ts#normalizeGtin` ve veritabanındaki
 `public.normalize_gtin`. Üçüncü bir kopya, zamanla ayrışacak üçüncü bir
 doğruluk kaynağı olurdu.
@@ -176,7 +246,7 @@ gösterilebilir.
 | --- | --- |
 | `kapali` | Anahtar yok — hiç ağa çıkılmadı |
 | `basarili` | Ürünler geldi (boş liste de başarıdır) |
-| `basarisiz` | `sebep`: `not_configured`, `unauthorized`, `invalid_request`, `rate_limited`, `unavailable`, `timeout`, `network`, `bad_response`, `butce` |
+| `basarisiz` | `sebep`: `not_configured`, `unauthorized`, `invalid_request`, **`quota_exhausted`**, `rate_limited`, `unavailable`, `timeout`, `network`, `bad_response`, `butce` |
 
 Her durumda **Ohaaaa katalog araması olduğu gibi çalışır**. Dış sonuç
 gelmemesi aramanın bozulması değildir.
@@ -261,7 +331,15 @@ yapıldığı gibi:
 
 ```ts
 const disSonuc = await disKaynaktaAra(
-  { query: q, market, currency, limit: 12 },
+  {
+    query: q,
+    // Pazar daraltması: `market` diye bir alan YOK. Para birimi +
+    // AĞ kimliği. Ağ kimlikleri `GET /v1/networks` ile bulunur ve
+    // yapılandırmadan gelir — kodda SABİTLENMEZ.
+    currencies: ['TRY'],
+    networkIds: [/* GET /v1/networks ile doldurulacak */],
+    perPage: 12,
+  },
   await headers(),
 );
 ```
