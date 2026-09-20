@@ -20,6 +20,7 @@ export const EN: Record<keyof typeof TR, string> = {
   'ortak.siralama': 'Sorting',
   'ortak.anaSayfa': 'Home',
   'ortak.tumu': 'All',
+  'ortak.tumunuGor': 'See all',
   'ortak.firsatlar': 'Deals',
   'ortak.giris': 'Sign in',
   'ortak.sayfaYolu': 'Breadcrumb',
@@ -49,6 +50,7 @@ export const EN: Record<keyof typeof TR, string> = {
   'ev.karsilastirdigimizMagazalar': 'Shops we compare',
   'ev.listelenemiyor': 'We can’t list products right now',
   'ev.kategoriler': 'Categories',
+  'ev.kategorilerGez': 'Browse categories',
 
   // --- User value section ---
   'deger.baslik': 'Before you buy, Ohaaaa.',

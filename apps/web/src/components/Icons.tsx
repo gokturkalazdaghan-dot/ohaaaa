@@ -178,6 +178,21 @@ export const ArrowRightIcon = (p: IconProps) => (
   </Icon>
 );
 
+/*
+ * Açılır/kapanır bölümlerin durum işareti.
+ *
+ * Setin içine elle eklendi: tek bir ok için ikon kütüphanesi kurmak,
+ * bu dosyanın en başında yazılı olan kararı bozardı.
+ *
+ * Dönüş açısı çağıran tarafta veriliyor (`rotate-180`); ikonun kendisi
+ * durum bilmez, yalnızca aşağıyı gösterir.
+ */
+export const ChevronDownIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="m6 9 6 6 6-6" />
+  </Icon>
+);
+
 export const ShareIcon = (p: IconProps) => (
   <Icon {...p}>
     <circle cx="18" cy="5" r="3" />

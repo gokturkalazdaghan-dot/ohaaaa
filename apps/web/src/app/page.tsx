@@ -4,9 +4,9 @@ import type { Metadata } from 'next';
 import { dilMetaVerisi } from '@/lib/seo';
 import Link from 'next/link';
 
+import { CategoryBrowser } from '@/components/CategoryBrowser';
 import { DataUnavailable } from '@/components/DataUnavailable';
 import { FlashDeals } from '@/components/FlashDeals';
-import { categoryIcon } from '@/components/Icons';
 import { SearchBar } from '@/components/SearchBar';
 import { getRequestLocale } from '@/lib/locale';
 import { t, type Locale } from '@ohaaaa/shared';
@@ -211,56 +211,20 @@ export default async function HomePage() {
         </div>
 
         {/*
-          Kategori çipleri artık İKONLU.
+          KATEGORİ DUVARI KALDIRILDI.
 
-          İkonlar çizilmişti ve `categories.icon` alanı veritabanından ta
-          buraya kadar taşınıyordu — ama hiçbir yerde kullanılmıyordu; çipler
-          düz metindi. Bir ızgarada aranan kategoriyi bulmak, kelimeyi
-          okumaktan çok şekli tanımakla olur; ikon burada süs değil,
-          tarama hızıdır.
+          Burada 6 ana kategori ve 21 alt kategori AYNI ANDA, aynı görünüşte
+          çip olarak diziliyordu -- 27 çip. Telefon ekranında bu, arama
+          kutusunun altını baştan aşağı dolduruyor ve fırsatlar ile öne
+          çıkan ürünleri ekranın çok aşağısına itiyordu; Safari ekran
+          görüntüsüyle bildirilen arıza buydu.
 
-          İkon `aria-hidden`: adı zaten yanında yazıyor, ekran okuyucuya iki
-          kez söylemek gürültüdür. İkonu olmayan kategori sorunsuz şekilde
-          yalnızca metinle çizilir.
+          Yerine gelen gezgin yalnızca ANA BAŞLIKLARI gösteriyor; alt
+          kategoriler başlığa dokununca açılıyor. Veri aynı ağaçtan
+          (`getCategoryTree`) geliyor, adresler değişmedi, hiçbir kategori
+          silinmedi -- yalnızca ne zaman görüneceği değişti.
         */}
-        {categories.length > 0 && (
-          <nav aria-label={t(contentLocale, 'ev.kategoriler')} className="mt-6">
-            <ul className="flex flex-wrap gap-2">
-              {/*
-                Üst kategori ve alt kategorileri BİRLİKTE. Kataloğun
-                neredeyse tamamı alt kategorilerde duruyor (bilgisayar
-                32.894 grup -- ölçüldü); yalnızca üstleri göstermek en çok
-                ürünü olan yolları gizlemekti. Ürün sayısı çipte yazılıyor
-                çünkü ölçülmüş bir değer ve kullanıcı hangi kategorinin
-                dolu olduğunu böyle görür.
-              */}
-              {categories.flatMap((node) => [
-                <li key={node.category.id}>
-                  <Link href={`/kategori/${node.category.slug}`} className="chip">
-                    {(() => {
-                      const Icon = categoryIcon(node.category);
-                      return Icon ? <Icon className="h-4 w-4 text-brand" aria-hidden="true" /> : null;
-                    })()}
-                    {node.category.name}
-                    <span className="tabular text-2xs text-subtle">
-                      {node.groupCount.toLocaleString('tr-TR')}
-                    </span>
-                  </Link>
-                </li>,
-                ...node.children.map((child) => (
-                  <li key={child.category.id}>
-                    <Link href={`/kategori/${child.category.slug}`} className="chip">
-                      {child.category.name}
-                      <span className="tabular text-2xs text-subtle">
-                        {child.groupCount.toLocaleString('tr-TR')}
-                      </span>
-                    </Link>
-                  </li>
-                )),
-              ])}
-            </ul>
-          </nav>
-        )}
+        <CategoryBrowser nodes={categories} locale={contentLocale} />
       </section>
 
       {catalogUnavailable && (
