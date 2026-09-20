@@ -152,12 +152,16 @@ begin
   select id into v_baska from public.categories
    where parent_id is null and is_active and id <> v_l1 limit 1;
 
+  -- Deneme urunu BASLIKLA araniyor, sayfanin ilk 100'unde DEGIL: bu dosya
+  -- tohum kataloguyla kosuyor ama ayni iddia uretim olceginde de
+  -- gecerli olmali. Sayfaya bakan bir iddia, katalog buyudugunde kapsam
+  -- DOGRUYKEN kirmiziya doner.
   insert into public.product_groups (slug, title, category_id, offer_count, min_price_cents)
-       values ('test-l3-arama', 'Test L3 Arama', v_l3, 1, 1000)
+       values ('test-l3-arama', 'zztestl3arama', v_l3, 1, 1000)
     returning id into v_g;
 
   select count(*) into n
-    from public.search_products(null, v_l1, null, null, 'relevance', 100, 0)
+    from public.search_products('zztestl3arama', v_l1, null, null, 'relevance', 100, 0)
    where group_id = v_g;
   if n <> 1 then
     raise exception
@@ -166,7 +170,7 @@ begin
   end if;
 
   select count(*) into n
-    from public.search_products(null, v_baska, null, null, 'relevance', 100, 0)
+    from public.search_products('zztestl3arama', v_baska, null, null, 'relevance', 100, 0)
    where group_id = v_g;
   if n <> 0 then
     raise exception 'BAŞARISIZ: urun baska bir ana kategoride de gorundu';

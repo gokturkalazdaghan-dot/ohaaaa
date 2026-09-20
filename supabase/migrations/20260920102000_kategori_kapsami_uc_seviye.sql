@@ -538,12 +538,23 @@ begin
 
   -- 3) ARAMA GERÇEKTEN L3'Ü GÖRÜYOR. İddiayı sorguyla kanıtlamak şart:
   --    kapsam fonksiyonu doğru olup arama onu kullanmıyor olabilirdi.
+  /*
+   * DENEME ÜRÜNÜ BAŞLIKLA ARANIYOR, SAYFANIN İLK 100'ÜNDE ARANMIYOR.
+   *
+   * ÖLÇÜLEN HATA: ilk hâli `search_products(null, v_l1, ...)` ile sayfanın
+   * ilk 100 satırına bakıyordu. Tohum kataloğunda (6 grup) geçiyordu ama
+   * ÜRETİMDE o dalda ~24.000 grup var: tek satırlık deneme ürünü ilk 100'e
+   * hiç girmiyor ve iddia, kapsam DOĞRUYKEN başarısız oluyordu.
+   *
+   * Başlık tek ve ayırt edici bir belirteç taşıyor; sorgu sonucu bire
+   * indiriyor ve iddia katalog büyüklüğünden bağımsız hâle geliyor.
+   */
   insert into public.product_groups (slug, title, category_id, offer_count, min_price_cents)
-  values ('goc-l3-kapsam-denemesi', 'Goc L3 Kapsam Denemesi', v_l3, 1, 1000)
+  values ('goc-l3-kapsam-denemesi', 'zzgockapsamdenemesi', v_l3, 1, 1000)
   returning id into v_grup;
 
   select count(*) into v_n
-    from public.search_products(null, v_l1, null, null, 'relevance', 100, 0)
+    from public.search_products('zzgockapsamdenemesi', v_l1, null, null, 'relevance', 100, 0)
    where group_id = v_grup;
   if v_n <> 1 then
     raise exception
@@ -551,7 +562,7 @@ begin
   end if;
 
   select count(*) into v_n
-    from public.search_products(null, v_l2, null, null, 'relevance', 100, 0)
+    from public.search_products('zzgockapsamdenemesi', v_l2, null, null, 'relevance', 100, 0)
    where group_id = v_grup;
   if v_n <> 1 then
     raise exception 'DOGRULAMA 3b: L3 kategorideki urun, ALT kategori aramasinda cikmadi.';
@@ -561,7 +572,7 @@ begin
   --    sızdırmak, her kategori sayfasını "her şey" sayfasına çevirirdi.
   select count(*) into v_n
     from public.search_products(
-           null,
+           'zzgockapsamdenemesi',
            (select id from public.categories where slug::text = 'telefon'),
            null, null, 'relevance', 100, 0)
    where group_id = v_grup;
