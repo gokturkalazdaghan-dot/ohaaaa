@@ -2,8 +2,31 @@
  * GET /api/cron/alim — zamanlanmış ürün alım turu.
  *
  * KİM ÇAĞIRIR
- * Vercel Cron (bkz. vercel.json). Vercel zamanlanmış isteklere kendi
- * `authorization: Bearer <CRON_SECRET>` başlığını ekler.
+ * ŞU AN HİÇBİR ZAMANLAYICI — ve bu bilinçli.
+ *
+ * Üretimdeki alım turunu GitHub Actions yürütüyor
+ * (`.github/workflows/ingest.yml`, 6 saatte bir) ve o iş bu HTTP ucunu
+ * DEĞİL, CLI'ı doğrudan çalıştırıyor. Bu uç, bir turu beklemeden
+ * başlatmak gerektiğinde kullanılan ELLE / YEDEK tetikleyicidir.
+ *
+ * NEDEN vercel.json'da DEĞİL
+ * İki sebep, ikisi de bağlayıcı:
+ *   1. Hobby planında iki cron yuvası var ve ikisi de dolu
+ *      (`fiyat-alarmi`, `donusum-esitle`). Alımı oraya koymak, o ikisinden
+ *      birini düşürmek demekti.
+ *   2. Serverless çağrı 60 saniyede ölüyor (aşağıdaki SÜRE BÜTÇESİ) --
+ *      GitHub Actions işi 30 dakikaya kadar koşabiliyor. Alımın doğru
+ *      yeri, süresi olan yer.
+ *
+ * Bu satırlar önce "Vercel Cron (bkz. vercel.json)" diyordu; vercel.json
+ * bu yolu HİÇ listelemedi. Yorum yanlış olduğu için tehlikeliydi: alımın
+ * Vercel tarafından koşturulduğunu sanan biri, GitHub Actions işini
+ * devre dışı bıraktığında kataloğun sessizce donduğunu ancak günler
+ * sonra fark ederdi.
+ *
+ * Buraya bir gün cron eklenirse Vercel zamanlanmış isteğe kendi
+ * `authorization: Bearer <CRON_SECRET>` başlığını ekler ve aşağıdaki
+ * denetim değişmeden çalışır.
  *
  * NEDEN SIR ZORUNLU: bu uç nokta ÇALIŞTIRMAK, dış sitelere istek attırmak
  * ve katalog yazmak demektir. Sırsız bir uç nokta, siteyi başkalarının
