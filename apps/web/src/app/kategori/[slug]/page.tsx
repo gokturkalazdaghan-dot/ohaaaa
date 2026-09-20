@@ -2,7 +2,7 @@ import { dilMetaVerisi } from '@/lib/seo';
 import type { Metadata } from 'next';
 import { ProductCard } from '@/components/ProductCard';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 
 import { formatCount, formatMoney, siblingsOf, t, type Locale } from '@ohaaaa/shared';
 
@@ -13,6 +13,7 @@ import { Pagination } from '@/components/Pagination';
 import {
   categoryHasProducts,
   getCategories,
+  getCategoryRedirect,
   searchProducts,
   type SortOption,
 } from '@/data/catalog';
@@ -146,6 +147,21 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     categories = await getCategories();
     category = categories.find((candidate) => candidate.slug === slug);
 
+    /*
+     * BİRLEŞTİRİLMİŞ KATEGORİ 404 DEĞİL, 301.
+     *
+     * Yinelenen kategoriler kanonik hedeflerine birleştirildi ve kaynak
+     * satır pasifleşti. `getCategories()` yalnızca etkin kategorileri
+     * döndürdüğü için burada bulunamıyor; hiçbir şey yapmasaydık
+     * `/kategori/projektor` dün 200 veren bir adresken bugün 404 verirdi.
+     * Dışarıya verilmiş bir adresi 404'e çevirmek, o sayfanın bütün arama
+     * değerini çöpe atmaktır -- kalıcı yönlendirme o değeri hedefe aktarır.
+     */
+    if (!category) {
+      const hedef = await getCategoryRedirect(slug);
+      if (hedef) permanentRedirect(`/kategori/${hedef}`);
+    }
+
     if (!category) notFound();
 
     results = await searchProducts({
@@ -155,8 +171,8 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
       offset: (page - 1) * PAGE_SIZE,
     });
   } catch (error) {
-    // notFound() bir hata fırlatarak çalışır; onu yutmamalıyız.
-    if (isNotFoundError(error)) throw error;
+    // notFound() ve permanentRedirect() birer hata fırlatarak çalışır; onları yutmamalıyız.
+    if (isNavigationSignal(error)) throw error;
 
     console.error(
       JSON.stringify({
@@ -417,16 +433,27 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
 }
 
 /**
- * `notFound()` bir hata fırlatarak çalışır (NEXT_HTTP_ERROR_FALLBACK).
- * Genel bir catch bloğu onu yutarsa 404 yerine "veri yok" sayfası gösterilir
- * ve gerçekten silinmiş bir kategori kalıcı olarak 200 dönmeye başlar.
+ * `notFound()` ve `permanentRedirect()` birer HATA FIRLATARAK çalışır
+ * (`NEXT_HTTP_ERROR_FALLBACK` ve `NEXT_REDIRECT`). Genel bir catch bloğu
+ * bunları yutarsa iki ayrı arıza çıkar:
+ *
+ *   • 404 yerine "veri yok" sayfası gösterilir ve gerçekten silinmiş bir
+ *     kategori kalıcı olarak 200 dönmeye başlar.
+ *   • Birleştirilmiş bir kategori hedefine YÖNLENMEZ; kullanıcı "veri yok"
+ *     görür ve arama motoru o adresi ölü sayar -- oysa hedef sayfa duruyor.
+ *
+ * Bu yüzden ikisi de yeniden fırlatılır.
  */
-function isNotFoundError(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'digest' in error &&
-    typeof (error as { digest?: unknown }).digest === 'string' &&
-    (error as { digest: string }).digest.startsWith('NEXT_HTTP_ERROR_FALLBACK')
-  );
+function isNavigationSignal(error: unknown): boolean {
+  if (
+    typeof error !== 'object' ||
+    error === null ||
+    !('digest' in error) ||
+    typeof (error as { digest?: unknown }).digest !== 'string'
+  ) {
+    return false;
+  }
+
+  const digest = (error as { digest: string }).digest;
+  return digest.startsWith('NEXT_HTTP_ERROR_FALLBACK') || digest.startsWith('NEXT_REDIRECT');
 }

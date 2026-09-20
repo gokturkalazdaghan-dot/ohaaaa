@@ -118,6 +118,15 @@ sipariş tablolarını göremez; bir taşeron başka bir taşeronun API anahtarl
 siparişlerini veya panel verisini okuyamaz; kullanıcı kendi rolünü ya da
 komisyon oranını yükseltemez.
 
+## Kategori taksonomisi
+
+Ürün taksonomisi üç seviyeli (L1 Ana · L2 Alt · L3 Ürün Kategorisi) ve
+affiliate feed'lerden bağımsızdır: satıcının kendi ağacı
+`category_source_map` tablosunda yaşar, bizimki `categories` içinde.
+Yeni bir satıcının eşlemesi **veriye yazılır, dağıtım gerektirmez**.
+
+Ayrıntı: [`docs/kategori-taksonomisi.md`](docs/kategori-taksonomisi.md).
+
 ## Taşeron API'si
 
 ```sh

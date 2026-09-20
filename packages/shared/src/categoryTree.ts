@@ -21,24 +21,30 @@ export interface CategoryLike {
 export interface CategoryNode<T extends CategoryLike> {
   category: T;
   /**
-   * Bu kategoride görülebilecek grup sayısı: KENDİ + ÇOCUKLARI.
+   * Bu kategoride görülebilecek grup sayısı: KENDİ + BÜTÜN ALT AĞACI.
    *
-   * Toplama gerekli çünkü arama işlevi üst kategoriyi sorgularken alt
-   * kategorileri de kapsıyor (`search_products` içinde `parent_id`
-   * alt sorgusu). Yalnızca kendi sayısını göstermek "Elektronik: 0" gibi
-   * gerçekle çelişen bir sayı üretirdi -- oysa o sayfa 34 binden fazla
-   * ürün gösteriyor.
+   * Toplama gerekli çünkü arama işlevi bir kategoriyi sorgularken alt
+   * ağacının tamamını kapsıyor (`kategori_kapsami` özyinelemeli iniyor).
+   * Yalnızca kendi sayısını göstermek "Elektronik: 0" gibi gerçekle çelişen
+   * bir sayı üretirdi -- oysa o sayfa 34 binden fazla ürün gösteriyor.
+   *
+   * TOPLAM ÜÇ SEVİYEYİ KAPSAR. Taksonomi L1 > L2 > L3 olduğundan yalnızca
+   * doğrudan çocukları toplamak, ürün kategorilerindeki (L3) ürünleri
+   * saymadan bırakırdı: menüdeki sayı ile sayfadaki liste ayrışır ve
+   * kullanıcı dolu bir kategoriyi boş sanıp hiç tıklamazdı.
    */
   groupCount: number;
-  children: Array<{ category: T; groupCount: number }>;
+  /** Alt kategoriler -- kendileri de birer düğüm, yani ağaç istenen
+   * derinlikte gezilebilir. Boş dallar elenmiştir. */
+  children: CategoryNode<T>[];
 }
 
 /**
  * Düz kategori listesini ağaca dizer ve BOŞ dalları eler.
  *
- * ELEME KURALI: grup sayısı sıfır olan kategori dışarıda kalır. Üst kategori
- * ancak kendi VE bütün çocukları boşsa düşer -- çocuğunda ürün olan bir üst
- * kategoriyi elemek, o ürünlere giden yolu kapatmak olurdu.
+ * ELEME KURALI: kendi VE bütün alt ağacı sıfır olan kategori dışarıda kalır.
+ * Çocuğunda ürün olan bir üst kategoriyi elemek, o ürünlere giden yolu
+ * kapatmak olurdu.
  *
  * SIRA KORUNUR. Gelen dizi zaten `sort_order` ile sıralı; burada yeniden
  * sıralamak o niyeti ezerdi.
@@ -47,15 +53,11 @@ export interface CategoryNode<T extends CategoryLike> {
  * gösteriyorsa (üst kategori pasifleştirilmiş olabilir) çocuk KAYBEDİLMEZ,
  * üst seviyeye alınır. Sessizce düşürmek, o kategorideki ürünleri
  * gezinilemez yapardı.
- */
-/**
- * İkincil yerleşim: `parentId` → o üst kategori altında AYRICA gösterilecek
- * kategori kimlikleri.
  *
- * Kanonik taksonomide bazı kavramlar iki ayrı Seviye-1 altında aranıyor
- * ("Saat" hem Moda'da hem Takı'da). İkinci bir kategori satırı açmak, aynı
- * kavramın ürünlerini iki kimliğe bölerdi; bu yüzden kategori tek evinde
- * kalıyor ve yalnızca menüde ikinci bir yerde daha görünüyor.
+ * DÖNGÜYE KARŞI KORUMALI. Veritabanı tarafı döngüyü zaten reddediyor ama bu
+ * fonksiyon başka bir kaynaktan (demo küme, önbellek, test) beslenebilir:
+ * ziyaret edilmiş kimlik ikinci kez açılmaz, yoksa sonsuz özyineleme
+ * sunucuyu kilitlerdi.
  */
 export type SecondaryPlacements = ReadonlyMap<string, readonly string[]>;
 
@@ -67,10 +69,6 @@ export function buildCategoryTree<T extends CategoryLike>(
   const kimlikler = new Set(categories.map((c) => c.id));
   const kategoriKimlige = new Map(categories.map((c) => [c.id, c]));
 
-  const ustSeviye = categories.filter(
-    (c) => c.parentId === null || !kimlikler.has(c.parentId),
-  );
-
   const cocuklar = new Map<string, T[]>();
   for (const c of categories) {
     if (c.parentId === null || !kimlikler.has(c.parentId)) continue;
@@ -79,46 +77,59 @@ export function buildCategoryTree<T extends CategoryLike>(
     else cocuklar.set(c.parentId, [c]);
   }
 
-  const dugumler: CategoryNode<T>[] = [];
+  const ustSeviye = categories.filter(
+    (c) => c.parentId === null || !kimlikler.has(c.parentId),
+  );
 
-  for (const ust of ustSeviye) {
-    const kendi = ownCounts.get(ust.id) ?? 0;
+  /**
+   * Bir dalı düğüme çevirir; dal tamamen boşsa `null` döner.
+   *
+   * `yolda` aynı dalda açık olan kimlikleri tutar: bir döngü varsa ikinci
+   * ziyaret engellenir ve dal orada kapanır.
+   */
+  const dugumKur = (kategori: T, yolda: ReadonlySet<string>): CategoryNode<T> | null => {
+    if (yolda.has(kategori.id)) return null;
+    const yeniYol = new Set(yolda).add(kategori.id);
 
-    const doluCocuklar = (cocuklar.get(ust.id) ?? [])
-      .map((c) => ({ category: c, groupCount: ownCounts.get(c.id) ?? 0 }))
-      .filter((c) => c.groupCount > 0);
+    const kendi = ownCounts.get(kategori.id) ?? 0;
 
-    const toplam = kendi + doluCocuklar.reduce((s, c) => s + c.groupCount, 0);
+    const altDugumler = (cocuklar.get(kategori.id) ?? [])
+      .map((c) => dugumKur(c, yeniYol))
+      .filter((d): d is CategoryNode<T> => d !== null);
+
     /*
-     * TOPLAM YALNIZCA KENDİ DALINDAN HESAPLANIR.
+     * İKİNCİL YERLEŞİMLER SAYIYA KATILMAZ.
      *
-     * İkincil yerleşimler bilerek bu toplamın DIŞINDA: "Saat" hem Moda hem
-     * Takı altında görünüyor ama ürünleri tek bir yerde duruyor. İkisine de
-     * eklemek aynı ürünleri iki kez saymak ve kullanıcıya gerçek olmayan bir
-     * sayı göstermek olurdu.
+     * "Saat" hem Moda hem Takı altında görünüyor ama ürünleri tek bir yerde
+     * duruyor. İkisine de eklemek aynı ürünleri iki kez saymak ve kullanıcıya
+     * gerçek olmayan bir sayı göstermek olurdu.
      *
      * Aynı sebeple boş bir üst kategori ikincil yerleşimle DİRİLMEZ: kendi
      * dalı boşsa menüden düşer. Yoksa ürünü olmayan bir sayfaya giden yol
      * açardık.
      */
-    if (toplam === 0) continue;
+    const toplam = kendi + altDugumler.reduce((s, d) => s + d.groupCount, 0);
+    if (toplam === 0) return null;
 
-    const ekCocuklar = (secondaryPlacements?.get(ust.id) ?? [])
+    const ekDugumler = (secondaryPlacements?.get(kategori.id) ?? [])
       .map((kimlik) => kategoriKimlige.get(kimlik))
       .filter((c): c is T => c !== undefined)
       // Zaten birincil çocuksa iki kez listeleme.
-      .filter((c) => !doluCocuklar.some((d) => d.category.id === c.id))
-      .map((c) => ({ category: c, groupCount: ownCounts.get(c.id) ?? 0 }))
-      .filter((c) => c.groupCount > 0);
+      .filter((c) => !altDugumler.some((d) => d.category.id === c.id))
+      .map((c) => dugumKur(c, yeniYol))
+      .filter((d): d is CategoryNode<T> => d !== null);
 
-    dugumler.push({
-      category: ust,
+    return {
+      category: kategori,
       groupCount: toplam,
-      children: [...doluCocuklar, ...ekCocuklar],
-    });
-  }
+      children: [...altDugumler, ...ekDugumler],
+    };
+  };
 
-  return dugumler;
+  const bos: ReadonlySet<string> = new Set<string>();
+  return ustSeviye
+    .map((ust) => dugumKur(ust, bos))
+    .filter((d): d is CategoryNode<T> => d !== null);
 }
 
 /**

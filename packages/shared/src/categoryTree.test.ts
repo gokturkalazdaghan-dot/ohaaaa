@@ -177,3 +177,96 @@ test('yerleşim verilmezse ağaç aynen eskisi gibi kurulur', () => {
     buildCategoryTree(URETIM, SAYILAR, new Map()),
   );
 });
+
+/* ==========================================================================
+ * ÜÇ SEVİYELİ TAKSONOMİ (L1 Ana · L2 Alt · L3 Ürün Kategorisi)
+ * --------------------------------------------------------------------------
+ * Kanonik taksonomi üç seviyeli. İki seviye toplayan bir ağaç, ürün
+ * kategorilerindeki (L3) ürünleri saymadan bırakır: menüdeki sayı ile
+ * sayfadaki liste ayrışır ve kullanıcı dolu bir kategoriyi boş sanır.
+ * ========================================================================== */
+
+/** L1 Bilgisayar & Teknoloji > L2 Bilgisayar Bileşenleri > L3 RAM / Ekran Kartı */
+const UC_SEVIYE: K[] = [
+  k('bilgisayar-tablet'),
+  k('bilgisayar-bilesenleri', 'bilgisayar-tablet'),
+  k('ram', 'bilgisayar-bilesenleri'),
+  k('ekran-karti', 'bilgisayar-bilesenleri'),
+  k('yazilim', 'bilgisayar-tablet'),
+];
+
+test('L3 sayıları L1 toplamına giriyor -- ara seviye sayıyı yutmuyor', () => {
+  const agac = buildCategoryTree(
+    UC_SEVIYE,
+    new Map([['ram', 40], ['ekran-karti', 60], ['yazilim', 5]]),
+  );
+
+  const l1 = agac.find((d) => d.category.slug === 'bilgisayar-tablet');
+  assert.ok(l1, 'kendi sayısı 0 olsa da alt ağacında 105 grup var');
+  assert.equal(l1.groupCount, 105);
+
+  const l2 = l1.children.find((d) => d.category.slug === 'bilgisayar-bilesenleri');
+  assert.ok(l2);
+  assert.equal(l2.groupCount, 100);
+  assert.deepEqual(l2.children.map((d) => d.category.slug), ['ram', 'ekran-karti']);
+});
+
+test('boş L3 elenir, dolu kardeşi ve üstü kalır', () => {
+  const agac = buildCategoryTree(UC_SEVIYE, new Map([['ram', 40], ['yazilim', 5]]));
+
+  const l2 = agac[0]?.children.find((d) => d.category.slug === 'bilgisayar-bilesenleri');
+  assert.ok(l2);
+  assert.deepEqual(l2.children.map((d) => d.category.slug), ['ram']);
+});
+
+test('alt ağacı tamamen boş olan L2 düşer ama L1 yaşamaya devam eder', () => {
+  const agac = buildCategoryTree(UC_SEVIYE, new Map([['yazilim', 5]]));
+
+  const l1 = agac.find((d) => d.category.slug === 'bilgisayar-tablet');
+  assert.ok(l1);
+  assert.deepEqual(l1.children.map((d) => d.category.slug), ['yazilim']);
+  assert.equal(l1.groupCount, 5);
+});
+
+test('kendi ürünü olan ara kategori, çocuklarının sayısına EKLENİR', () => {
+  // L2 hem kendi ürününü taşıyabilir hem alt kategorileri olabilir; ikisini
+  // birden saymamak "Bilgisayar Bileşenleri (100)" derken 140 ürün
+  // göstermek olurdu.
+  const agac = buildCategoryTree(
+    UC_SEVIYE,
+    new Map([['bilgisayar-bilesenleri', 40], ['ram', 60]]),
+  );
+
+  const l2 = agac[0]?.children[0];
+  assert.equal(l2?.category.slug, 'bilgisayar-bilesenleri');
+  assert.equal(l2?.groupCount, 100);
+});
+
+test('döngülü veri sonsuz özyinelemeye düşmez', () => {
+  // Veritabanı döngüyü reddediyor ama bu fonksiyon demo kümeden ya da
+  // bayat bir önbellekten de beslenebiliyor. Kilitlenmek yerine dalı kapat.
+  // Kök -> a -> b -> a: döngü KÖKTEN ERİŞİLEBİLİR, yani koruma gerçekten
+  // devreye girmek zorunda. Erişilemeyen bir döngü zaten hiç gezilmez ve
+  // testi geçmiş gibi gösterirdi.
+  const dongulu: K[] = [
+    k('kok'),
+    { id: 'a', parentId: 'kok', slug: 'a' },
+    { id: 'b', parentId: 'a', slug: 'b' },
+  ];
+  // `a`nın ikinci ebeveyni ikincil yerleşimle kuruluyor: `b` altında `a`.
+  const ikincil = new Map([['b', ['a']]]);
+
+  const agac = buildCategoryTree(
+    dongulu,
+    new Map([['a', 1], ['b', 1]]),
+    ikincil,
+  );
+
+  const kok = agac.find((d) => d.category.slug === 'kok');
+  assert.ok(kok);
+  assert.equal(kok.groupCount, 2);
+  // Dal `a > b` ile kapanır: `b` altında ikinci bir `a` AÇILMAZ.
+  assert.deepEqual(kok.children.map((d) => d.category.slug), ['a']);
+  assert.deepEqual(kok.children[0]?.children.map((d) => d.category.slug), ['b']);
+  assert.deepEqual(kok.children[0]?.children[0]?.children, []);
+});

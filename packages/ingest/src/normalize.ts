@@ -159,6 +159,17 @@ function normalizeOne(
       mapping.category ? read(record, mapping.category) : null,
       title,
     ),
+    /*
+     * HAM KAYNAK KATEGORİSİ KORUNUR.
+     *
+     * Kural listesi bu değeri çözemediğinde (yeni bir satıcı, Türkçe ya da
+     * Almanca bir taksonomi) eskiden değer burada KAYBOLUYORDU ve ürün
+     * sınıflandırılmamış kalıyordu. Ham değer taşındığı için hat, koddaki
+     * listeye ek olarak veritabanındaki `category_source_map` sözlüğüne de
+     * sorabiliyor -- yani yeni bir satıcının eşlemesi DAĞITIM GEREKTİRMİYOR.
+     */
+    sourceCategory:
+      (mapping.category ? read(record, mapping.category) : null)?.trim().slice(0, 500) || null,
     shippingFeeCents: Math.max(0, shippingFeeCents),
   };
 }

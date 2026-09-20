@@ -104,14 +104,31 @@ export async function CategoryNav() {
 
             {node.children.length > 0 && (
               <div
-                className="invisible absolute left-0 top-full z-50 hidden min-w-56 rounded-xl border border-line bg-surface p-2 opacity-0 shadow-lg transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:block"
+                className="invisible absolute left-0 top-full z-50 hidden max-w-[min(90vw,44rem)] rounded-xl border border-line bg-surface p-2 opacity-0 shadow-lg transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:block"
               >
-                <ul>
+                {/*
+                  ÜÇ SEVİYE, İKİ DEĞİL.
+
+                  Kanonik taksonomi L1 > L2 > L3. Panel yalnızca L2'yi
+                  gösterseydi ürün kategorileri (L3) menüden hiç
+                  görünmezdi: "Bilgisayar Bileşenleri" açılır ama "Ekran
+                  Kartı"na yalnızca kategori sayfasından gidilebilirdi.
+
+                  L3'ler kendi L2'sinin ALTINDA, girintili bir liste olarak
+                  duruyor. Düz bir listede L2 ile L3'ü yalnızca sıra ayırır
+                  ve hangi ürün kategorisinin hangi alt kategoriye ait
+                  olduğu görünmez olur -- taksonomiyi menüde çözmek yerine
+                  kullanıcıya bırakmak olurdu.
+
+                  Sütunlara bölünüyor çünkü bazı L2'lerin altında altı L3
+                  var; tek sütunda panel ekranı aşardı.
+                */}
+                <ul className="columns-1 gap-4 sm:columns-2 lg:columns-3">
                   {node.children.map((child) => (
-                    <li key={child.category.id}>
+                    <li key={child.category.id} className="mb-2 break-inside-avoid">
                       <Link
                         href={`/kategori/${child.category.slug}`}
-                        className="flex items-center justify-between gap-4 rounded-lg px-3 py-1.5 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-fg"
+                        className="flex items-center justify-between gap-4 rounded-lg px-3 py-1.5 text-sm font-medium text-fg transition-colors hover:bg-surface-2"
                       >
                         <span>{child.category.name}</span>
                         {/*
@@ -123,6 +140,24 @@ export async function CategoryNav() {
                           {child.groupCount.toLocaleString(contentLocale)}
                         </span>
                       </Link>
+
+                      {child.children.length > 0 && (
+                        <ul className="ml-3 border-l border-line pl-2">
+                          {child.children.map((grandChild) => (
+                            <li key={grandChild.category.id}>
+                              <Link
+                                href={`/kategori/${grandChild.category.slug}`}
+                                className="flex items-center justify-between gap-3 rounded-lg px-3 py-1 text-xs text-muted transition-colors hover:bg-surface-2 hover:text-fg"
+                              >
+                                <span>{grandChild.category.name}</span>
+                                <span className="text-subtle">
+                                  {grandChild.groupCount.toLocaleString(contentLocale)}
+                                </span>
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </li>
                   ))}
                 </ul>

@@ -48,8 +48,15 @@ export const ONBELLEK = {
  * değişikliğinden sonra artırılır.
  *
  * 2 -> ürünlerin taksonomiye dağıtılması (34.722 grup).
+ * 3 -> kanonik üç seviyeli taksonomi: ağaç yeniden dizildi (L1/L2/L3),
+ *      altı yinelenen kategori birleştirilip ürünleri hedefe taşındı ve
+ *      kategori kapsamı özyinelemeli oldu. Önbellekteki ağaç bu göçten
+ *      SONRA da eski hâliyle sunulurdu: menü eski adları, eski
+ *      hiyerarşiyi ve L3'süz sayıları gösterirdi. Sürüm artırılmadan
+ *      dağıtım yapmak, göçü uygulayıp sonucunu bir saatten uzun süre
+ *      göstermemek demekti -- ölçülen arıza tam olarak buydu.
  */
-const KATALOG_SURUMU = 'v2';
+const KATALOG_SURUMU = 'v3';
 
 /**
  * Bir katalog okumasını önbelleğe alır.
