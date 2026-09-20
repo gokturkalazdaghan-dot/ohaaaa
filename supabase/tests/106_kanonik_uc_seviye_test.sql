@@ -342,4 +342,88 @@ begin
   raise notice '✓ kaynak taksonomisi kanonik taksonomiden ayri ve dogru cozuluyor';
 end $$;
 
+-- ---------------------------------------------------------------------------
+-- 10) AŞIRI YÜKLENMİŞ (OVERLOADED) UYGULAMA FONKSİYONU YOK
+-- ---------------------------------------------------------------------------
+-- ÖLÇÜLEN ARIZA. Üretimdeki `search_products` ve `search_facets`, depoda
+-- karşılığı olmayan bir göçle fazladan bir `p_currency` parametresi almıştı.
+-- Kapsam göçü dar imzayla yazıldığında `create or replace` üretimdeki
+-- fonksiyonu DEĞİŞTİRMEZ, yanına İKİNCİ bir sürüm açar; PostgREST o noktada
+-- "could not choose the best candidate function" der ve ARAMA TAMAMEN DURUR
+-- -- göç "başarılı" görünürken.
+--
+-- Bu iddia o sınıf hatayı derlemede yakalar. Bugün hiçbir uygulama
+-- fonksiyonunun birden fazla imzası yok (ölçüldü); kural bunu SABİTLİYOR.
+-- Gerçekten aşırı yükleme gerekirse burası bilinçli olarak gevşetilir --
+-- kaza eseri değil.
+--
+-- Eklenti fonksiyonları (citext, pg_trgm, pgTAP) HARİÇ: onlar tasarımı gereği
+-- aşırı yüklü ve bizim kararımız değil.
+do $$
+declare v_liste text;
+begin
+  select string_agg(proname || ' (' || adet || ' surum)', ', ' order by proname)
+    into v_liste
+    from (
+      select p.proname, count(*) as adet
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public'
+         and p.prokind in ('f', 'p')
+         and not exists (
+           select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e'
+         )
+       group by p.proname
+      having count(*) > 1
+    ) t;
+
+  if v_liste is not null then
+    raise exception
+      'BAŞARISIZ: asiri yuklenmis uygulama fonksiyonu var: %. PostgREST '
+      'bunlari cagiramaz ("could not choose the best candidate function") ve '
+      'ilgili uc sessizce calismaz. Yeni bir imza yaziyorsan ESKISINI dusur.',
+      v_liste;
+  end if;
+
+  raise notice '✓ asiri yuklenmis uygulama fonksiyonu yok';
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 11) DEPO ŞEMASI ÜRETİMLE HİZALI KALIYOR
+-- ---------------------------------------------------------------------------
+-- `20260920104000_uretim_ile_sema_hizalamasi` göçü, üretimde olup depoda
+-- olmayan nesneleri depoya taşıdı. Buradaki iddia onların yeniden
+-- kaybolmamasını sağlıyor: kaybolurlarsa temiz replay üretimden farklı bir
+-- şema üretir ve bir sonraki uyuşmazlık yine ÜRETİMDE ortaya çıkar.
+do $$
+declare v_eksik text;
+begin
+  select string_agg(ad, ', ') into v_eksik from (
+    select 'programs.feed_access NOT NULL' as ad
+     where exists (
+       select 1 from information_schema.columns
+        where table_schema='public' and table_name='programs'
+          and column_name='feed_access' and is_nullable='YES')
+    union all
+    select 'order_items_currency_matches tetikleyicisi'
+     where not exists (
+       select 1 from pg_trigger t join pg_class c on c.oid=t.tgrelid
+        where c.relname='order_items' and t.tgname='order_items_currency_matches')
+    union all
+    select i.ad from (values
+        ('product_groups_category_offers_idx'),
+        ('product_groups_offers_idx'),
+        ('programs_network_feed_unique')
+      ) as i(ad)
+     where not exists (
+       select 1 from pg_indexes where schemaname='public' and indexname = i.ad)
+  ) t;
+
+  if v_eksik is not null then
+    raise exception 'BAŞARISIZ: uretimle hizalanan nesneler kaybolmus: %', v_eksik;
+  end if;
+
+  raise notice '✓ depo semasi uretimle hizali';
+end $$;
+
 rollback;

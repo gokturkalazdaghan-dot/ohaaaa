@@ -231,6 +231,34 @@ artırılmazsa üst çubuk eski ağacı bir saatten uzun süre sunmaya devam ede
 
 ---
 
+## Depo ile üretim aynı şemayı üretir
+
+Bir zamanlar üretmiyordu ve bu gerçek bir tuzak doğurdu: üretimdeki
+`search_products`/`search_facets`, depoda karşılığı olmayan bir göçle
+fazladan `p_currency` parametresi almıştı. Kapsam göçü dar imzayla
+yazıldığında `create or replace` fonksiyonu değiştirmez, **yanına ikinci
+bir sürüm açar** ve PostgREST o noktada aramayı tamamen durdurur — göç
+"başarılı" görünürken. Temiz replay bunu yakalayamazdı, çünkü depoda o
+parametre hiç yoktu.
+
+Fark, göç adları karşılaştırılarak değil **iki veritabanının
+sütun/fonksiyon/indeks/tetikleyici dökümleri** karşılaştırılarak bulundu
+ve altı nesneye indi. `20260920104000_uretim_ile_sema_hizalamasi` onları
+depoya taşıdı; doğrulandı: **tablo, sütun, uygulama fonksiyonu, indeks ve
+tetikleyici düzeyinde sıfır fark.**
+
+İki kapı bunu koruyor (`106_kanonik_uc_seviye_test.sql`):
+
+- **Aşırı yüklenmiş uygulama fonksiyonu yok.** Yeni bir imza yazan biri
+  eskisini düşürmezse CI kırmızıya döner — üretim değil.
+- **Hizalanan nesneler kaybolmaz.** Kaybolurlarsa temiz replay yine
+  üretimden ayrışır.
+
+> Yeni bir fonksiyon imzası mı yazıyorsun? **Eskisini `drop function` ile
+> düşür** ve yetkileri yeniden ver — `drop` onları da götürür.
+
+---
+
 ## Bilinen ve kabul edilmiş borç
 
 - **`android-telefonlar` slug'ı "Akıllı Telefon" adını taşıyor.** Ad doğru,
