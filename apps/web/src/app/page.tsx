@@ -6,6 +6,7 @@ import Link from 'next/link';
 
 import { CategoryBrowser } from '@/components/CategoryBrowser';
 import { DataUnavailable } from '@/components/DataUnavailable';
+import { InstallApp } from '@/components/InstallApp';
 import { FlashDeals } from '@/components/FlashDeals';
 import { SearchBar } from '@/components/SearchBar';
 import { getRequestLocale } from '@/lib/locale';
@@ -226,6 +227,24 @@ export default async function HomePage() {
         */}
         <CategoryBrowser nodes={categories} locale={contentLocale} />
       </section>
+
+      {/*
+        TELEFONA KUR ÇAĞRISI ARTIK BURADA, FOOTER'DA DEĞİL.
+
+        Ölçüldü (iPhone Safari, 390x844): bölüm footer'dayken sayfanın
+        4.495 pikselinde kalıyordu ve oraya inen olmuyordu. Kullanıcı bunu
+        "Safari'de kurulum düğmesi yok" diye bildirdi -- bölüm vardı,
+        ulaşılmıyordu.
+
+        Kahraman alanının hemen altında: ziyaretçi ne olduğunu daha yeni
+        okudu, "bunu her gün açacağım" kararı tam burada veriliyor.
+
+        Bileşen kendi kendini gizliyor: zaten kuruluysa `null` döner, yani
+        uygulamadan açan kullanıcı bu kutuyu hiç görmez.
+      */}
+      <div className="mt-8">
+        <InstallApp />
+      </div>
 
       {catalogUnavailable && (
         <DataUnavailable

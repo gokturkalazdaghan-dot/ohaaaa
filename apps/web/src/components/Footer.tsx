@@ -1,26 +1,23 @@
 import Link from 'next/link';
 
-import { InstallApp } from '@/components/InstallApp';
 import { isAffiliateOnly } from '@/lib/env';
 
 export function Footer() {
   return (
     <footer className="mt-16 border-t border-line bg-bg">
       {/*
-        KURULUM ÇAĞRISI FOOTER'IN EN ÜSTÜNDE.
+        KURULUM ÇAĞRISI BURADAN TAŞINDI.
 
-        Sayfanın altı, "bu siteyi beğendim" kararının verildiği yer: ürünü
-        gezmiş, fiyatı görmüş kullanıcı buraya iner. Başlığa koymak her
-        sayfada yer kaplardı ve kararını vermemiş birine sorulan bir soru
-        olurdu.
+        Gerekçe "kararını vermiş kullanıcıya sor" idi ve mantıklıydı; ama
+        ÖLÇÜM onu çürüttü: iPhone Safari'de bölüm sayfanın 4.495 pikselinde,
+        5.523 piksellik bir sayfanın en dibinde kalıyordu. Oraya inen kimse
+        olmadığı için kullanıcı "Safari'de kurulum düğmesi yok" diye
+        bildirdi -- bölüm vardı, görünmüyordu.
 
-        Bileşen istemci tarafında çalışır ve ZATEN KURULUYSA ya da tarayıcı
-        kurulumu hiç desteklemiyorsa `null` döner -- yani boş bir kutu
-        bırakmaz.
+        Artık ana sayfada, arama kutusunun hemen altında (bkz. `app/page.tsx`).
+        Footer'da İKİNCİ bir kopya bırakılmadı: aynı çağrıyı iki kez sormak,
+        birinci sefer hayır diyene ısrar etmektir.
       */}
-      <div className="pt-10">
-        <InstallApp />
-      </div>
       <div className="mx-auto grid max-w-6xl gap-10 px-4 pb-10 text-left sm:grid-cols-2 sm:px-6">
         <div>
           <p className="font-semibold text-fg">Ohaaaa.com</p>

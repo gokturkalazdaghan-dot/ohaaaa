@@ -21,6 +21,7 @@ export const EN: Record<keyof typeof TR, string> = {
   'ortak.anaSayfa': 'Home',
   'ortak.tumu': 'All',
   'ortak.tumunuGor': 'See all',
+  'ortak.kapat': 'Close',
   'ortak.firsatlar': 'Deals',
   'ortak.giris': 'Sign in',
   'ortak.sayfaYolu': 'Breadcrumb',

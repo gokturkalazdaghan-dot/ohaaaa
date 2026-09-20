@@ -48,17 +48,46 @@ import { t, type Category, type CategoryNode, type Locale } from '@ohaaaa/shared
  *
  * Veri yine SUNUCUDA okunuyor; istemciye inen tek şey açma/kapama.
  */
+/**
+ * `kart`    : ana sayfadaki çerçeveli liste.
+ * `cekmece` : telefondaki kenar menüsünün içi -- çerçeve yok, satırlar
+ *             daha yüksek (baş parmak hedefi), yazı biraz daha büyük.
+ *
+ * İki KOPYA yazmak yerine tek bileşenin iki görünümü var: akordeonun
+ * mantığı (tek bölüm açık, `aria-expanded`, panelin kapalıyken hiç
+ * çizilmemesi) iki yerde ayrı ayrı yazılsaydı, biri düzeltilip diğeri
+ * unutulduğunda menü iki yerde farklı davranırdı.
+ */
+export type KategoriGorunumu = 'kart' | 'cekmece';
+
 export function CategoryBrowser({
   nodes,
   locale,
+  gorunum = 'kart',
+  etiket,
 }: {
   nodes: CategoryNode<Category>[];
   locale: Locale;
+  gorunum?: KategoriGorunumu;
+  /** Landmark adı. İki menü aynı adı taşıyamaz (axe: benzersiz olmalı). */
+  etiket?: string;
 }) {
   const [acikKimlik, setAcikKimlik] = useState<string | null>(null);
   const onEk = useId();
 
   if (nodes.length === 0) return null;
+
+  const cekmece = gorunum === 'cekmece';
+  const listeSinifi = cekmece
+    ? 'divide-y divide-line/60'
+    : 'divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface';
+  /* Çekmecede satır daha yüksek: baş parmakla vurulan hedef en az 44px. */
+  const satirSinifi = cekmece
+    ? 'flex w-full items-center gap-3 rounded-lg px-3 py-3.5 text-left transition-colors hover:bg-surface-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand'
+    : 'flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-surface-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand';
+  const panelSinifi = cekmece
+    ? 'px-3 pb-3'
+    : 'border-t border-line bg-surface-2 px-4 py-3';
 
   return (
     /*
@@ -67,8 +96,11 @@ export function CategoryBrowser({
       sayıyor ("landmark must have a unique aria-label"). Şerit
       `ev.kategoriler` adını kullanıyor; burası ana sayfanın kendi listesi.
     */
-    <nav aria-label={t(locale, 'ev.kategorilerGez')} className="mt-6">
-      <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface">
+    <nav
+      aria-label={etiket ?? t(locale, 'ev.kategorilerGez')}
+      className={cekmece ? undefined : 'mt-6'}
+    >
+      <ul className={listeSinifi}>
         {nodes.map((node) => {
           const acik = acikKimlik === node.category.id;
           const panelKimligi = `${onEk}-${node.category.id}`;
@@ -92,7 +124,7 @@ export function CategoryBrowser({
               {altlar.length === 0 ? (
                 <Link
                   href={`/kategori/${node.category.slug}`}
-                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-surface-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand"
+                  className={satirSinifi}
                 >
                   {Ikon ? <Ikon className="h-5 w-5 shrink-0 text-brand" aria-hidden="true" /> : null}
                   <span className="flex-1 font-semibold">{node.category.name}</span>
@@ -106,7 +138,7 @@ export function CategoryBrowser({
                   aria-expanded={acik}
                   aria-controls={panelKimligi}
                   onClick={() => setAcikKimlik(acik ? null : node.category.id)}
-                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-surface-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand"
+                  className={satirSinifi}
                 >
                   {Ikon ? <Ikon className="h-5 w-5 shrink-0 text-brand" aria-hidden="true" /> : null}
                   <span className="flex-1 font-semibold">{node.category.name}</span>
@@ -136,7 +168,7 @@ export function CategoryBrowser({
                 sayfa hem daha az yanlış anlaşılacak bir ağaç.
               */}
               {acik && altlar.length > 0 && (
-                <div id={panelKimligi} className="border-t border-line bg-surface-2 px-4 py-3">
+                <div id={panelKimligi} className={panelSinifi}>
                   {/*
                     Alt kategoriler ÇİP olarak: mevcut tasarım dili bu ve
                     sarmalanan bir çip kümesi, tek sütunlu uzun bir listeden

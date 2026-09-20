@@ -290,6 +290,112 @@ export const BasketIcon = (p: IconProps) => (
   </Icon>
 );
 
+/* ---------------------------------------------------------------------------
+ * KATEGORİ İKONLARI
+ *
+ * Kanonik taksonomide 18 ana kategori var; altısının ikonu vardı, on ikisi
+ * ikonsuzdu ve menüde düz metin olarak duruyordu. Aranan şeyi bir listede
+ * bulmak kelimeyi okumaktan çok şekli tanımakla olur -- ikonsuz bir satır,
+ * taranması en yavaş satırdır.
+ *
+ * Hepsi elle çizildi: dosyanın başındaki karar (harici ikon kitaplığı yok)
+ * on üç ikon için bozulacak bir karar değil. Aynı ızgara (24x24), aynı
+ * çizgi kalınlığı (1.75) ve aynı uç biçimi kullanılıyor; farklı kaynaktan
+ * gelen ikonlar bir arada dizildiğinde göz bunu hemen yakalar.
+ * ------------------------------------------------------------------------ */
+
+export const LaptopIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="4" y="5" width="16" height="11" rx="2" />
+    <path d="M2 19.5h20" />
+  </Icon>
+);
+
+export const SmartphoneIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="6.5" y="2.5" width="11" height="19" rx="2.5" />
+    <path d="M10.5 18.5h3" />
+  </Icon>
+);
+
+export const GamepadIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M7.5 7.5h9a4.5 4.5 0 0 1 4.4 3.6l.8 4a3 3 0 0 1-5.4 2.3L15 15H9l-1.3 2.4a3 3 0 0 1-5.4-2.3l.8-4a4.5 4.5 0 0 1 4.4-3.6Z" />
+    <path d="M6.5 11v2.5M5.25 12.25h2.5M16 11.5h.01M18 13.5h.01" />
+  </Icon>
+);
+
+export const BookIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H18a1 1 0 0 1 1 1v13H5.5A1.5 1.5 0 0 0 4 18.5v-14Z" />
+    <path d="M4 18.5A1.5 1.5 0 0 0 5.5 20H19" />
+    <path d="M8 7.5h7" />
+  </Icon>
+);
+
+export const FilmIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="2.5" y="5" width="19" height="14" rx="2" />
+    <path d="M7 5v14m10-14v14M2.5 12h19M2.5 8.5h4.5m10 0h4.5m-19 7h4.5m10 0h4.5" />
+  </Icon>
+);
+
+export const MedicalIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="3" y="3" width="18" height="18" rx="4" />
+    <path d="M12 8v8m-4-4h8" />
+  </Icon>
+);
+
+export const WrenchIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M15.5 3a5.5 5.5 0 0 0-5.1 7.6L3.6 17.4a2 2 0 0 0 2.8 2.8l6.8-6.8A5.5 5.5 0 0 0 20.3 6l-2.9 2.9-2.4-2.4L18 3.6A5.5 5.5 0 0 0 15.5 3Z" />
+  </Icon>
+);
+
+export const CarIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 16v2.5M20 16v2.5" />
+    <path d="M3 16v-3.2a2 2 0 0 1 .3-1L5.6 8a2 2 0 0 1 1.7-1h9.4a2 2 0 0 1 1.7 1l2.3 3.8a2 2 0 0 1 .3 1V16H3Z" />
+    <path d="M6.5 13h.01M17.5 13h.01" />
+  </Icon>
+);
+
+export const FridgeIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="5.5" y="2.5" width="13" height="19" rx="2.5" />
+    <path d="M5.5 9.5h13M8.5 6v1.5M8.5 12v2.5" />
+  </Icon>
+);
+
+export const BabyBottleIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M10 5.5h4l.6 3.2c.04.23.06.46.06.7v9.1a2 2 0 0 1-2 2h-1.3a2 2 0 0 1-2-2V9.4c0-.24.02-.47.06-.7L10 5.5Z" />
+    <path d="M9.5 2.5h5M11 2.5v3m2-3v3M9.4 12h5.2" />
+  </Icon>
+);
+
+export const GemIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M7 3.5h10l4 5.5-9 11.5L3 9l4-5.5Z" />
+    <path d="M3 9h18M8.5 9 12 20.5 15.5 9 12 3.5 8.5 9Z" />
+  </Icon>
+);
+
+export const LockIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="4.5" y="10" width="15" height="11" rx="2.5" />
+    <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+  </Icon>
+);
+
+export const HeadphonesIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 15v-3a8 8 0 0 1 16 0v3" />
+    <path d="M4 14.5h2a1.5 1.5 0 0 1 1.5 1.5v2.5A1.5 1.5 0 0 1 6 20H5.5A1.5 1.5 0 0 1 4 18.5v-4Zm16 0h-2a1.5 1.5 0 0 0-1.5 1.5v2.5A1.5 1.5 0 0 0 18 20h.5a1.5 1.5 0 0 0 1.5-1.5v-4Z" />
+  </Icon>
+);
+
 /*
  * Kategori ikonları.
  *
@@ -308,6 +414,16 @@ const iconsByName: Record<string, (p: IconProps) => React.ReactElement> = {
   dumbbell: DumbbellIcon,
   sparkles: SparklesIcon,
   basket: BasketIcon,
+  /*
+   * ÜRETİMDE GERÇEKTEN YAZAN ADLAR. `categories.icon` alanında yalnızca
+   * dokuz satır dolu ve içlerinden dördü ('laptop', 'smartphone',
+   * 'headphones', 'shopping-basket') bu haritada YOKTU: alan doğru
+   * doldurulmuş olmasına rağmen ikon çıkmıyor, slug yedeğine düşüyordu.
+   */
+  laptop: LaptopIcon,
+  smartphone: SmartphoneIcon,
+  headphones: HeadphonesIcon,
+  'shopping-basket': BasketIcon,
 };
 
 /*
@@ -316,12 +432,39 @@ const iconsByName: Record<string, (p: IconProps) => React.ReactElement> = {
  * ikonsuz bir çip, YANLIŞ ikonlu bir çipten iyidir ama doğru ikondan kötüdür.
  */
 const iconsBySlug: Record<string, (p: IconProps) => React.ReactElement> = {
+  /*
+   * KANONİK TAKSONOMİDEKİ ON SEKİZ ANA KATEGORİNİN TAMAMI.
+   *
+   * Önceki hâlinde altı giriş vardı ve ikisi ('moda', 'kozmetik') artık
+   * ana kategori olmayan slug'lara bakıyordu. Canlı ana kategorilerden
+   * yalnızca `elektronik` ve `ev-yasam` ikon alıyordu; menüdeki dört
+   * başlık düz metindi.
+   *
+   * Bugün ürünü olmayan kategoriler de burada: `buildCategoryTree` onları
+   * eliyor ama ürün girdiği gün ikonsuz görünmesinler diye.
+   */
+  'bilgisayar-tablet': LaptopIcon,
+  telefon: SmartphoneIcon,
   elektronik: CpuIcon,
-  moda: ShirtIcon,
+  'gaming-konsol': GamepadIcon,
   'ev-yasam': SofaIcon,
-  'spor-outdoor': DumbbellIcon,
-  kozmetik: SparklesIcon,
+  'kitap-kirtasiye-ofis': BookIcon,
+  'oyuncak-muzik-film': FilmIcon,
+  'saglik-medikal': MedicalIcon,
+  'yapi-market-bahce-oto': WrenchIcon,
+  'oto-yedek-parca': CarIcon,
   supermarket: BasketIcon,
+  'giyim-ayakkabi': ShirtIcon,
+  'beyaz-esya-mutfak': FridgeIcon,
+  kozmetik: SparklesIcon,
+  'spor-outdoor': DumbbellIcon,
+  'anne-bebek': BabyBottleIcon,
+  'altin-taki-mucevher': GemIcon,
+  /* Ayrımı yapan ama içeriği anlatmayan bir ikon bilerek seçildi. */
+  'yetiskin-urunleri': LockIcon,
+
+  /* Demo kümesi ve eski adresler için korunuyor. */
+  moda: ShirtIcon,
 };
 
 /**

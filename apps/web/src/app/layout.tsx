@@ -9,6 +9,7 @@ import { isVisualSearchConfigured } from '@/lib/visualSearch';
 import { Footer } from '@/components/Footer';
 import { Header } from '@/components/Header';
 import { CategoryNav } from '@/components/CategoryNav';
+import { CategoryDrawerMount } from '@/components/CategoryDrawerMount';
 import { FavoritesProvider } from '@/components/FavoritesProvider';
 import { UserMenu } from '@/components/UserMenu';
 import { CartDrawer } from '@/components/CartDrawer';
@@ -252,6 +253,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             visualSearchEnabled={isVisualSearchConfigured()}
           />
           <main id="icerik">{children}</main>
+          {/*
+            TELEFONDAKİ KATEGORİ ÇEKMECESİ.
+
+            Üst çubuktaki şerit alt kategorileri yalnızca `hover` ile
+            açıyor; dokunmatik ekranda `hover` yoktur, yani telefondan
+            gelen ziyaretçi alt kategorilere şeritten HİÇ ulaşamıyordu ve
+            ana sayfaya dönmek zorundaydı. Çekmece her sayfada, ekranın
+            kenarındaki tutamaçtan çekilerek açılıyor.
+
+            `main`'den SONRA duruyor: sekme sırasında sayfanın içeriğinden
+            önce gelen bir menü, her sayfada geçilmesi gereken bir engeldir.
+          */}
+          <CategoryDrawerMount />
           <Footer />
           {isAffiliateOnly ? null : <CartDrawer />}
         </FavoritesProvider>

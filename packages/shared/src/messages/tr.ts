@@ -19,6 +19,7 @@ export const TR = {
   'ortak.anaSayfa': 'Ana sayfa',
   'ortak.tumu': 'Tümü',
   'ortak.tumunuGor': 'Tümünü gör',
+  'ortak.kapat': 'Kapat',
   'ortak.firsatlar': 'Fırsatlar',
   'ortak.giris': 'Giriş',
   'ortak.sayfaYolu': 'Sayfa yolu',
