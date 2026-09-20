@@ -192,6 +192,45 @@ genel bilgisayar kategorisine değil.
 
 ---
 
+## Ölçümler
+
+35.006 ürün grubuyla, üretimdeki çarpık dağılım taklit edilerek (ürünlerin
+çoğu tek bir dalda) ölçüldü. `anon` rolünün deyim zaman aşımı **3.000 ms**.
+
+| Sorgu | Süre |
+|---|---|
+| `kategori_grup_sayilari()` (şerit sayaçları) | 13 ms |
+| `search_facets()` | 93 ms |
+| `search_facets('dell')` | 157 ms |
+| `search_products(L1)` | 102 ms |
+| `search_suggestions('a')` — 200 kategori eşleşiyor, en kötü hâl | 158 ms |
+
+**Kapsam düzeltmesi ne kadar ürün kurtardı:** "Bilgisayar & Teknoloji"
+sayfası tek seviye kapsamla **3.501**, özyinelemeli kapsamla **33.251**
+grup gösteriyor — eski hâli dalın ürünlerinin **%89'unu gizliyordu.**
+
+**Filtre sayaçları ayrıca bir performans düzeltmesi çıktı.** Eski
+`by_category` her ana kategori satırı için yeniden koşan bir
+`in (select …)` alt sorgusu kullanıyordu:
+
+| | Süre |
+|---|---|
+| eski (tek seviye, in-subquery) | **9.425 ms** |
+| yeni (`kategori_kapsami` + lateral) | **20 ms** |
+
+Eski hâl bu ölçekte yalnızca eksik değil, `anon`'un bütçesini üçe
+katlayarak **düşüyordu**. Düştüğünde Next.js bayat önbelleği sunmaya devam
+eder ve vitrin eski sayılarda kalır — `onbellek.ts` içinde yazılı, bu
+depoda bir kez yaşanmış arızanın aynısı.
+
+### Göçten sonra önbellek
+
+`KATALOG_SURUMU` **v3**'e çıkarıldı. Toplu bir veri değişikliğinden sonra
+artırılmazsa üst çubuk eski ağacı bir saatten uzun süre sunmaya devam eder
+(ölçülmüş arıza). Rutin yol ise `POST /api/cron/katalog-tazele`.
+
+---
+
 ## Bilinen ve kabul edilmiş borç
 
 - **`android-telefonlar` slug'ı "Akıllı Telefon" adını taşıyor.** Ad doğru,

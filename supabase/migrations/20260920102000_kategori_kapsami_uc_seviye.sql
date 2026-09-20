@@ -17,6 +17,29 @@
 -- anlaşılmaz.
 --
 -- ---------------------------------------------------------------------------
+-- ÖLÇÜLDÜ (35.006 ürün grubu, üretimdeki çarpık dağılım taklit edilerek)
+-- ---------------------------------------------------------------------------
+-- Ana kategori sayfasının kapsamı, "Bilgisayar & Teknoloji" dalı:
+--
+--   tek seviye (eski)   →   3.501 grup
+--   özyinelemeli (yeni) →  33.251 grup
+--
+-- Yani o sayfa dalının ürünlerinin %89'unu GİZLİYORDU. Bu sayı bir tahmin
+-- değil; iki kapsam aynı veri üzerinde sayıldı.
+--
+-- Filtre sayaçlarında değişiklik ayrıca bir PERFORMANS DÜZELTMESİ çıktı.
+-- Eski `by_category`, her ana kategori için satır başına yeniden koşan bir
+-- `in (select ...)` alt sorgusu kullanıyordu:
+--
+--   eski (tek seviye, in-subquery)      →  9.425 ms
+--   yeni (kategori_kapsami + lateral)   →     20 ms
+--
+-- `anon` rolünün deyim zaman aşımı 3.000 ms. Yani eski hâl bu ölçekte
+-- yalnızca eksik değil, ÇALIŞMIYORDU: sorgu düşer, Next.js bayat önbelleği
+-- sunmaya devam eder ve vitrin eski sayılarda kalırdı -- bu depoda daha
+-- önce bir kez yaşanmış, `onbellek.ts` içinde yazılı olan arızanın aynısı.
+--
+-- ---------------------------------------------------------------------------
 -- NEDEN ÖZYİNELEMELİ FONKSİYON, NEDEN İKİNCİ BİR `in` DEĞİL
 -- ---------------------------------------------------------------------------
 -- İkinci bir seviye elle eklenebilirdi (`parent_id in (select ...)`) ama o,
