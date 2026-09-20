@@ -31,6 +31,10 @@
       "types": "./dist/providers/index.d.ts",
       "default": "./dist/providers/index.js"
     },
+    "./product-search": {
+      "types": "./dist/productSearch/index.d.ts",
+      "default": "./dist/productSearch/index.js"
+    },
     "./agents": {
       "types": "./dist/agents/index.d.ts",
       "default": "./dist/agents/index.js"

@@ -46,7 +46,8 @@ export type RateFeature =
   | 'giris'
   | 'kayit'
   | 'tiklama'
-  | 'iletisim';
+  | 'iletisim'
+  | 'dis-arama';
 
 interface Tavan {
   /** Kişi başı pencere içindeki en fazla çağrı. */
@@ -134,6 +135,31 @@ function tavanlar(feature: RateFeature): Tavan {
       kisiBasi: sayi('TIKLAMA_IP_SAATLIK', 120),
       kisiPencereSaniye: 3600,
       kuresel: sayi('TIKLAMA_GUNLUK', 200_000),
+    };
+  }
+
+  if (feature === 'dis-arama') {
+    /*
+     * TALEP-ANI DIŞ ÜRÜN ARAMASI — ORTAĞIN KOTASI, BİZİM SORUMLULUĞUMUZ.
+     *
+     * Buradaki tavan maliyet kısmak için değil; kullanıcının yazdığı her
+     * harfin doğrudan bir ortağın API'sine geçmesini engellemek için var.
+     * Sınırsız bırakılırsa üç şey olur ve üçü de bizim sorunumuzdur:
+     * ortağın hız sınırı yenir (429 herkese kapanır), sözleşmedeki adil
+     * kullanım maddesi aşılır ve tek bir betik bütün yayıncı kotasını
+     * tüketir.
+     *
+     * Kişi başı tavan, gerçek bir kullanıcının bir oturumda yapacağı
+     * arama sayısının üstünde: arama kutusunu deneyerek kullanan kimse
+     * saatte 60 farklı sorgu yazmaz.
+     *
+     * Tavan aşıldığında ARAMA BOZULMAZ: dış sonuçlar atlanır, Ohaaaa
+     * katalog sonuçları olduğu gibi gösterilir.
+     */
+    return {
+      kisiBasi: sayi('DIS_ARAMA_IP_SAATLIK', 60),
+      kisiPencereSaniye: 3600,
+      kuresel: sayi('DIS_ARAMA_GUNLUK', 5000),
     };
   }
 

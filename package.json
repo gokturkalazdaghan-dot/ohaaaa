@@ -26,6 +26,7 @@
     "verify:brand": "node scripts/verify-brand.mjs",
     "verify:headers": "node scripts/verify-headers.mjs",
     "verify:secrets": "node scripts/verify-secrets.mjs",
+    "dis-arama:deneme": "node scripts/dis-arama-deneme.mjs",
     "agent:locale": "node scripts/agent-locale-parity.mjs",
     "agent:contract": "node scripts/agent-contract-verify.mjs"
   },
