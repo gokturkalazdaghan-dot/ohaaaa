@@ -232,6 +232,59 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- 6b) YÖNLENDİRME VİTRİNİN ROLÜNDEN DE GÖRÜNÜYOR
+-- ---------------------------------------------------------------------------
+-- ÖLÇÜLEN ARIZA. Yukarıdaki iddia SÜPER KULLANICI olarak koşuyordu ve süper
+-- kullanıcı RLS'i ATLAR. Fonksiyon doğru cevabı veriyordu, testler yeşildi --
+-- ama canlıda altı adres 301 yerine 404 döndü.
+--
+-- Sebep: `categories` politikası `using (is_active)` ve birleştirilen kategori
+-- TANIMI GEREĞİ pasif. `SECURITY INVOKER` bir çözücü, tam da yönlendirmesi
+-- gereken satırı göremiyordu.
+--
+-- Bu iddia asıl soruyu soruyor: VİTRİN ne görüyor? Rol değiştirmeden sormak,
+-- kullanıcının hiç yaşamadığı bir dünyayı test etmekti.
+do $$
+declare v_kaynak text; v_super text; v_anon text;
+begin
+  select c.slug::text into v_kaynak
+    from public.categories c where c.merged_into_id is not null limit 1;
+
+  if v_kaynak is null then
+    raise notice '- atlandi: birlestirilmis kategori yok';
+    return;
+  end if;
+
+  select y.hedef_slug into v_super from public.kategori_yonlendirme(v_kaynak) y;
+
+  set local role anon;
+  select y.hedef_slug into v_anon from public.kategori_yonlendirme(v_kaynak) y;
+  reset role;
+
+  if v_anon is null or v_anon is distinct from v_super then
+    raise exception
+      'BAŞARISIZ: anon yonlendirmeyi goremiyor (super "%", anon "%"). '
+      'Vitrin 301 yerine 404 dondurur ve o adreslerin arama degeri gider.',
+      coalesce(v_super, 'NULL'), coalesce(v_anon, 'NULL');
+  end if;
+
+  -- HARF DUYARSIZ OLMALI. Olculen tuzak: fonksiyon `set search_path = ''`
+  -- ile yazili ve citext eklentisi `public` semasinda kurulu, yani citext'in
+  -- `=` operatoru arama yolunda DEGIL. PostgreSQL hata vermek yerine ortuk
+  -- cast ile harf DUYARLI `text =` operatorune duser. Sonuc: `citext` sutunu
+  -- citext gibi davranmayi birakir ve harf farki tasiyan eski adresler 301
+  -- yerine 404 alir. Hata dusmez -- yanlis cevap doner.
+  if (select y.hedef_slug from public.kategori_yonlendirme(upper(v_kaynak)) y)
+     is distinct from v_anon then
+    raise exception
+      'BAŞARISIZ: yonlendirme harf duyarli. Bos arama yolunda citext '
+      'operatoru bulunamiyor olabilir -- karsilastirmayi acikca lower() ile yap.';
+  end if;
+
+  raise notice '✓ yonlendirme anon rolunden gorunuyor ve harf duyarsiz (% -> %)', v_kaynak, v_anon;
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- 7) MARKA KATEGORİ DEĞİL, İŞLETİM SİSTEMİ DE DEĞİL
 -- ---------------------------------------------------------------------------
 -- Kanonik taksonominin taşıdığı söz bu. Bir marka adı kategori olursa
