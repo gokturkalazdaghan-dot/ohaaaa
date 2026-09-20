@@ -55,8 +55,14 @@ export const ONBELLEK = {
  *      hiyerarşiyi ve L3'süz sayıları gösterirdi. Sürüm artırılmadan
  *      dağıtım yapmak, göçü uygulayıp sonucunu bir saatten uzun süre
  *      göstermemek demekti -- ölçülen arıza tam olarak buydu.
+ * 4 -> yonlendirme cozucusu duzeltildi. Once `SECURITY INVOKER` oldugu
+ *      icin RLS (`using is_active`) birlestirilen -- yani TANIMI GEREGI
+ *      pasif -- satiri anon dan gizliyordu; cozucu bos donuyor ve vitrin
+ *      301 yerine 404 veriyordu. O BOS SONUC bir saatlik TTL ile
+ *      onbellege girdi. Veritabani duzeldikten sonra bile eski adresler
+ *      404 donmeye devam etti -- surum artirilmasaydi TTL dolana kadar.
  */
-const KATALOG_SURUMU = 'v3';
+const KATALOG_SURUMU = 'v4';
 
 /**
  * Bir katalog okumasını önbelleğe alır.

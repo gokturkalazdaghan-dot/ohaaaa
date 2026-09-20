@@ -184,9 +184,25 @@ select set_eq(
     'order_belongs_to_current_user', 'order_has_vendor_of_current_user',
     -- Vitrinin okudugu skor/fiyat fonksiyonlari
     'deal_score', 'ohaaaa_score', 'offer_freshness',
-    'price_drops', 'price_history'
+    'price_drops', 'price_history',
+    /*
+     * kategori_yonlendirme — BILEREK eklendi (20260920105000).
+     *
+     * Birlestirilen kategorinin eski adresi 301 ile kanonik hedefine
+     * gitmeli. Birlestirilen satir TANIMI GEREGI pasiftir ve `categories`
+     * politikasi `using (is_active)` oldugu icin anon onu goremez; fonksiyon
+     * SECURITY INVOKER iken tam da yonlendirmesi gereken satiri goremiyor ve
+     * vitrin 301 yerine 404 donduruyordu (uretimde olculdu: alti adres).
+     *
+     * Dondurdugu tek sey bir SLUG ESLEMESI -- 301 cevabinin kendisi, yani
+     * zaten disariya acik olmasi gereken bilgi. Urun, fiyat, satici ya da
+     * kisisel veri tasimiyor. Alternatif olan "RLS politikasini gevsetmek"
+     * butun pasif kategorileri (bilerek kapsam disi birakilan gida/icecek
+     * dahil) vitrine acardi; tek fonksiyon acmak dar olan karardir.
+     */
+    'kategori_yonlendirme'
   ],
-  'anon''a acik SECURITY DEFINER kumesi tam olarak belgelenen 9 fonksiyon'
+  'anon''a acik SECURITY DEFINER kumesi tam olarak belgelenen 10 fonksiyon'
 );
 
 -- ---------------------------------------------------------------------------
