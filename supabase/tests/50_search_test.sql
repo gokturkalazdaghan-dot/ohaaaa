@@ -16,6 +16,7 @@ declare
   v_max       bigint;
   v_first     uuid;
   v_first_p2  uuid;
+  v_currency  char(3);
 begin
   -- 1) total_count sayfadaki satir sayisi degil, TOPLAM eslesme olmali.
   --    Ayni sey olsaydi ikinci sayfa diye bir sey olmazdi.
@@ -82,16 +83,46 @@ begin
     raise notice '✓ ust kategori alt kategorileri kapsiyor';
   end if;
 
-  -- 4) Fiyat filtresi gercekten daraltmali.
-  select max(s.total_count) into v_total
-    from public.search_products(null, null, null, null, 'relevance', 1, 0) s;
-  select coalesce(max(s.total_count), 0) into v_total_p2
-    from public.search_products(null, null, 1, 2, 'relevance', 1, 0) s;
+  -- 4) Fiyat filtresi gercekten daraltmali -- PARA BIRIMI ICINDE.
+  --
+  --    `p_currency` VERILMEDIGINDE fiyat suzgeci BILEREK uygulanmaz. Sebebi
+  --    olculmustu: farkli mezhepleri (TRY, HUF, USD) tek araliga sokmak
+  --    "en ucuz"u fiyata gore degil MEZHEBE gore secer ve dusuk mezhepli
+  --    para birimi her zaman kazanirdi. Bu yuzden filtre bir para birimi
+  --    secildiginde devreye girer.
+  --
+  --    Para birimi katalogdan OKUNUYOR, sabit yazilmiyor: tohum degisince
+  --    test sessizce anlamsizlasmasin.
+  select g.price_currency into v_currency
+    from public.product_groups g
+   where g.offer_count > 0 and g.price_currency is not null
+   limit 1;
 
-  if v_total_p2 >= v_total then
-    raise exception 'imkansiz fiyat araligi sonuclari daraltmadi: % -> %', v_total, v_total_p2;
+  if v_currency is null then
+    raise notice '- fiyat araligi iddiasi atlandi: katalogda para birimli grup yok';
+  else
+    select coalesce(max(s.total_count), 0) into v_total
+      from public.search_products(null, null, null, null, 'relevance', 1, 0,
+                                  null, false, v_currency) s;
+    select coalesce(max(s.total_count), 0) into v_total_p2
+      from public.search_products(null, null, 1, 2, 'relevance', 1, 0,
+                                  null, false, v_currency) s;
+
+    if v_total_p2 >= v_total then
+      raise exception 'imkansiz fiyat araligi sonuclari daraltmadi: % -> %', v_total, v_total_p2;
+    end if;
+    raise notice '✓ fiyat araligi filtresi para birimi icinde uygulaniyor';
+
+    -- Para birimi VERILMEDIGINDE daraltmamali: bu bir kaza degil, karar.
+    select coalesce(max(s.total_count), 0) into v_total_p2
+      from public.search_products(null, null, 1, 2, 'relevance', 1, 0) s;
+    if v_total_p2 <> v_total then
+      raise exception
+        'para birimi verilmeden fiyat suzgeci uygulandi (% -> %) -- mezhepler '
+        'karisirdi', v_total, v_total_p2;
+    end if;
+    raise notice '✓ para birimi yokken fiyat suzgeci uygulanmiyor (kasitli)';
   end if;
-  raise notice '✓ fiyat araligi filtresi uygulaniyor';
 
   -- 5) search_facets gercek sinirlari vermeli.
   v_facets := public.search_facets(null, null);

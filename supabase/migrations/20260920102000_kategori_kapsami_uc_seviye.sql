@@ -17,27 +17,44 @@
 -- anlaşılmaz.
 --
 -- ---------------------------------------------------------------------------
--- ÖLÇÜLDÜ (35.006 ürün grubu, üretimdeki çarpık dağılım taklit edilerek)
+-- ÖLÇÜLDÜ — ÜRETİMDE, GÖÇTEN ÖNCE
 -- ---------------------------------------------------------------------------
--- Ana kategori sayfasının kapsamı, "Bilgisayar & Teknoloji" dalı:
+-- Üretim kataloğu: 43.160 ürün grubu (35.876'sı teklifli), 283 kategori.
 --
---   tek seviye (eski)   →   3.501 grup
---   özyinelemeli (yeni) →  33.251 grup
+--   search_facets()  →  4.097 ms
+--   anon rolünün statement_timeout  →  3.000 ms
 --
--- Yani o sayfa dalının ürünlerinin %89'unu GİZLİYORDU. Bu sayı bir tahmin
--- değil; iki kapsam aynı veri üzerinde sayıldı.
+-- Yani filtre sayaçları ŞU ANDA her anonim ziyaretçi için DÜŞÜYOR. Bu göç
+-- yalnızca üç seviyeyi görünür kılmıyor; bugün kırık olan bir şeyi tamir
+-- ediyor. Yeni sayaç şekli aynı üretim verisinde 46 ms (ölçüldü, plan
+-- `product_groups_kategori_sayim_idx` indeksinden karşılıyor).
 --
--- Filtre sayaçlarında değişiklik ayrıca bir PERFORMANS DÜZELTMESİ çıktı.
--- Eski `by_category`, her ana kategori için satır başına yeniden koşan bir
--- `in (select ...)` alt sorgusu kullanıyordu:
+-- Not: L3 kategoriler üretimde bugün BOŞ, dolayısıyla özyinelemeli kapsam
+-- şu an sıfır ek ürün getiriyor. Değeri iki yerde: (1) sayaç sorgusunun
+-- zaman aşımından kurtulması, (2) ürünler L3'e sınıflandırılmaya
+-- başladığında sessiz bir eksik oluşmaması.
 --
---   eski (tek seviye, in-subquery)      →  9.425 ms
---   yeni (kategori_kapsami + lateral)   →     20 ms
+-- ---------------------------------------------------------------------------
+-- İMZA: `p_currency` KORUNUYOR — YENİ AŞIRI YÜKLEME AÇMIYORUZ
+-- ---------------------------------------------------------------------------
+-- ÖLÇÜLEN TUZAK: üretimdeki `search_products` ve `search_facets`,
+-- `search_currency_filter` göçüyle fazladan bir `p_currency` parametresi
+-- aldı. O göç DEPODA YOK (üretimde var, depoda olmayan 14 göçten biri).
 --
--- `anon` rolünün deyim zaman aşımı 3.000 ms. Yani eski hâl bu ölçekte
--- yalnızca eksik değil, ÇALIŞMIYORDU: sorgu düşer, Next.js bayat önbelleği
--- sunmaya devam eder ve vitrin eski sayılarda kalırdı -- bu depoda daha
--- önce bir kez yaşanmış, `onbellek.ts` içinde yazılı olan arızanın aynısı.
+-- `create or replace` yalnızca AYNI imzayı değiştirir. Dar imzayla
+-- yazsaydık üretimde ikinci bir aşırı yükleme oluşurdu ve PostgREST
+-- "Could not choose the best candidate function" diyerek ARAMAYI TAMAMEN
+-- düşürürdü -- göç "başarılı" görünürken.
+--
+-- Bu yüzden:
+--   1. Dar imza VARSA düşürülüyor (temiz replay'de var, üretimde yok).
+--   2. Kanonik sürüm GENİŞ imzayla yazılıyor (üretimdekiyle birebir).
+--   3. Yetkiler açıkça yeniden veriliyor: `drop` onları da götürür.
+--
+-- Para birimi semantiği ÜRETİMDEN alındı, depodan değil: fiyat filtresi
+-- yalnızca `p_currency` verildiğinde uygulanıyor ve fiyat sınırları tek
+-- para birimi varsa hesaplanıyor. Bunlar bilerek verilmiş kararlar;
+-- kapsam düzeltmesi onları ezmemeli.
 --
 -- ---------------------------------------------------------------------------
 -- NEDEN ÖZYİNELEMELİ FONKSİYON, NEDEN İKİNCİ BİR `in` DEĞİL
@@ -45,8 +62,7 @@
 -- İkinci bir seviye elle eklenebilirdi (`parent_id in (select ...)`) ama o,
 -- aynı hatayı bir seviye ileri taşımaktan başka bir şey olmazdı: dördüncü
 -- seviye açıldığı gün aynı sessiz eksik geri gelirdi. Özyinelemeli çözüm
--- derinlikten bağımsız; `tree_level` kısıtı zaten üçte durduruyor, yani
--- özyineleme de sınırlı.
+-- derinlikten bağımsız; `tree_level` kısıtı zaten üçte durduruyor.
 --
 -- ---------------------------------------------------------------------------
 -- BİRLEŞTİRİLMİŞ KATEGORİ KAPSAMA GİRMEZ
@@ -87,7 +103,17 @@ comment on function public.kategori_kapsami is
 grant execute on function public.kategori_kapsami(uuid) to anon, authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
--- ARAMA: kapsam özyinelemeli
+-- DAR İMZALAR DÜŞÜRÜLÜYOR (varsa)
+-- ---------------------------------------------------------------------------
+-- Temiz replay'de `p_currency`'siz sürümler var; üretimde yok. İkisini yan
+-- yana bırakmak PostgREST'te aşırı yükleme belirsizliği demekti.
+drop function if exists public.search_products(
+  text, uuid, bigint, bigint, text, integer, integer, text[], boolean);
+drop function if exists public.search_facets(
+  text, uuid, text[], boolean);
+
+-- ---------------------------------------------------------------------------
+-- ARAMA: kapsam özyinelemeli, para birimi semantiği korunmuş
 -- ---------------------------------------------------------------------------
 create or replace function public.search_products(
   p_query         text default null,
@@ -98,7 +124,8 @@ create or replace function public.search_products(
   p_limit         integer default 24,
   p_offset        integer default 0,
   p_brands        text[] default null,
-  p_free_shipping boolean default false
+  p_free_shipping boolean default false,
+  p_currency      char(3) default null
 )
 returns table (
   group_id        uuid,
@@ -151,11 +178,13 @@ as $function$
         p_category_id is null
         or g.category_id in (select category_id from kapsam)
       )
-      and (p_min_price is null or g.min_price_cents >= p_min_price)
-      and (p_max_price is null or g.min_price_cents <= p_max_price)
+      and (p_currency is null or g.price_currency = p_currency)
+      -- Fiyat filtresi PARA BIRIMI ICINDE: farkli mezhepleri tek araliga
+      -- sokmak "en ucuz"u fiyata degil mezhebe gore secerdi.
+      and (p_currency is null or p_min_price is null or g.min_price_cents >= p_min_price)
+      and (p_currency is null or p_max_price is null or g.min_price_cents <= p_max_price)
       -- Marka karsilastirmasi BUYUK/KUCUK HARFTEN bagimsiz: besleme
-      -- "Sony", "SONY" ve "sony" gonderebilir; kullaniciya bunlarin ayri
-      -- marka gibi gorunmesi hata olurdu.
+      -- "Sony", "SONY" ve "sony" gonderebilir.
       and (
         p_brands is null
         or cardinality(p_brands) = 0
@@ -205,15 +234,15 @@ $function$;
 -- ---------------------------------------------------------------------------
 -- FİLTRE SAYAÇLARI: hem seçili kategori kapsamı hem ana kategori sayaçları
 -- ---------------------------------------------------------------------------
--- `by_category` ana kategorileri sayıyor ve tek seviye iniyordu: "Elektronik"
--- filtresinin yanındaki sayı, L3'teki ürünleri hiç görmüyordu. Kullanıcı
--- "Elektronik (12)" görüp tıkladığında 300 ürün bulurdu -- ya da tam tersi,
--- dolu bir kategoriyi sıfır sanıp hiç tıklamazdı.
+-- `by_category` ana kategorileri sayıyor ve tek seviye iniyordu. Ölçülen
+-- bedeli yalnızca eksik sayı değil, 4.097 ms: `anon` bütçesinin üstünde,
+-- yani sayaçlar zaten düşüyordu.
 create or replace function public.search_facets(
   p_query         text default null,
   p_category_id   uuid default null,
   p_brands        text[] default null,
-  p_free_shipping boolean default false
+  p_free_shipping boolean default false,
+  p_currency      char(3) default null
 )
 returns jsonb
 language sql
@@ -230,10 +259,11 @@ as $function$
   ),
   -- Metin eslesmesi: butun sayaclarin ortak tabani.
   matched as (
-    select g.id, g.category_id, g.min_price_cents, g.brand
+    select g.id, g.category_id, g.min_price_cents, g.brand, g.price_currency
     from public.product_groups g
     cross join params pr
     where g.offer_count > 0
+      and (p_currency is null or g.price_currency = p_currency)
       and (
         pr.q is null
         or not exists (
@@ -264,10 +294,10 @@ as $function$
   /*
    * ANA KATEGORİ SAYAÇLARI ÜÇ SEVİYEYİ TOPLAR.
    *
-   * `kategori_kapsami` her ana kategori için bir kez çağrılıyor. Ana
-   * kategori sayısı 18 ve fonksiyon en fazla üç seviye iniyor; maliyet
-   * sabit. Alternatif olan "her ürünün kökünü bul" ifadesi her ürün grubu
-   * için tırmanırdı -- 34 bin satırda ölçülebilir bir fark.
+   * `kategori_kapsami` her ana kategori için BİR KEZ çağrılıyor ve sonuç
+   * `product_groups_kategori_sayim_idx` üzerinden eşleniyor. Eski hâl her
+   * ana kategori satırı için yeniden koşan bir `in (select ...)` alt
+   * sorgusuydu; üretim verisinde 4.097 ms, bu şekil 46 ms (ölçüldü).
    */
   by_category as (
     select c.id, c.slug, c.name, count(m.id) as n
@@ -312,7 +342,7 @@ as $function$
   ),
   -- Fiyat sinirlari: fiyat DISINDAKI filtreler uygulanir.
   price_scope as (
-    select m.min_price_cents
+    select m.min_price_cents, m.price_currency
     from in_category m
     where (
         p_brands is null or cardinality(p_brands) = 0
@@ -322,10 +352,18 @@ as $function$
         not coalesce(p_free_shipping, false)
         or m.id in (select group_id from free_shipping_groups)
       )
+  ),
+  -- Tek para birimi yoksa sinir VERILMEZ: farkli mezhepleri tek araliga
+  -- sokmak kullaniciya anlamsiz bir kaydirac gosterirdi.
+  price_bounds as (
+    select
+      case when count(distinct price_currency) <= 1 then min(min_price_cents) end as lo,
+      case when count(distinct price_currency) <= 1 then max(min_price_cents) end as hi
+    from price_scope
   )
   select jsonb_build_object(
-    'min_price_cents', (select min(min_price_cents) from price_scope),
-    'max_price_cents', (select max(min_price_cents) from price_scope),
+    'min_price_cents', (select lo from price_bounds),
+    'max_price_cents', (select hi from price_bounds),
     'free_shipping_count', (select n from shipping_count),
     'categories', coalesce(
       (select jsonb_agg(jsonb_build_object('id', id, 'slug', slug, 'name', name, 'count', n))
@@ -342,9 +380,10 @@ $function$;
 -- ---------------------------------------------------------------------------
 -- ÖNERİ ŞERİDİ: kategori önerisinin yanındaki sayı da üç seviyeyi görsün
 -- ---------------------------------------------------------------------------
--- Sonuç vermeyen öneri gösterilmiyor (`result_count > 0`). Tek seviye sayan
+-- İmza değişmiyor, bu yüzden `create or replace` yeterli ve yetkiler korunur.
+-- Sonuç vermeyen öneri gösterilmiyor (`result_count > 0`); tek seviye sayan
 -- eski hâl, yalnızca L3'te ürünü olan bir kategoriyi "sonuçsuz" sayıp öneri
--- şeridinden TAMAMEN düşürüyordu.
+-- şeridinden TAMAMEN düşürürdü.
 create or replace function public.search_suggestions(
   p_query text,
   p_limit integer default 8
@@ -426,12 +465,53 @@ as $function$
 $function$;
 
 -- ---------------------------------------------------------------------------
+-- YETKİLER YENİDEN VERİLİYOR
+-- ---------------------------------------------------------------------------
+-- `drop function` yetkileri de götürür. Vermeseydik vitrin (anon) arama
+-- yapamaz, site sessizce "sonuç yok" gösterirdi.
+grant execute on function public.search_products(
+  text, uuid, bigint, bigint, text, integer, integer, text[], boolean, char)
+  to anon, authenticated, service_role;
+grant execute on function public.search_facets(
+  text, uuid, text[], boolean, char)
+  to anon, authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
 -- GÖÇ KENDİNİ DOĞRULUYOR
 -- ---------------------------------------------------------------------------
 do $$
 declare
   v_l1 uuid; v_l2 uuid; v_l3 uuid; v_grup uuid; v_n bigint;
 begin
+  -- 0) AŞIRI YÜKLEME YOK. Bu kontrol olmasaydı göç "başarılı" görünürken
+  --    PostgREST aramayı tamamen düşürebilirdi.
+  select count(*) into v_n from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname = 'search_products';
+  if v_n <> 1 then
+    raise exception
+      'DOGRULAMA 0: search_products % surumlu -- asiri yukleme PostgREST te '
+      '"could not choose the best candidate function" hatasi uretir ve arama '
+      'tamamen durur.', v_n;
+  end if;
+  select count(*) into v_n from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname = 'search_facets';
+  if v_n <> 1 then
+    raise exception 'DOGRULAMA 0b: search_facets % surumlu -- asiri yukleme var.', v_n;
+  end if;
+
+  -- 0c) VITRIN (anon) HALA CAGIRABILIYOR. `drop` yetkileri goturur.
+  if not has_function_privilege('anon',
+        'public.search_products(text,uuid,bigint,bigint,text,integer,integer,text[],boolean,char)',
+        'execute') then
+    raise exception
+      'DOGRULAMA 0c: anon search_products u cagiramiyor -- site sessizce '
+      '"sonuc yok" gosterirdi.';
+  end if;
+  if not has_function_privilege('anon', 'public.search_facets(text,uuid,text[],boolean,char)',
+        'execute') then
+    raise exception 'DOGRULAMA 0d: anon search_facets i cagiramiyor.';
+  end if;
+
   select id into v_l1 from public.categories where slug::text = 'bilgisayar-tablet';
   select id into v_l2 from public.categories where slug::text = 'bilgisayar-bilesenleri';
   select id into v_l3 from public.categories where slug::text = 'ram';
@@ -500,9 +580,19 @@ begin
       'bir kategoriyi sifir sanip hic tiklamazdi.';
   end if;
 
+  -- 6) PARA BİRİMİ PARAMETRESİ HALA ÇALIŞIYOR. Kapsam düzeltmesi onu
+  --    ezseydi fiyat filtresi mezhepleri karıştırırdı.
+  select count(*) into v_n
+    from public.search_products(null, v_l1, null, null, 'relevance', 100, 0, null, false, 'XTS');
+  if v_n <> 0 then
+    raise exception
+      'DOGRULAMA 6: var olmayan para biriminde sonuc dondu -- p_currency '
+      'suzgeci calismiyor.';
+  end if;
+
   delete from public.product_groups where id = v_grup;
 
   raise notice
     'Kategori kapsami uc seviyeye cikti: arama, filtre sayaclari ve oneri '
-    'seridi L3 urunlerini artik goruyor.';
+    'seridi L3 urunlerini artik goruyor. Imza tek, yetkiler yerinde.';
 end $$;
