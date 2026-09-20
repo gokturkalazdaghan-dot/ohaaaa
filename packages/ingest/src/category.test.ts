@@ -13,6 +13,7 @@ import { test } from 'node:test';
 
 import {
   categorySlugKey,
+  kaynakKategorileriniCoz,
   matchCanonicalGroups,
   resolveCategoryIds,
   runSource,
@@ -282,4 +283,137 @@ test('categoryIds gecilmezse eski davranis aynen korunur', async () => {
   assert.equal(sonuc[0]?.categoryId, null);
   // Kanonik eslestirme etkilenmedi.
   assert.equal(typeof sonuc[0]?.groupId, 'string');
+});
+
+/* ==========================================================================
+ * VERİ TABANLI KAYNAK EŞLEMESİ
+ * --------------------------------------------------------------------------
+ * Koddaki kural listesi bilinçli olarak kısa: yalnızca gerçekten görülmüş
+ * değerler var. Yeni bir satıcı bağlandığında o liste tutmaz ve eskiden
+ * bütün feed sınıflandırılmamış kalırdı -- ölçüldü, BTO'da tam olarak bu
+ * oldu (35.767/35.767). Bu testler, veritabanı sözlüğünün o boşluğu
+ * DAĞITIM GEREKTİRMEDEN kapattığını ve kapatırken mevcut kararları
+ * ezmediğini doğruluyor.
+ * ========================================================================== */
+
+const teklif = (over: Partial<NormalizedOffer> = {}): NormalizedOffer =>
+  ({
+    externalId: 'x1',
+    title: 'Bir Ürün',
+    productUrl: 'https://magaza.example/u/1',
+    priceCents: 1000,
+    compareAtPriceCents: null,
+    currency: 'TRY',
+    stock: 1,
+    gtin: null,
+    brand: null,
+    description: null,
+    imageUrls: [],
+    categorySlug: null,
+    sourceCategory: null,
+    shippingFeeCents: 0,
+    ...over,
+  }) as NormalizedOffer;
+
+test('kural listesinin çözemediği kaynak değeri VERİTABANI sözlüğünden çözülür', async () => {
+  const sorulan: Array<{ source: string; keys: string[] }> = [];
+  const repository = fakeRepository({
+    async resolveSourceCategories(source, keys) {
+      sorulan.push({ source, keys: [...keys] });
+      return new Map([['Haushalt & Garten', 'ev-yasam']]);
+    },
+  }).repository;
+
+  const sonuc = await kaynakKategorileriniCoz(
+    [teklif({ sourceCategory: 'Haushalt & Garten' })],
+    'yeni-alman-satici',
+    repository,
+  );
+
+  assert.equal(sonuc[0]?.categorySlug, 'ev-yasam');
+  assert.deepEqual(sorulan, [
+    { source: 'yeni-alman-satici', keys: ['Haushalt & Garten'] },
+  ]);
+});
+
+test('kod kuralı zaten karar verdiyse sözlük ONU EZMEZ', async () => {
+  // Başlık kuralı feed'in tek değerli kategorisinden daha bilgilendirici.
+  // Sözlüğün onu ezmesi, ölçülmüş bir iyileştirmeyi sessizce geri almaktı.
+  let soruldu = false;
+  const repository = fakeRepository({
+    async resolveSourceCategories() {
+      soruldu = true;
+      return new Map([['computers', 'elektronik']]);
+    },
+  }).repository;
+
+  const sonuc = await kaynakKategorileriniCoz(
+    [teklif({ categorySlug: 'kulaklik', sourceCategory: 'computers' })],
+    'bto',
+    repository,
+  );
+
+  assert.equal(sonuc[0]?.categorySlug, 'kulaklik');
+  assert.equal(soruldu, false, 'çözülmüş teklif için sözlüğe hiç sorulmamalıydı');
+});
+
+test('KAPSAM DIŞI karar korunur -- ürün uydurma bir kategoriye konmaz', async () => {
+  // Sözlükte satır VAR ama hedefi `null`: gıda/alkol/tütün gibi bilerek
+  // almadığımız ürünler. Bunu "eşleşmedi" sayıp bir kategoriye doldurmak,
+  // kapsam dışı kararını sessizce iptal etmek olurdu.
+  const repository = fakeRepository({
+    async resolveSourceCategories() {
+      return new Map([['Food & Drink', null]]);
+    },
+  }).repository;
+
+  const sonuc = await kaynakKategorileriniCoz(
+    [teklif({ sourceCategory: 'Food & Drink' })],
+    'awin',
+    repository,
+  );
+
+  assert.equal(sonuc[0]?.categorySlug, null);
+});
+
+test('sözlükte HİÇ OLMAYAN anahtar teklifi olduğu gibi bırakır', async () => {
+  const repository = fakeRepository({
+    async resolveSourceCategories() {
+      return new Map();
+    },
+  }).repository;
+
+  const sonuc = await kaynakKategorileriniCoz(
+    [teklif({ sourceCategory: 'Department Stores' })],
+    'awin',
+    repository,
+  );
+
+  assert.equal(sonuc[0]?.categorySlug, null);
+});
+
+test('sözlük okunamazsa alım DÜŞMEZ; kod kuralları çalışmaya devam eder', async () => {
+  const repository = fakeRepository({
+    async resolveSourceCategories() {
+      throw new Error('ağ hatası');
+    },
+  }).repository;
+
+  const sonuc = await kaynakKategorileriniCoz(
+    [teklif({ categorySlug: 'telefon', sourceCategory: 'Phones' })],
+    'awin',
+    repository,
+  );
+
+  assert.equal(sonuc[0]?.categorySlug, 'telefon');
+});
+
+test('sözlük yeteneği OLMAYAN depo eskisi gibi çalışır', async () => {
+  // Arayüzü zorunlu kılmak, çalışan her çağıranı bir anda kırardı.
+  const repository = fakeRepository().repository;
+  const girdi = [teklif({ sourceCategory: 'Haushalt & Garten' })];
+
+  const sonuc = await kaynakKategorileriniCoz(girdi, 'x', repository);
+
+  assert.equal(sonuc, girdi, 'aynı dizi geri dönmeli -- kopya bile gerekmiyor');
 });

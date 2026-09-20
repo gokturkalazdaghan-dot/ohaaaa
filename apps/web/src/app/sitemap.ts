@@ -159,7 +159,34 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       );
       return [] as Awaited<ReturnType<typeof getCategoryTree>>;
     });
-    const categories = tree.flatMap((node) => [node.category, ...node.children.map((c) => c.category)]);
+    /*
+     * AĞAÇ ÖZYİNELEMELİ DÜZLEŞTİRİLİR.
+     *
+     * Önceki hâli yalnızca İKİ seviye topluyordu (`node` + `node.children`).
+     * Taksonomi üç seviyeye çıkınca bu, ürün kategorisi (L3) sayfalarını
+     * haritadan tamamen dışarıda bırakıyordu -- "Ekran Kartı" gibi gerçek
+     * ürün taşıyan, indekslenebilir sayfalar hiç bildirilmezdi. Aynı sınıf
+     * hata bir kez `/kategori/bilgisayar` için yaşandı (34.249 grup
+     * bildirilmiyordu); ikincisini yazmamak için düzleştirme derinlikten
+     * bağımsız.
+     *
+     * `buildCategoryTree` boş dalları zaten eliyor, yani buraya yalnızca
+     * ürünü olan kategoriler geliyor.
+     */
+    const duzlestir = (
+      dugumler: Awaited<ReturnType<typeof getCategoryTree>>,
+    ): Array<(typeof dugumler)[number]['category']> =>
+      dugumler.flatMap((node) => [node.category, ...duzlestir(node.children)]);
+
+    /*
+     * TEKİLLEŞTİRME ŞART. İkincil yerleşimler bir kategoriyi menüde iki üst
+     * kategori altında gösteriyor ("Saat" hem Moda hem Takı). Aynı adresi
+     * site haritasına iki kez yazmak, tek bir sayfayı iki kayıt gibi
+     * bildirmek olurdu.
+     */
+    const categories = [
+      ...new Map(duzlestir(tree).map((category) => [category.id, category])).values(),
+    ];
 
     const categoryPages: MetadataRoute.Sitemap = categories.flatMap((category) => [
       {

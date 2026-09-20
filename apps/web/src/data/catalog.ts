@@ -215,20 +215,25 @@ function normalize(value: string): string {
  */
 
 /**
- * Kategori kapsamı: kategorinin KENDİSİ + doğrudan çocukları.
+ * Kategori kapsamı: kategorinin KENDİSİ + BÜTÜN alt ağacı (L2 ve L3).
  *
- * `search_products` ile aynı kapsam kuralı. Orada `is_active` filtresi YOK;
- * burada da olmamalı -- aksi hâlde pasif bir alt kategoride duran ürünler
- * RPC yolunda görünüp bu yolda kaybolurdu.
+ * `search_products` ile AYNI kapsam kuralı; ikisi `kategori_kapsami`
+ * fonksiyonunu paylaşıyor. Paylaşmasalardı bu yol ile RPC yolu farklı
+ * ürün kümesi gösterirdi ve fark ekrandan anlaşılmazdı.
+ *
+ * ÖNCEKİ HÂLİ TEK SEVİYE İNİYORDU (`parent_id = categoryId`). Taksonomi üç
+ * seviyeye çıkınca bu sessiz bir eksik üretiyordu: "Bilgisayar & Teknoloji"
+ * sayfası "Bilgisayar Bileşenleri"ni görüyor ama onun altındaki "Ekran
+ * Kartı"nı GÖRMÜYORDU. Sayfa açılır, ürün listeler, hata düşmez -- yalnızca
+ * katalog eksiktir.
  */
 async function kategoriKapsaminiOku(categoryId: string): Promise<string[]> {
   const supabase = createAnonClient();
   if (!supabase) return [categoryId];
 
-  const { data, error } = await supabase
-    .from('categories')
-    .select('id')
-    .eq('parent_id', categoryId);
+  const { data, error } = await supabase.rpc('kategori_kapsami', {
+    p_category_id: categoryId,
+  });
 
   /*
    * Okunamadıysa YALNIZCA kendi kategorisi kullanılır. Alt kategorileri
@@ -247,7 +252,16 @@ async function kategoriKapsaminiOku(categoryId: string): Promise<string[]> {
     return [categoryId];
   }
 
-  return [categoryId, ...(data ?? []).map((satir) => String(satir.id))];
+  const kimlikler = (data ?? []).map((satir: { category_id: string }) =>
+    String(satir.category_id),
+  );
+
+  /*
+   * Kökün kendisi HER ZAMAN kapsamda. Fonksiyon onu zaten döndürüyor ama
+   * boş bir cevap (beklenmedik bir veri hâli) kategoriyi kendi sayfasından
+   * bile silerdi.
+   */
+  return kimlikler.includes(categoryId) ? kimlikler : [categoryId, ...kimlikler];
 }
 
 const kategoriKapsami = onbellekle(
@@ -1179,6 +1193,51 @@ async function kategorileriOku(): Promise<Category[]> {
 }
 
 /**
+ * Birleştirilmiş bir kategori slug'ının KANONİK hedefi.
+ *
+ * NEDEN GEREKLİ
+ * Yinelenen kategoriler birleştirildiğinde kaynak satır pasifleşiyor.
+ * `getCategories()` yalnızca ETKİN kategorileri döndürdüğü için kategori
+ * sayfası o adresi bulamaz ve `notFound()` çağırırdı: `/kategori/projektor`
+ * bir gün 200, ertesi gün 404. Dışarıya verilmiş bir adresi 404'e çevirmek
+ * o sayfanın bütün arama değerini çöpe atmak demek.
+ *
+ * Birleştirilmemiş slug için `null` döner -- "yönlendirme yok". Kendini
+ * döndürseydi her kategori sayfasında gereksiz bir 301 kurardık.
+ *
+ * OKUNAMAZSA `null`. Hata durumunda yönlendirme yapmamak, kullanıcıyı
+ * yanlış bir sayfaya göndermekten iyidir; sayfa zaten kendi 404'ünü verir.
+ */
+async function kategoriYonlendirmesiniOku(slug: string): Promise<string | null> {
+  const supabase = createAnonClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase.rpc('kategori_yonlendirme', {
+    p_slug: slug,
+  });
+
+  if (error) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'Kategori yonlendirmesi okunamadi',
+        slug,
+        hata: error.message,
+      }),
+    );
+    return null;
+  }
+
+  const satir = (data ?? [])[0] as { hedef_slug?: string } | undefined;
+  const hedef = satir?.hedef_slug ? String(satir.hedef_slug) : null;
+
+  // Kendine yönlendirme sonsuz döngü demek. Veritabanı kısıtı bunu zaten
+  // engelliyor; burada ikinci bir kapı, çünkü bedeli tarayıcıda sonsuz
+  // yönlenme olurdu.
+  return hedef && hedef !== slug ? hedef : null;
+}
+
+/**
  * Bu kategoride gösterilecek ÜRÜN VAR MI?
  *
  * Kapsam ürün aramasıyla AYNI: kendi kategorisi VE alt kategorileri
@@ -1198,13 +1257,10 @@ async function kategoriDoluMuOku(categoryId: string): Promise<boolean> {
     );
   }
 
-  const { data: cocuklar } = await supabase
-    .from('categories')
-    .select('id')
-    .eq('parent_id', categoryId)
-    .eq('is_active', true);
-
-  const kapsam = [categoryId, ...(cocuklar ?? []).map((c) => String(c.id))];
+  // Kapsam LİSTELEME ile aynı: `kategori_kapsami` üç seviye iniyor. Farklı
+  // kapsam kullansaydık sayfa ürün gösterirken meta veri "boş" diyebilirdi
+  // ve dolu bir kategori `noindex` alırdı.
+  const kapsam = await kategoriKapsami(categoryId);
 
   const { data, error } = await supabase
     .from('product_groups')
@@ -2747,6 +2803,17 @@ async function aramaIpuclariniOku(limit = 5): Promise<SearchHints> {
 
 /** Etkin kategorilerin tamamı (alt kategoriler dahil). */
 export const getCategories = onbellekle('kategoriler', kategorileriOku, ONBELLEK.taksonomi);
+
+/**
+ * Birleştirilmiş kategori slug'ının kanonik hedefi (yoksa `null`).
+ *
+ * Kategori sayfası bunu okuyup 301 veriyor: eski adres yaşamaya devam eder.
+ */
+export const getCategoryRedirect = onbellekle(
+  'kategori-yonlendirme',
+  kategoriYonlendirmesiniOku,
+  ONBELLEK.taksonomi,
+);
 
 /** Gezinilebilir kategori ağacı -- boş dallar elenmiş, sayılar ölçülmüş. */
 export const getCategoryTree = onbellekle('kategori-agaci', kategoriAgaciniOku, ONBELLEK.taksonomi);

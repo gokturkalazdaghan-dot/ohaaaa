@@ -69,6 +69,16 @@ import { redact } from './http/redact.js';
  * ölçümle güncellendi; ikisi birlikte değişmeli, yoksa test bayat bir
  * sayıyı korumaya devam eder.
  */
+/**
+ * Bir alimda sorulacak EN FAZLA essiz kaynak kategori degeri.
+ *
+ * Saglikli bir feed'in kategori sozlugu birkac yuz degerdir. Binleri
+ * gectiginde sebep neredeyse her zaman alan haritasinin yanlis sutunu
+ * okumasidir (kategori yerine urun adi); o durumda tavan olmasaydi alim
+ * basina on binlerce RPC cagrisi yapilirdi.
+ */
+export const KAYNAK_KATEGORI_TAVANI = 500;
+
 export const UPSERT_BATCH_SIZE = 50;
 
 /**
@@ -241,6 +251,70 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
       }
 
       return result;
+    },
+
+    /**
+     * Saticinin KENDI kategori metnini kanonik kategoriye cozer.
+     *
+     * `kanonik_kategori` RPC'si tek bir deger aliyor -- bu bilincli: cozum
+     * sirasi (kaynaga ozgu tam anahtar -> ortak kural -> yol parcalari, en
+     * spesifikten) tek degerde anlamli. Toplu bir surum yazmak o sirayi
+     * SQL icinde yeniden kurmak demekti ve iki kopya hemen ayrisirdi.
+     *
+     * Bir feed'in kategori SOZLUGU kucuktur (tekillestirilmis degerler;
+     * olculen BTO feed'inde 1, tipik Awin saticilarinda 50-200), urun
+     * sayisi degil. Yine de essiz degerler SINIRLANIR: bozuk bir alan
+     * haritasi kategori sutunu yerine urun ADINI okursa sozluk aniden
+     * on binlerce essiz deger uretir ve bu, satici basina on binlerce RPC
+     * cagrisi demekti.
+     *
+     * COZULEMEYEN DEGER HARITAYA GIRMEZ. "Henuz eslenmedi" ile "bilerek
+     * kapsam disi" (null deger) ayri seyler; karistirmak, disarida
+     * biraktigimiz urunleri sessizce kapsama sokardi.
+     */
+    async resolveSourceCategories(source, keys) {
+      const sonuc = new Map<string, string | null>();
+      if (keys.length === 0) return sonuc;
+
+      const sinirli = keys.slice(0, KAYNAK_KATEGORI_TAVANI);
+      if (keys.length > KAYNAK_KATEGORI_TAVANI) {
+        console.warn(
+          JSON.stringify({
+            level: 'warn',
+            msg: 'Kaynak kategori sozlugu beklenenden buyuk; ilk N deger soruldu',
+            source,
+            essiz_deger: keys.length,
+            sorulan: KAYNAK_KATEGORI_TAVANI,
+            neden:
+              'Bu kadar essiz kategori degeri genellikle alan haritasinin ' +
+              'yanlis sutunu okudugunu gosterir.',
+          }),
+        );
+      }
+
+      for (const anahtar of sinirli) {
+        const { data, error } = await okumayiYenidenDene(() =>
+          supabase.rpc('kanonik_kategori', {
+            p_source: source,
+            p_source_key: anahtar,
+          }),
+        );
+
+        if (error) {
+          throw new Error(`Kaynak kategori eslemesi okunamadi: ${error.message}`);
+        }
+
+        const satir = (data ?? [])[0] as
+          | { slug?: string | null; kapsam_disi?: boolean }
+          | undefined;
+
+        // Satir hic yoksa: henuz eslenmedi -- haritaya GIRMEZ.
+        if (!satir) continue;
+
+        sonuc.set(anahtar, satir.kapsam_disi ? null : (satir.slug ?? null));
+      }
+
+      return sonuc;
     },
 
     async findGroupsByGtin(gtins) {

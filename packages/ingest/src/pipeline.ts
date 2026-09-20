@@ -58,6 +58,24 @@ export interface IngestRepository {
    * bizim taksonomimizi belirleyemez.
    */
   findCategoryIdsBySlug(slugs: string[]): Promise<Map<string, string>>;
+  /**
+   * Satıcının KENDİ kategori metnini kanonik kategoriye çözer (veritabanındaki
+   * `category_source_map` sözlüğü üzerinden).
+   *
+   * → ham kaynak değeri → kanonik slug, ya da `null` (BİLEREK KAPSAM DIŞI)
+   *
+   * Haritada HİÇ OLMAYAN anahtar "henüz eşlenmedi" demektir; `null` değer
+   * ise "bilerek almıyoruz" (gıda, alkol, tütün). İkisini karıştırmak,
+   * kapsam dışı bırakılan ürünleri sessizce kapsama sokardı.
+   *
+   * İSTEĞE BAĞLI. Uygulamayan bir depo (testlerdeki sahte depolar, eski
+   * çağıranlar) eskisi gibi yalnızca koddaki kural listesiyle çalışır.
+   * Zorunlu kılmak, çalışan her çağıranı bir anda kırardı.
+   */
+  resolveSourceCategories?(
+    source: string,
+    keys: string[],
+  ): Promise<Map<string, string | null>>;
   /** GTIN ile kanonik ürün arar. → gtin → group_id */
   findGroupsByGtin(gtins: string[]): Promise<Map<string, string>>;
   /** Marka + normalize başlık imzasıyla arar. → imza → group_id */
@@ -339,8 +357,28 @@ export async function runSource(
      * filtreledigi icin BOS kalir. Hatanin en pahali bicimi: her sayac
      * yesil, vitrin bos.
      */
-    const categoryIds = await resolveCategoryIds(offers, deps.repository);
-    const withGroups = await matchCanonicalGroups(offers, deps.repository, categoryIds);
+    /*
+     * ESLEME IKI KATMANLI: KOD, SONRA VERI.
+     *
+     * Birinci katman `categorize.ts` icindeki kural listesi -- hizli ve
+     * dagitimla gelir. Ikinci katman veritabanindaki `category_source_map`
+     * sozlugu: YENI BIR SATICI baglandiginda eslemesi oraya YAZILIR ve
+     * dagitim gerekmez. Ikinci katman olmasaydi her yeni feed icin kod
+     * degistirip yayin yapmak gerekirdi; global olcekte bu, her satici
+     * icin bir surum demekti.
+     */
+    const siniflandirilmis = await kaynakKategorileriniCoz(
+      offers,
+      source.slug,
+      deps.repository,
+    );
+
+    const categoryIds = await resolveCategoryIds(siniflandirilmis, deps.repository);
+    const withGroups = await matchCanonicalGroups(
+      siniflandirilmis,
+      deps.repository,
+      categoryIds,
+    );
 
     /*
      * Siniflandirilamayanlar SAYILIR ve LOGLANIR.
@@ -350,7 +388,7 @@ export async function runSource(
      */
     const cozulemeyen = [
       ...new Set(
-        offers
+        siniflandirilmis
           .map((offer) => categorySlugKey(offer.categorySlug))
           .filter((slug): slug is string => !!slug && !categoryIds.has(slug)),
       ),
@@ -555,6 +593,89 @@ export { categorySlugKey } from './categorize.js';
 // ice aktariliyor.
 import { categorySlugKey } from './categorize.js';
 
+
+/**
+ * Kural listesinin cozemedigi teklifleri VERITABANI SOZLUGUNDEN tamamlar.
+ *
+ * NEDEN GEREKLI
+ * `categorize.ts` icindeki liste bilincli olarak KISA: yalnizca gercekten
+ * gorulmus degerler var. Yeni bir satici baglandiginda ("Elektronik",
+ * "Haushalt & Garten", "Consumer Electronics") o liste tutmaz ve butun
+ * feed siniflandirilmamis kalirdi -- olculdu, BTO'da tam olarak bu oldu
+ * ve 35.767 urunun tamami kategori sayfalarinda gorunmedi.
+ *
+ * Bu adim ham kaynak degerini `category_source_map` sozlugune soruyor.
+ * Sozluk VERIDE oldugu icin yeni bir satici icin dagitim gerekmez.
+ *
+ * KOD KURALI KAZANIR. Kural listesi bir deger icin zaten karar verdiyse
+ * (`categorySlug` dolu) ona dokunulmaz: baslik tabanli kural, feed'in tek
+ * degerli kategorisinden daha bilgilendirici ve bunu degistirmek sessiz
+ * bir gerileme olurdu.
+ *
+ * KAPSAM DISI KARARI KORUNUR. Sozluk `null` dondurdugunde bu "bilerek
+ * almiyoruz" demektir (gida, alkol, tutun) ve teklif siniflandirilmamis
+ * BIRAKILIR -- uydurma bir kategoriye konmaz.
+ *
+ * DEPO BU YETENEGI SUNMUYORSA teklifler AYNEN doner: eski davranis korunur.
+ */
+export async function kaynakKategorileriniCoz(
+  offers: NormalizedOffer[],
+  source: string,
+  repository: IngestRepository,
+): Promise<NormalizedOffer[]> {
+  if (!repository.resolveSourceCategories) return offers;
+
+  // Yalnizca COZULEMEYENLER sorulur. Cozulmus tekliflerin ham degerini de
+  // sormak, sozluge gereksiz yuk bindirmekten baska bir sey yapmazdi.
+  const anahtarlar = [
+    ...new Set(
+      offers
+        .filter((offer) => !offer.categorySlug)
+        .map((offer) => (offer.sourceCategory ?? '').trim())
+        .filter((deger) => deger.length > 0),
+    ),
+  ];
+
+  if (anahtarlar.length === 0) return offers;
+
+  let sozluk: Map<string, string | null>;
+  try {
+    sozluk = await repository.resolveSourceCategories(source, anahtarlar);
+  } catch (error) {
+    /*
+     * SOZLUK OKUNAMAZSA ALIM DUSMEZ.
+     *
+     * Bu katman bir IYILESTIRME: olmadiginda kural listesi eskisi gibi
+     * calisir ve cozulemeyenler zaten sayilip loglaniyor. Burada hata
+     * firlatmak, calisan bir alimi yardimci bir sorgu yuzunden iptal
+     * etmek olurdu.
+     */
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'Kaynak kategori sozlugu okunamadi; yalnizca kod kurallari kullanildi',
+        source,
+        hata: error instanceof Error ? error.message : String(error),
+      }),
+    );
+    return offers;
+  }
+
+  return offers.map((offer) => {
+    if (offer.categorySlug) return offer;
+
+    const ham = (offer.sourceCategory ?? '').trim();
+    if (ham.length === 0) return offer;
+
+    // `has` ile `get` AYRI sorular: haritada olmayan anahtar "henuz
+    // eslenmedi", `null` deger ise "bilerek kapsam disi".
+    if (!sozluk.has(ham)) return offer;
+    const slug = sozluk.get(ham) ?? null;
+    if (slug === null) return offer;
+
+    return { ...offer, categorySlug: slug };
+  });
+}
 
 /**
  * Feed'de gecen kategori degerlerini MEVCUT katalog kategorilerine cozer.

@@ -59,6 +59,20 @@ export interface NormalizedOffer {
   description: string | null;
   imageUrls: string[];
   categorySlug: string | null;
+  /**
+   * Feed'in KENDİ kategori metni, ham hâliyle ("Computers > Peripherals").
+   *
+   * NEDEN AYRI BİR ALAN
+   * `categorySlug` kod içindeki kural listesinin ÇIKTISI; bu alan ise
+   * kaynağın söylediği şeyin kendisi. İkisini tek alanda tutmak, kaynağın
+   * taksonomisini bizim taksonomimizle karıştırmak olurdu ve kural listesi
+   * bir değeri çözemediğinde ham değer KAYBOLURDU -- oysa veritabanındaki
+   * `category_source_map` tam da o ham değere bakarak eşleme yapıyor.
+   *
+   * İsteğe bağlı: eski çağıranlar (testler, elle kurulan teklifler) bunu
+   * vermeden de derlenir; veren taraf veri tabanlı eşlemeden yararlanır.
+   */
+  sourceCategory?: string | null;
   shippingFeeCents: number;
 }
 
