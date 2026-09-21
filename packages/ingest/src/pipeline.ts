@@ -76,6 +76,18 @@ export interface IngestRepository {
     source: string,
     keys: string[],
   ): Promise<Map<string, string | null>>;
+  /**
+   * Veritabanının tanıdığı ETKİN para birimi kodları.
+   *
+   * Kod tarafında liste TUTULMAZ: hangi kodların var olduğunu `currencies`
+   * tablosu bilir ve `products.currency` ona bir yabancı anahtarla bağlı.
+   * Kopya tutmak, iki doğruluk kaynağı demekti.
+   *
+   * İSTEĞE BAĞLI ve okunamazsa çağıran taraf HİÇBİR satırı elemez:
+   * geçici bir okuma hatasında bütün kataloğu geçersiz saymak, çözmeye
+   * çalıştığımız arızanın daha büyüğü olurdu.
+   */
+  listSupportedCurrencies?(): Promise<Set<string>>;
   /** GTIN ile kanonik ürün arar. → gtin → group_id */
   findGroupsByGtin(gtins: string[]): Promise<Map<string, string>>;
   /** Marka + normalize başlık imzasıyla arar. → imza → group_id */
@@ -301,9 +313,38 @@ export async function runSource(
     }
 
     // --- 3) Normalleştir -----------------------------------------------------
+    /*
+     * PARA BİRİMİ KÜMESİ YAZMADAN ÖNCE OKUNUR.
+     *
+     * Ölçülen arıza: AliExpress PL turu `products_currency_fkey` ile
+     * düştü. Feed satır başına farklı para birimi taşıyor; tanınmayan tek
+     * bir kod, partiyi ve onunla birlikte BÜTÜN turu reddettiriyordu.
+     *
+     * Okunamazsa küme `undefined` kalır ve hiçbir satır elenmez -- eski
+     * davranış. Bir okuma hatasının kataloğu düşürmesi, düzeltmeye
+     * çalıştığımız arızanın aynısı olurdu.
+     */
+    let paraBirimleri: Set<string> | undefined;
+    if (deps.repository.listSupportedCurrencies) {
+      try {
+        const okunan = await deps.repository.listSupportedCurrencies();
+        /* Boş küme "hiçbir para birimi geçerli değil" demek olurdu. */
+        paraBirimleri = okunan.size > 0 ? okunan : undefined;
+      } catch (hata: unknown) {
+        paraBirimleri = undefined;
+        summary.sampleErrors.push({
+          externalId: null,
+          reason:
+            'UYARI: para birimi listesi okunamadı; doğrulama atlandı ' +
+            `(${hata instanceof Error ? hata.message : String(hata)})`,
+        });
+      }
+    }
+
     const { offers, errors } = normalizeRecords(records, source.fieldMapping, {
       defaultCurrency: source.currency,
       allowedHosts: source.allowedHosts,
+      allowedCurrencies: paraBirimleri,
     });
 
     summary.itemsFailed = errors.length;

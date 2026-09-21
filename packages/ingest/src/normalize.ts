@@ -20,10 +20,30 @@ export interface NormalizeResult {
 /** Fiyatın makul üst sınırı (10 milyon TL). Üstü neredeyse daima veri hatasıdır. */
 const MAX_PRICE_CENTS = 1_000_000_000;
 
+/**
+ * Normalleştirme seçenekleri.
+ *
+ * `allowedCurrencies` İSTEĞE BAĞLI ve bilerek öyle: kümeyi okuyamadığımız
+ * bir turda hiçbir satırı elemeyiz. Bilinmeyeni "geçersiz" saymak, geçici
+ * bir okuma hatasında bütün kataloğu düşürmek olurdu.
+ */
+export interface NormalizeOptions {
+  defaultCurrency: string;
+  allowedHosts: string[];
+  /**
+   * Veritabanının GERÇEKTEN tanıdığı para birimi kodları.
+   *
+   * Burada liste TUTULMAZ, taşınır: hangi kodların var olduğunu
+   * `currencies` tablosu bilir (bkz. `isCurrencyCode` yorumu -- orada da
+   * biçim kontrolü ile üyelik kontrolü bilerek ayrılmış).
+   */
+  allowedCurrencies?: ReadonlySet<string>;
+}
+
 export function normalizeRecords(
   records: RawRecord[],
   mapping: FieldMapping,
-  options: { defaultCurrency: string; allowedHosts: string[] },
+  options: NormalizeOptions,
 ): NormalizeResult {
   const offers: NormalizedOffer[] = [];
   const errors: NormalizeResult['errors'] = [];
@@ -62,7 +82,7 @@ export function normalizeRecords(
 function normalizeOne(
   record: RawRecord,
   mapping: FieldMapping,
-  options: { defaultCurrency: string; allowedHosts: string[] },
+  options: NormalizeOptions,
   externalId: string,
 ): NormalizedOffer | { reason: string } {
   const title = read(record, mapping.title)?.trim();
@@ -128,14 +148,47 @@ function normalizeOne(
     ? parseMoneyToCents(read(record, mapping.shipping_fee) ?? '') ?? 0
     : 0;
 
+  /*
+   * ===========================================================================
+   * PARA BİRİMİ YAZMADAN ÖNCE DOĞRULANIR
+   * ===========================================================================
+   * ÖLÇÜLEN ARIZA (üretimde): `aliexpress-pl-yuksek-komisyon` turu
+   *
+   *   Teklifler yazılamadı: insert or update on table "products"
+   *   violates foreign key constraint "products_currency_fkey"
+   *
+   * AliExpress feed'i satır başına farklı para birimi taşıyor. Kaynak
+   * PLN olarak kurulu, gelen satırların bir kısmı USD (tabloda var), bir
+   * kısmı tabloda OLMAYAN bir kod. Yazma partiler hâlinde ve tek RPC
+   * çağrısı; bir satırın kodu tanınmayınca PARTİNİN TAMAMI reddediliyor,
+   * atılan hata da bütün turu düşürüyordu. Son turda 1.494 ürün yazılıp
+   * kaynak `failed` durumunda kaldı.
+   *
+   * Yani TEK bir satır yüzünden o satıcının bütün kataloğu tazelenmiyordu.
+   *
+   * Doğru yer burası: bu dosyanın en başındaki kural "şüpheli veri
+   * alınmaz" ve zaten bir ELEME yolu var -- elenen satır
+   * `ingest_runs.sample_errors` içinde GÖRÜNÜR olur, sessizce kaybolmaz.
+   * Veritabanına yanlış kodu gönderip kısıtın yakalamasını beklemek,
+   * doğrulamayı en pahalı yere ertelemekti.
+   *
+   * Küme YOKSA hiçbir satır elenmez (bkz. `NormalizeOptions`).
+   */
+  const paraBirimi =
+    (mapping.currency ? read(record, mapping.currency) : null)?.trim().toUpperCase()
+    || options.defaultCurrency;
+
+  if (options.allowedCurrencies && !options.allowedCurrencies.has(paraBirimi)) {
+    return { reason: `para birimi desteklenmiyor: ${paraBirimi}` };
+  }
+
   return {
     externalId,
     title: title.slice(0, 300),
     productUrl,
     priceCents,
     compareAtPriceCents,
-    currency: (mapping.currency ? read(record, mapping.currency) : null)?.trim().toUpperCase()
-      ?? options.defaultCurrency,
+    currency: paraBirimi,
     stock,
     gtin,
     brand: (mapping.brand ? read(record, mapping.brand) : null)?.trim().slice(0, 120) || null,
@@ -197,9 +250,28 @@ export function parseStock(value: string | null | undefined): number {
     return Math.max(0, Math.min(numeric, 1_000_000));
   }
 
-  const inStock = ['in stock', 'instock', 'available', 'true', 'yes', 'evet', 'var', 'stokta'];
+  /*
+   * ALT ÇİZGİLİ BİÇİMLER GOOGLE SHOPPING ŞEMASINDAN GELİR.
+   *
+   * 'in stock' ve 'instock' vardı ama 'in_stock' YOKTU. Google Shopping
+   * biçimli feed'ler -- Awin'in "retail" ürün verisi bu biçimdedir --
+   * tam olarak alt çizgili yazar.
+   *
+   * Eksikken HİÇBİR ŞEY hata vermiyor: bilinmeyen değer 0'a düşüyor ve
+   * stoktaki her ürün "stokta yok" olarak yazılıyor. Sessiz kayıp, gürültülü
+   * hatadan kötüdür; ürün vitrine hiç çıkmaz ve kimse sebebini aramaz.
+   * Gerçek bir feed'de ölçülmüştü: 636 üründen 476'sı böyle kayboluyordu.
+   *
+   * Bugünkü üç kaynağımız bundan etkilenmiyor (ürünlerin %95-100'ü aktif),
+   * yani bu YAŞAYAN değil YATAN bir arıza -- ve tam da yeni bir Awin
+   * satıcısı bağlandığında patlayacak olanı.
+   */
+  const inStock = [
+    'in stock', 'instock', 'in_stock', 'available', 'true', 'yes',
+    'evet', 'var', 'stokta',
+  ];
   const outOfStock = [
-    'out of stock', 'outofstock', 'unavailable', 'false', 'no',
+    'out of stock', 'outofstock', 'out_of_stock', 'unavailable', 'false', 'no',
     'hayir', 'hayır', 'yok', 'tukendi', 'tükendi', 'preorder', 'backorder',
   ];
 
