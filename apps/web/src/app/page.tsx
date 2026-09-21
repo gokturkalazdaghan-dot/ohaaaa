@@ -4,7 +4,6 @@ import type { Metadata } from 'next';
 import { dilMetaVerisi } from '@/lib/seo';
 import Link from 'next/link';
 
-import { CategoryBrowser } from '@/components/CategoryBrowser';
 import { DataUnavailable } from '@/components/DataUnavailable';
 import { InstallApp } from '@/components/InstallApp';
 import { FlashDeals } from '@/components/FlashDeals';
@@ -98,6 +97,13 @@ export default async function HomePage() {
   const [dealsRes, categoriesRes, vendorsRes, trendingRes, vitrinRes, ipucuRes] =
     await Promise.all([
     fetched('kampanyalar', getFlashDeals(3)),
+    /*
+     * Ağaç ana sayfada artık ÇİZİLMİYOR ama yine de okunuyor: aşağıdaki
+     * `catalogUnavailable` kararı "veri gelmedi mi, yoksa katalog mu boş"
+     * ayrımını bu iki okumaya bakarak veriyor. Ücretsiz sayılır --
+     * kategori çekmecesi aynı önbellek girdisini kullanıyor, yani
+     * fazladan bir sorgu değil.
+     */
     fetched('kategoriler', getCategoryTree()),
     fetched('magazalar', getVendors()),
     /*
@@ -112,7 +118,6 @@ export default async function HomePage() {
   const ipuclari = ipucuRes.ok ? ipucuRes.value : undefined;
   const deals = dealsRes.ok ? dealsRes.value : [];
   const vitrin = vitrinRes.ok ? vitrinRes.value : [];
-  const categories = categoriesRes.ok ? categoriesRes.value : [];
   const vendors = vendorsRes.ok ? vendorsRes.value : [];
   /*
    * VITRINDEKI URUNLER BU IZGARADA TEKRAR ETMEZ.
@@ -212,20 +217,20 @@ export default async function HomePage() {
         </div>
 
         {/*
-          KATEGORİ DUVARI KALDIRILDI.
+          KATEGORİ LİSTESİ ANA SAYFADAN TAMAMEN KALKTI.
 
-          Burada 6 ana kategori ve 21 alt kategori AYNI ANDA, aynı görünüşte
-          çip olarak diziliyordu -- 27 çip. Telefon ekranında bu, arama
-          kutusunun altını baştan aşağı dolduruyor ve fırsatlar ile öne
-          çıkan ürünleri ekranın çok aşağısına itiyordu; Safari ekran
-          görüntüsüyle bildirilen arıza buydu.
+          Önce 27 çiplik bir duvardı; açılır başlıklara indirgendi. Ama
+          kenar çekmecesi geldikten sonra AYNI ağaç iki yerde duruyordu:
+          arama kutusunun altında ve kenardan çekilen menüde. İkisi aynı
+          veriyi, aynı akordeonla gösteriyordu.
 
-          Yerine gelen gezgin yalnızca ANA BAŞLIKLARI gösteriyor; alt
-          kategoriler başlığa dokununca açılıyor. Veri aynı ağaçtan
-          (`getCategoryTree`) geliyor, adresler değişmedi, hiçbir kategori
-          silinmedi -- yalnızca ne zaman görüneceği değişti.
+          Ana sayfanın işi kategori listelemek değil: ziyaretçi ya arar ya
+          da fırsatlara bakar. Kategoriye göre gezinmek isteyen için
+          telefonda kenar çekmecesi, geniş ekranda üst çubuktaki şerit var
+          -- ikisi de HER sayfada, yalnızca ana sayfada değil.
+
+          Bileşen SİLİNMEDİ, burada kullanılmıyor: çekmecenin içi o.
         */}
-        <CategoryBrowser nodes={categories} locale={contentLocale} />
       </section>
 
       {/*
