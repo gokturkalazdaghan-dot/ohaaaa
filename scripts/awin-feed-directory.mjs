@@ -61,6 +61,7 @@ const ESLEME = {
   itemCount: ['no of products', 'number of products', 'products', 'no_of_products'],
   imported: ['last imported', 'last checked', 'lastimported'],
   membership: ['membership status', 'membership', 'status', 'join status'],
+  url: ['url', 'feed url', 'download url'],
 };
 
 /**
@@ -124,6 +125,32 @@ function bolgeKodu(deger) {
   return /^[A-Za-z]{2}$/.test(d) ? d.toUpperCase() : null;
 }
 
+/**
+ * Feed adresinden API ANAHTARINI SÖKER.
+ *
+ * Awin liste çıktısındaki `URL` kolonu indirmeye hazır adresi verir --
+ * ve adresin içinde anahtar durur. Veritabanı bunu zaten reddediyor:
+ * `program_feeds_url_no_secret` ve `..._url_placeholder` kısıtları tam da
+ * bu kazayı engellemek için yazılmış. Depodaki desen anahtarı yer
+ * tutucuyla saklamak; gerçek değer yalnızca çalışma anında ortamdan gelir.
+ *
+ * Sökme BAŞARISIZSA adres HİÇ saklanmaz. Yarım temizlenmiş bir adresi
+ * "herhalde tamamdır" diye yazmak, sırrı veritabanına sızdırmanın en
+ * sessiz yoludur.
+ */
+function adresiTemizle(adres) {
+  const d = String(adres ?? '').trim();
+  if (!d.startsWith('https://')) return null;
+
+  const temiz = d.replace(/\/apikey\/[^/]+/, '/apikey/${AWIN_DATAFEED_API_KEY}');
+
+  /* Kısıtların ikisini de BURADA da uyguluyoruz: veritabanına güvenip
+     göndermek, hatayı en geç yerde görmek olurdu. */
+  if (/\/apikey\/(?!\$\{)/.test(temiz)) return null;
+  if (/[0-9a-f]{24,}/.test(temiz)) return null;
+  return temiz;
+}
+
 function sayi(deger) {
   const n = Number(String(deger ?? '').replace(/[^0-9]/g, ''));
   return Number.isFinite(n) && n > 0 ? n : null;
@@ -181,6 +208,8 @@ async function main() {
       language: (al(satir, k.language) || '').toLowerCase().slice(0, 8) || null,
       itemCount: sayi(al(satir, k.itemCount)),
       membership: al(satir, k.membership) || null,
+      url: adresiTemizle(al(satir, k.url)),
+      imported: al(satir, k.imported) || null,
     });
   }
 
@@ -192,6 +221,17 @@ async function main() {
   });
 
   /* --- 1) Reklamverenler ------------------------------------------------ */
+  /*
+   * TEK BİR ZAMAN DAMGASI.
+   *
+   * İlk koşu `programs_first_seen_before_verified` kısıtıyla düştü:
+   * `last_verified_at` JS'te hesaplanmıştı, `first_seen_at` ise sunucuda
+   * `now()` varsayılanıyla doluyordu -- yani SONRAKİ bir an. Kısıt
+   * `last_verified_at >= first_seen_at` istiyor ve aradaki milisaniyeler
+   * bunu bozuyordu. İkisi de aynı değeri alınca sorun ortadan kalkıyor.
+   */
+  const simdi = new Date().toISOString();
+
   const reklamverenler = new Map();
   for (const r of kayitlar) {
     if (!reklamverenler.has(r.advId)) {
@@ -203,7 +243,8 @@ async function main() {
         network_status: r.membership,
         /* Teknik erişim ticari onay DEĞİL: hiçbir program yayına alınmaz. */
         application_state: 'DISCOVERED',
-        last_verified_at: new Date().toISOString(),
+        first_seen_at: simdi,
+        last_verified_at: simdi,
       });
     }
   }
@@ -272,7 +313,19 @@ async function main() {
       region: r.region,
       language: r.language,
       network_item_count: r.itemCount,
-      checked_at: new Date().toISOString(),
+      feed_url: r.url,
+      /*
+       * `checked_at` YAZILMIYOR. `program_feeds_measure_needs_time` kısıtı
+       * onu ölçüm alanlarına bağlıyor: `checked_at` dolu ama
+       * `ingestable_count`/`measured_item_count` boşsa satır reddedilir --
+       * ve haklı olarak. `checked_at` "biz feed'i indirip saydık" demek;
+       * burada yaptığımız yalnızca dizini okumak.
+       *
+       * Awin'in bildirdiği tarih `last_imported_at`e gidiyor: o bizim
+       * ölçümümüz değil, ağın beyanı.
+       */
+      last_imported_at: r.imported ? (Number.isNaN(Date.parse(r.imported))
+        ? null : new Date(r.imported).toISOString()) : null,
     }));
 
   let yazilan = 0;
@@ -297,7 +350,7 @@ async function main() {
  * `main` yalnızca dosya DOĞRUDAN çalıştırıldığında koşar; içe aktaran bir
  * test, ağa çıkmaz ve veritabanına yazmaz.
  */
-export { csvAyristir, kolonlariCoz, sayi, bolgeKodu, ESLEME };
+export { csvAyristir, kolonlariCoz, sayi, bolgeKodu, adresiTemizle, ESLEME };
 
 const dogrudanCalisiyor =
   process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;

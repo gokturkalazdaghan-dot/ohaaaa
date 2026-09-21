@@ -13,7 +13,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 
-import { csvAyristir, kolonlariCoz, sayi, bolgeKodu } from './awin-feed-directory.mjs';
+import { csvAyristir, kolonlariCoz, sayi, bolgeKodu, adresiTemizle } from './awin-feed-directory.mjs';
 
 test('tırnak içindeki virgül kolonu bölmez', () => {
   // Gerçek reklamveren adlarında virgül var: "Smith, Jones & Co."
@@ -93,4 +93,70 @@ test('gerçek biçimli bir liste satırı uçtan uca doğru okunur', () => {
   assert.deepEqual(oku(satirlar[3]), {
     fid: '99999', adv: '88888', ad: 'He said "hi"', bolge: null, adet: 12,
   });
+});
+
+/*
+ * =============================================================================
+ * ADRESTEN ANAHTAR SÖKME
+ * =============================================================================
+ * Liste çıktısının `URL` kolonu indirmeye hazır adresi verir ve İÇİNDE
+ * anahtar vardır. Veritabanı bunu iki kısıtla reddediyor
+ * (`program_feeds_url_no_secret`, `..._url_placeholder`) ama hatayı en geç
+ * yerde görmek yerine burada engelliyoruz.
+ *
+ * En önemli test SONUNCUSU: sökemediğimiz bir adres SAKLANMAZ. Yarım
+ * temizlenmiş bir adresi "herhalde tamamdır" diye yazmak, sırrı sessizce
+ * sızdırmaktır.
+ */
+
+test('apikey yer tutucuyla değiştirilir', () => {
+  const t = adresiTemizle(
+    'https://productdata.awin.com/datafeed/download/apikey/abc123def456abc123def456/language/en/fid/111663/format/csv/',
+  );
+  assert.equal(
+    t,
+    'https://productdata.awin.com/datafeed/download/apikey/${AWIN_DATAFEED_API_KEY}/language/en/fid/111663/format/csv/',
+  );
+  assert.ok(!/[0-9a-f]{24,}/.test(t), 'sonuçta uzun onaltılık dizi kalmamalı');
+  assert.ok(!/\/apikey\/(?!\$\{)/.test(t), 'apikey yer tutucu olmalı');
+});
+
+test('https olmayan adres saklanmaz', () => {
+  assert.equal(adresiTemizle('http://productdata.awin.com/x'), null);
+  assert.equal(adresiTemizle('ftp://x'), null);
+  assert.equal(adresiTemizle(''), null);
+  assert.equal(adresiTemizle(undefined), null);
+});
+
+test('anahtar sökülemezse adres HİÇ saklanmaz', () => {
+  // `apikey` segmenti yok ama uzun onaltılik bir dizi var: sirri tasiyor
+  // olabilir, o yuzden reddedilir.
+  assert.equal(
+    adresiTemizle('https://ornek.example/feed/0123456789abcdef0123456789abcdef'),
+    null,
+    'uzun onaltılık dizi taşıyan adres reddedilmeli',
+  );
+});
+
+test('gerçek liste başlığı (üretimden ölçüldü) doğru çözülür', () => {
+  /*
+   * Bu başlık Awin'in canlı liste uç noktasından geldi -- tahmin değil,
+   * ilk koşunun günlüğünden alındı.
+   */
+  const baslik = [
+    'Advertiser ID', 'Advertiser Name', 'Primary Region', 'Membership Status',
+    'Feed ID', 'Feed Name', 'Language', 'Vertical', 'Last Imported',
+    'Last Checked', 'No of products', 'URL',
+  ];
+  const k = kolonlariCoz(baslik);
+  assert.equal(k.advertiserId, 0);
+  assert.equal(k.advertiserName, 1);
+  assert.equal(k.region, 2);
+  assert.equal(k.membership, 3);
+  assert.equal(k.feedId, 4);
+  assert.equal(k.feedName, 5);
+  assert.equal(k.language, 6);
+  assert.equal(k.imported, 8);
+  assert.equal(k.itemCount, 10);
+  assert.equal(k.url, 11);
 });
