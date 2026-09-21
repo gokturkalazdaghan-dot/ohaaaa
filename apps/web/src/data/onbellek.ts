@@ -62,7 +62,14 @@ export const ONBELLEK = {
  *      onbellege girdi. Veritabani duzeldikten sonra bile eski adresler
  *      404 donmeye devam etti -- surum artirilmasaydi TTL dolana kadar.
  */
-const KATALOG_SURUMU = 'v4';
+/*
+ * v5: `sunulan-pazarlar` girdisi BOZUK bir değerle önbelleğe alınmıştı.
+ * İlk hâli `sources` tablosunu okuyordu ve `anon` o tabloyu okuyamıyor
+ * (42501); girdi boş dizi olarak 1 saatlik TTL ile pinlendi ve `hreflang`
+ * 39 girdiye çıktı. Fonksiyon düzeldi ama önbellekteki boş değer kendi
+ * kendine düşmez -- sürüm çevrilmezse düzeltme bir saat görünmez.
+ */
+const KATALOG_SURUMU = 'v5';
 
 /**
  * Bir katalog okumasını önbelleğe alır.

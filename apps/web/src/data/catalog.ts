@@ -2845,10 +2845,18 @@ async function sunulanPazarlariOku(): Promise<string[]> {
   const supabase = createAnonClient();
   if (!supabase) return [];
 
-  const { data, error } = await supabase
-    .from('sources')
-    .select('market_code')
-    .eq('is_enabled', true);
+  /*
+   * TABLO DEĞİL RPC.
+   *
+   * ÖLÇÜLEN ARIZA: ilk hâli `sources` tablosunu okuyordu ve `anon` o
+   * tabloyu HİÇ okuyamıyor (`42501 permission denied`) -- tek politika
+   * `sources_admin_all using (is_admin())`. Küme her zaman boş döndü,
+   * eleme hiç çalışmadı ve `hreflang` 8 girdiden 39'a çıktı.
+   *
+   * Politikayı gevşetmek `endpoint_url` ve `auth_secret_ref`i de açardı.
+   * `sunulan_pazarlar()` yalnızca pazar kodlarını döndürüyor.
+   */
+  const { data, error } = await supabase.rpc('sunulan_pazarlar');
 
   if (error) {
     console.warn(
@@ -2862,7 +2870,7 @@ async function sunulanPazarlariOku(): Promise<string[]> {
   }
 
   const kodlar = new Set<string>();
-  for (const satir of data ?? []) {
+  for (const satir of (data ?? []) as { market_code: string | null }[]) {
     if (satir.market_code) kodlar.add(String(satir.market_code));
   }
   return [...kodlar].sort();

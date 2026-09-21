@@ -200,9 +200,29 @@ select set_eq(
      * butun pasif kategorileri (bilerek kapsam disi birakilan gida/icecek
      * dahil) vitrine acardi; tek fonksiyon acmak dar olan karardir.
      */
-    'kategori_yonlendirme'
+    'kategori_yonlendirme',
+    /*
+     * sunulan_pazarlar — BILEREK eklendi (20260921080000).
+     *
+     * Vitrin `hreflang` uretirken "hangi pazarlari sunuyoruz" sorusunu
+     * sormak zorunda: urun tasimadigimiz pazari ilan etmek, arama
+     * motoruna bos vitrin gostermektir. Bu soruyu `sources` tablosundan
+     * sormak MUMKUN DEGIL -- `anon` o tabloyu hic okuyamaz (olculdu:
+     * 42501 permission denied) ve tek politika `sources_admin_all
+     * using (is_admin())`.
+     *
+     * Politikayi gevsetmek `endpoint_url` ve `auth_secret_ref`i de acardi:
+     * biri feed adresi, digeri gizli degisken ADI. Fonksiyon yalnizca
+     * PAZAR KODLARINI donduruyor ('UK', 'PL') -- zaten disariya acik
+     * olmasi gereken bilgi, cunku `hreflang` ciktisinin kendisi bunu ilan
+     * ediyor. Urun, fiyat, adres ya da gizli tasimiyor.
+     *
+     * Tek fonksiyon acmak, tablonun tamamini acmaktan dar olan karardir
+     * -- `kategori_yonlendirme` icin verilen kararin aynisi.
+     */
+    'sunulan_pazarlar'
   ],
-  'anon''a acik SECURITY DEFINER kumesi tam olarak belgelenen 10 fonksiyon'
+  'anon''a acik SECURITY DEFINER kumesi tam olarak belgelenen 11 fonksiyon'
 );
 
 -- ---------------------------------------------------------------------------

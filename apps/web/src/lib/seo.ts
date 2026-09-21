@@ -116,7 +116,24 @@ function sunulanVaryantlar(
      * Lehçe sözlük eklendiği gün `cevrilenler` kendiliğinden dolar ve bu
      * yedek devreden çıkar; burada değişecek bir şey yok.
      */
-    const kullanilacak = cevrilenler.length > 0 ? cevrilenler : [DEFAULT_YEDEK_DIL];
+    /*
+     * YEDEK YALNIZCA KÜME BİLİNİYORSA UYGULANIR.
+     *
+     * ÖLÇÜLEN GERİLEME: iki kural birbirinden bağımsız yazılmıştı. Pazar
+     * kümesi okunamayınca eleme devre dışı kaldı ama yedek çalışmaya
+     * devam etti -- ve 41 pazarın HEPSİNE İngilizce varyant üretti.
+     * `hreflang` 8 girdiden 39'a çıktı; 37'si sıfır ürünlü.
+     *
+     * İki kural aslında TEK kararın iki yüzü: "bu pazarı sunuyoruz" ancak
+     * kümeyi okuyabildiysek bilinir. Bilmiyorsak yeni varyant ÜRETMEYİZ ve
+     * davranış birebir eskisi olur.
+     */
+    const kullanilacak =
+      cevrilenler.length > 0
+        ? cevrilenler
+        : sunulanPazarlar.size > 0
+          ? [DEFAULT_YEDEK_DIL]
+          : [];
 
     for (const dil of kullanilacak) {
       if (!isTranslated(dil as never)) continue;
