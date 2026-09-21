@@ -285,3 +285,97 @@ test('gecersiz kontrol basamagi hala reddedilir', () => {
   assert.equal(normalizeGtin('5099206039291'), null);
   assert.equal(normalizeGtin('0000000000000'), '00000000000000');
 });
+
+/*
+ * =============================================================================
+ * PARA BİRİMİ DOĞRULAMASI -- ÜRETİMDE ÖLÇÜLEN ARIZADAN DOĞDU
+ * =============================================================================
+ * `aliexpress-pl-yuksek-komisyon` turu şu hatayla düştü:
+ *
+ *   Teklifler yazılamadı: insert or update on table "products"
+ *   violates foreign key constraint "products_currency_fkey"
+ *
+ * Feed satır başına farklı para birimi taşıyor. Yazma partiler hâlinde ve
+ * tek RPC çağrısı: tanınmayan TEK bir kod partinin tamamını, atılan hata da
+ * bütün turu reddettiriyordu. O satıcının kataloğu tazelenemez oldu.
+ *
+ * Testler kümenin VERİLDİĞİ ve VERİLMEDİĞİ iki hâli de tutuyor; ikincisi
+ * olmazsa, kümeyi okuyamadığımız bir turda kataloğu düşüren bir gerileme
+ * sessizce girebilirdi.
+ */
+
+const PARA_MAPPING: FieldMapping = { ...MAPPING, currency: 'cur' };
+
+test('tanınmayan para birimi taşıyan satır ELENİR, tur düşmez', () => {
+  const { offers, errors } = normalizeRecords(
+    [
+      { ...record({ id: 'SKU-USD' }), cur: 'USD' },
+      { ...record({ id: 'SKU-YOK' }), cur: 'XYZ' },
+      { ...record({ id: 'SKU-PLN' }), cur: 'PLN' },
+    ],
+    PARA_MAPPING,
+    { ...OPTIONS, allowedCurrencies: new Set(['USD', 'PLN', 'TRY']) },
+  );
+
+  // Geçerli iki satır YAZILIR: bir bozuk satır diğerlerini götürmez.
+  assert.deepEqual(
+    offers.map((o) => o.externalId),
+    ['SKU-USD', 'SKU-PLN'],
+  );
+
+  // Elenen satır GÖRÜNÜR olmalı; sessizce kaybolmamalı.
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0]?.externalId, 'SKU-YOK');
+  assert.match(String(errors[0]?.reason), /para birimi desteklenmiyor: XYZ/);
+});
+
+test('küme verilmezse hiçbir satır para birimi yüzünden elenmez', () => {
+  // Kümeyi okuyamadığımız tur, kataloğu düşürmemeli.
+  const { offers, errors } = normalizeRecords(
+    [{ ...record({ id: 'SKU-YOK' }), cur: 'XYZ' }],
+    PARA_MAPPING,
+    OPTIONS,
+  );
+
+  assert.equal(errors.length, 0);
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0]?.currency, 'XYZ');
+});
+
+test('para birimi hücresi BOŞ ise kaynağın kendi para birimine düşer', () => {
+  /*
+   * Bu da aynı yabancı anahtarı ihlal eden ikinci yoldu: kolon VAR ama
+   * hücre BOŞ olduğunda geri dönüş `??` ile yazılmıştı ve yalnızca
+   * null/undefined yakalıyordu -- boş dizgi geçip `currency: ''` olarak
+   * yazılıyordu. `currencies` tablosunda '' yok.
+   *
+   * Feed'lerin para birimini her satırda tekrar etmemesi yaygındır.
+   */
+  const { offers, errors } = normalizeRecords(
+    [{ ...record({ id: 'SKU-BOS' }), cur: '   ' }],
+    PARA_MAPPING,
+    { ...OPTIONS, allowedCurrencies: new Set(['TRY']) },
+  );
+
+  assert.equal(errors.length, 0, 'boş hücre satırı düşürmemeli');
+  assert.equal(offers[0]?.currency, 'TRY');
+});
+
+test('Google Shopping alt çizgili stok değerleri tanınır', () => {
+  /*
+   * Awin'in "retail" ürün verisi bu biçimde. Eksikken bilinmeyen değer
+   * 0'a düşüyor ve STOKTAKİ ürün stoksuz yazılıyordu -- sessiz kayıp.
+   */
+  // Sayı taşımayan "stokta" değeri varsayılan adede düşer; asıl soru
+  // sıfır mı değil mi -- vitrine çıkmayı o belirliyor.
+  const stokta = parseStock('in stock');
+  assert.ok(stokta > 0, 'sözleşme: stokta olan sıfırdan büyük');
+
+  assert.equal(parseStock('in_stock'), stokta, 'in_stock stokta sayılmalı');
+  assert.equal(parseStock('IN_STOCK'), stokta, 'büyük harf de tanınmalı');
+  assert.equal(parseStock('out_of_stock'), 0, 'out_of_stock stoksuz sayılmalı');
+
+  // Boşluklu ve bitişik biçimler bozulmadı.
+  assert.equal(parseStock('instock'), stokta);
+  assert.equal(parseStock('out of stock'), 0);
+});

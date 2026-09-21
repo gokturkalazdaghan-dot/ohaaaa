@@ -230,6 +230,28 @@ export function createSupabaseRepository(supabase: SupabaseClient): IngestReposi
      * urun yazmak, vitrinde gorunmeyen ama siniflandirilmis sayilan
      * satirlar uretirdi -- olcumu bozan sessiz bir ara durum.
      */
+    /**
+     * Veritabaninin tanidigi ETKIN para birimi kodlari.
+     *
+     * `products.currency` -> `currencies.code` yabanci anahtariyla bagli.
+     * Bu listeyi kodda tutmak ikinci bir dogruluk kaynagi olurdu; burada
+     * yalnizca TASINIYOR.
+     *
+     * 21 satirlik bir tablo: sayfalama, parti ve yeniden deneme butcesi
+     * gerekmiyor. Yine de okuma yeniden denemeye sarili -- gecici bir ag
+     * hatasinda hattin dogrulamayi atlamasi yerine, once tekrar denemesi
+     * dogru.
+     */
+    async listSupportedCurrencies() {
+      const { data, error } = await okumayiYenidenDene(() =>
+        supabase.from('currencies').select('code').eq('is_active', true),
+      );
+
+      if (error) throw new Error(`Para birimleri okunamadi: ${error.message}`);
+
+      return new Set((data ?? []).map((row) => String(row.code).toUpperCase()));
+    },
+
     async findCategoryIdsBySlug(slugs) {
       const result = new Map<string, string>();
       if (slugs.length === 0) return result;
