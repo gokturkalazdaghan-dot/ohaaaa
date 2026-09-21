@@ -2816,6 +2816,65 @@ export const getCategoryRedirect = onbellekle(
 );
 
 /** Gezinilebilir kategori ağacı -- boş dallar elenmiş, sayılar ölçülmüş. */
+/**
+ * Gerçekten ÜRÜN TAŞIDIĞIMIZ pazarlar.
+ *
+ * ÖLÇÜLEN ARIZA
+ * `hreflang` altı pazar ilan ediyordu -- en-US, en-CA, en-IE, en-EU,
+ * en-ANZ, en-GB -- ama yalnızca UK'de ürün vardı. Arama motoruna beş boş
+ * vitrin göstermek, ince içerik sinyali üretir ve gerçek olan tek vitrini
+ * de zayıflatır. Aynı anda PL'deki 1.494 ürün HİÇ ilan edilmiyordu.
+ *
+ * NEDEN `sources`, ÜRÜN SAYISI DEĞİL
+ * "Bu pazarı sunuyor muyuz" sorusunun cevabı ETKİN KAYNAKtır, anlık ürün
+ * sayısı değil. İki fark önemli:
+ *
+ *   1) Kaynağı yeni açtığımız bir pazar ilk tur inmeden de sunulur --
+ *      sayfası hazırdır, birkaç saat sonra dolar.
+ *   2) Bir pazarın ürünleri geçici olarak stoksuz kalırsa `hreflang`
+ *      titremez. Arama motoruna bugün var yarın yok demek, hiç dememekten
+ *      kötüdür.
+ *
+ * Üstelik üç satırlık bir tablo okunuyor; ürün tablosunda `market_code`
+ * üzerinden `distinct` almak 43 bin satırlık bir tarama olurdu.
+ *
+ * OKUNAMAZSA BOŞ DÖNER ve çağıran taraf eski davranışa düşer: geçici bir
+ * okuma hatası bütün dil haritasını silmemeli.
+ */
+async function sunulanPazarlariOku(): Promise<string[]> {
+  const supabase = createAnonClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('sources')
+    .select('market_code')
+    .eq('is_enabled', true);
+
+  if (error) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'Sunulan pazarlar okunamadi; dil haritasi eski davranisa dustu',
+        hata: error.message,
+      }),
+    );
+    return [];
+  }
+
+  const kodlar = new Set<string>();
+  for (const satir of data ?? []) {
+    if (satir.market_code) kodlar.add(String(satir.market_code));
+  }
+  return [...kodlar].sort();
+}
+
+/** Ürün taşıdığımız pazarların kodları. */
+export const getServedMarkets = onbellekle(
+  'sunulan-pazarlar',
+  sunulanPazarlariOku,
+  ONBELLEK.taksonomi,
+);
+
 export const getCategoryTree = onbellekle('kategori-agaci', kategoriAgaciniOku, ONBELLEK.taksonomi);
 
 /** Bu kategoride gösterilecek ürün var mı. */
