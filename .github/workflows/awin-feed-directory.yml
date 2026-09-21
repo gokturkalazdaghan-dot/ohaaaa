@@ -1,0 +1,63 @@
+# =============================================================================
+# AWIN FEED DİZİNİ
+# =============================================================================
+# Awin'in feed listesini çekip `programs` + `program_feeds` tablolarına yazar.
+#
+# NEDEN AYRI BİR İŞ
+# `AWIN_DATAFEED_API_KEY` bir depo gizlisi ve API ile OKUNAMAZ -- tasarımı
+# öyle. Anahtarı bir yere kopyalamak yerine, anahtarı zaten GÖREBİLEN yerde
+# çalışıyoruz. Gizli bu işin dışına hiç çıkmaz.
+#
+# DEPO PUBLIC -- GÜNLÜĞE VERİ YAZILMAZ
+# İş günlükleri ve artifact'ler herkese açık. Betik günlüğe yalnızca SAYILAR
+# ve başlık satırını (kolon adları) yazar; reklamveren adları, ülkeleri ve
+# ürün sayıları doğrudan veritabanına gider.
+#
+# ZAMANLAMA YOK
+# Bilerek elle tetiklenir. Dizin nadiren değişir ve her koşu Awin'e bir istek
+# demek; altı saatte bir çekmek karşılıksız yük olurdu.
+name: Awin feed dizini
+
+on:
+  # Ana dalda: elle tetikleme.
+  workflow_dispatch:
+  # Geliştirme dalında: itilince koşar, böylece `main` kirletilmeden
+  # denenebilir. `paths` filtresi ŞART -- bu dal başka işler için de
+  # kullanılıyor ve her itişte Awin'e istek atmak karşılıksız yük olurdu.
+  push:
+    branches:
+      - 'claude/ohaaaa-canonical-taxonomy-oxd9sa'
+    paths:
+      - 'scripts/awin-feed-directory.mjs'
+      - '.github/workflows/awin-feed-directory.yml'
+
+# Aynı anda iki koşu aynı tabloya yazmasın.
+concurrency:
+  group: awin-feed-directory
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  dizin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Dizini çek ve yaz
+        env:
+          AWIN_DATAFEED_API_KEY: ${{ secrets.AWIN_DATAFEED_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OHAAAA_USER_AGENT: 'OhaaaaBot/1.0 (+https://ohaaaa.com/bot; iletisim@ohaaaa.com)'
+        run: node scripts/awin-feed-directory.mjs
