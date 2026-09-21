@@ -78,11 +78,26 @@ begin
       v_super, coalesce(v_anon::text, 'NULL');
   end if;
 
+  /*
+   * "HIC KAYNAK YOK" BIR HATA DEGIL.
+   *
+   * Ilk hali bunu `raise exception` ile reddediyordu ve goc TEMIZ bir
+   * veritabaninda DUSTU (CI, 20260921: "DOGRULAMA 2: hic etkin kaynak
+   * yok"). Cunku CI uretim verisini tasimaz -- semayi sifirdan oynatir ve
+   * o anda `sources` bos olur.
+   *
+   * Dogrulama CEVRESE BAGLI OLMAMALI. Bu gocun soyledigi sey "anon bu
+   * fonksiyonu gorebiliyor mu"; kac satir dondugu cevrenin verisine
+   * bagli ve iddia konusu degil. Bos kume dogru cevaptir: hicbir kaynak
+   * yoksa hicbir pazar sunulmuyordur.
+   *
+   * Uretimde deger sifirdan buyuk oldugu ayrica olculdu (PL, UK).
+   */
   if v_super = 0 then
-    raise exception
-      'DOGRULAMA 2: hic etkin kaynak yok. Bu gocun bir anlami kalmaz ve '
-      'vitrin butun pazarlari ilan etmeye devam eder.';
+    raise notice
+      '- bu veritabaninda etkin kaynak yok; fonksiyon bos kume donduruyor '
+      '(temiz kurulumda beklenen).';
+  else
+    raise notice 'Sunulan pazarlar anon dan da gorunuyor: % pazar', v_anon;
   end if;
-
-  raise notice 'Sunulan pazarlar anon dan da gorunuyor: % pazar', v_anon;
 end $$;
