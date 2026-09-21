@@ -120,9 +120,23 @@ function kolonlariCoz(baslik) {
  * "Worldwide" da; ikincisini iki harfe KIRPMAK "WO" gibi var olmayan bir
  * ülke üretirdi. Tam iki harf değilse null.
  */
-function bolgeKodu(deger) {
+function bolgeKodu(deger, bilinenUlkeler) {
   const d = String(deger ?? '').trim();
-  return /^[A-Za-z]{2}$/.test(d) ? d.toUpperCase() : null;
+  if (!/^[A-Za-z]{2}$/.test(d)) return null;
+  const kod = d.toUpperCase();
+  /*
+   * ÜYELİK KONTROLÜ BİÇİM KONTROLÜNDEN AYRI.
+   *
+   * İkinci koşu `programs_country_code_fkey` ile düştü: iki harfli olmak
+   * GEÇERLİ ülke kodu olmak demek değil. Awin bölge alanında bizim
+   * `countries` tablomuzda karşılığı olmayan kodlar da dönüyor.
+   *
+   * Liste KODDA TUTULMUYOR, taşınıyor -- para birimi doğrulamasında
+   * verilen kararın aynısı. Küme okunamazsa biçim kontrolüne düşülür ve
+   * veritabanı son sözü söyler.
+   */
+  if (bilinenUlkeler && !bilinenUlkeler.has(kod)) return null;
+  return kod;
 }
 
 /**
@@ -192,6 +206,26 @@ async function main() {
     );
   }
 
+  const supabase = createClient(supabaseUrl, servisAnahtari, {
+    auth: { persistSession: false },
+  });
+
+  /*
+   * Ülke kümesi AYRIŞTIRMADAN ÖNCE okunur: bölge kodu satır satır
+   * doğrulanacak. Okunamazsa küme `undefined` kalır ve yalnızca biçim
+   * kontrolü uygulanır -- geçici bir okuma hatası bütün turu düşürmesin.
+   */
+  let bilinenUlkeler;
+  {
+    const { data, error } = await supabase.from('countries').select('code');
+    if (error) {
+      console.log(`UYARI: ülke listesi okunamadı, biçim kontrolüne düşüldü (${error.message})`);
+    } else {
+      bilinenUlkeler = new Set((data ?? []).map((r) => String(r.code).toUpperCase()));
+      console.log(`Bilinen ülke kodu: ${bilinenUlkeler.size}`);
+    }
+  }
+
   const al = (satir, idx) => (idx >= 0 ? (satir[idx] ?? '').trim() : '');
 
   const kayitlar = [];
@@ -204,7 +238,7 @@ async function main() {
       advId,
       advName: al(satir, k.advertiserName) || `Awin ${advId}`,
       feedName: al(satir, k.feedName) || null,
-      region: bolgeKodu(al(satir, k.region)),
+      region: bolgeKodu(al(satir, k.region), bilinenUlkeler),
       language: (al(satir, k.language) || '').toLowerCase().slice(0, 8) || null,
       itemCount: sayi(al(satir, k.itemCount)),
       membership: al(satir, k.membership) || null,
@@ -215,10 +249,6 @@ async function main() {
 
   console.log(`Okunan feed satırı: ${kayitlar.length}`);
   if (kayitlar.length === 0) throw new Error('Hiç feed satırı çözülemedi.');
-
-  const supabase = createClient(supabaseUrl, servisAnahtari, {
-    auth: { persistSession: false },
-  });
 
   /* --- 1) Reklamverenler ------------------------------------------------ */
   /*

@@ -59,6 +59,22 @@ test('bölge yalnızca tam iki harfse kabul edilir', () => {
   assert.equal(bolgeKodu(undefined), null);
 });
 
+test('iki harfli olmak GEÇERLİ ülke olmak değildir', () => {
+  /*
+   * İkinci koşu `programs_country_code_fkey` ile düştü. Biçim kontrolü
+   * "XX"i geçiriyordu ama `countries` tablosunda karşılığı yok.
+   */
+  const bilinen = new Set(['GB', 'US', 'PL']);
+  assert.equal(bolgeKodu('GB', bilinen), 'GB');
+  assert.equal(bolgeKodu('XX', bilinen), null, 'tabloda olmayan kod null olmalı');
+  assert.equal(bolgeKodu('pl', bilinen), 'PL');
+});
+
+test('ülke kümesi yoksa biçim kontrolüne düşülür', () => {
+  // Geçici bir okuma hatası bütün turu düşürmemeli.
+  assert.equal(bolgeKodu('XX', undefined), 'XX');
+});
+
 test('ürün sayısı binlik ayracıyla da okunur, sıfır null olur', () => {
   assert.equal(sayi('116,415'), 116415);
   assert.equal(sayi('6470'), 6470);
