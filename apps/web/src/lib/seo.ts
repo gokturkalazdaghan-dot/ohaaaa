@@ -28,6 +28,7 @@ import {
   type YolDili,
 } from '@ohaaaa/shared';
 
+import { getServedMarkets } from '@/data/catalog';
 import { pazarKatalogu } from '@/data/markets';
 import { siteUrl } from '@/lib/env';
 import { isTranslated } from '@/lib/locale';
@@ -36,17 +37,51 @@ import { ADRES_DILI_BASLIGI, ADRES_PAZARI_BASLIGI } from '@/middleware';
 const VARSAYILAN = { locale: DEFAULT_LOCALE, market: DEFAULT_MARKET };
 
 /**
+ * Çevirisi olmayan pazarların sunulduğu dil.
+ *
+ * İngilizce seçildi çünkü en geniş ikinci dil ve sözlüğü tam. Varsayılan
+ * dil (Türkçe) YEDEK OLAMAZ: Polonya'daki bir ziyaretçiye Türkçe sayfa
+ * göstermek, hiç göstermemekten iyi değil.
+ */
+const DEFAULT_YEDEK_DIL = 'en';
+
+/**
  * Katalogdan, GERÇEKTEN sunulan dil-pazar ikililerini çıkarır.
  *
  * Her pazar için o pazarın ülkelerinin dilleri denenir; çevirisi olan her
  * dil bir varyant üretir. `hreflang` ÜLKE kodu ister -- pazar kodu değil
  * (Britanya: pazar `UK`, ülke `GB`), o yüzden ülke de taşınıyor.
  */
-function sunulanVaryantlar(katalog: MarketKatalogu): AlternatifGirdisi[] {
+function sunulanVaryantlar(
+  katalog: MarketKatalogu,
+  sunulanPazarlar: ReadonlySet<string>,
+): AlternatifGirdisi[] {
   const cikti: AlternatifGirdisi[] = [];
 
   for (const pazar of katalog.markets) {
     if (!pazar.isActive) continue;
+
+    /*
+     * ÜRÜN TAŞIMADIĞIMIZ PAZAR İLAN EDİLMEZ.
+     *
+     * Ölçüldü: `hreflang` altı pazar bildiriyordu (en-US, en-CA, en-IE,
+     * en-EU, en-ANZ, en-GB) ama ürün yalnızca UK'deydi. Arama motoruna
+     * beş boş vitrin göstermek ince içerik sinyalidir ve gerçek olan tek
+     * vitrini de zayıflatır.
+     *
+     * Küme boşsa (okuma hatası) eleme YAPILMAZ: geçici bir arıza bütün
+     * dil haritasını silmemeli.
+     *
+     * Varsayılan pazar her zaman kalır -- kanonik ve `x-default` ona
+     * bağlı; onu elemek sayfayı kendi kanonik adresinden koparırdı.
+     */
+    if (
+      sunulanPazarlar.size > 0 &&
+      pazar.code !== DEFAULT_MARKET &&
+      !sunulanPazarlar.has(pazar.code)
+    ) {
+      continue;
+    }
 
     const ulkeler = pazarinUlkeleri(katalog, pazar.code);
     /*
@@ -63,7 +98,27 @@ function sunulanVaryantlar(katalog: MarketKatalogu): AlternatifGirdisi[] {
       if (ulke) diller.add(ulke.defaultLocale);
     }
 
-    for (const dil of diller) {
+    const cevrilenler = [...diller].filter((d) => isTranslated(d as never));
+
+    /*
+     * ÇEVİRİSİ OLMAYAN PAZAR İNGİLİZCE SUNULUR.
+     *
+     * ÖLÇÜLEN ARIZA: Polonya'da 1.494 aktif ürün vardı ve `hreflang`de
+     * HİÇ görünmüyordu. Sebep SEO ayarı değil: `countries.PL.default_locale`
+     * = 'pl' ve Lehçe sözlüğümüz yok, dolayısıyla pazar bütünüyle eleniyordu.
+     *
+     * Ürünü olan bir pazarı "dilini konuşamıyoruz" diye hiç sunmamak,
+     * o ürünleri arama motorundan tamamen saklamak demek. İngilizce
+     * sunmak dürüst bir ara çözüm: `hreflang="en-PL"` tam olarak
+     * "Polonya için İngilizce içerik" der -- uydurma değil, eksik olanı
+     * açıkça bildiren bir sinyal.
+     *
+     * Lehçe sözlük eklendiği gün `cevrilenler` kendiliğinden dolar ve bu
+     * yedek devreden çıkar; burada değişecek bir şey yok.
+     */
+    const kullanilacak = cevrilenler.length > 0 ? cevrilenler : [DEFAULT_YEDEK_DIL];
+
+    for (const dil of kullanilacak) {
       if (!isTranslated(dil as never)) continue;
       cikti.push({ locale: dil, market: pazar.code, countryCode: temsilci });
     }
@@ -109,8 +164,13 @@ function mutlak(kok: string, yol: string): string {
 export async function dilMetaVerisi(kalan: string): Promise<DilMetaVerisi> {
   const kok = siteUrl.replace(/\/+$/, '');
 
-  const katalog = await pazarKatalogu().catch(() => null);
-  const varyantlar = katalog ? sunulanVaryantlar(katalog) : [];
+  const [katalog, sunulan] = await Promise.all([
+    pazarKatalogu().catch(() => null),
+    getServedMarkets().catch(() => [] as string[]),
+  ]);
+  const varyantlar = katalog
+    ? sunulanVaryantlar(katalog, new Set(sunulan))
+    : [];
   const secim = await adrestekiIkili();
 
   const canonical = mutlak(kok, kanonikYol(kalan, secim, VARSAYILAN, varyantlar));
