@@ -63,7 +63,7 @@ Kanıtlar üç kaynaktan: (1) depo kodu, (2) üretim veritabanı (Supabase
 | B1 | FAZ 2 hedef programlarının **10'undan 6'sı** keşfedilmiş, hepsi `DISCOVERED` — hiçbiri onaylı/aktif değil. Eksik: **40456 (Lunzo RO), 54353 (Lunzo SK), 69786 (Lunzo DE), 69428 (Ultrahuman)**. | FAZ 2 |
 | B2 | Keşfedilen Lunzo/Lapert feed'lerinin her biri **~676.000 kalem** ilan ediyor; 9 program ≈ 6M teklif. Mevcut satır boyuyla (~8,9 KB) bu **~53 GB** eder; 8 GB disk buna yetmez. Kontrollü/filtreli alım şart. | FAZ 2, FAZ 7 |
 | B3 | `program_feeds.feed_access` hepsinde `unverified`; hiçbir feed URL'si doğrulanmadı, ürün alanları ölçülmedi. | FAZ 2 |
-| B4 | `conversions` = 0 ve `AWIN_API_TOKEN` üretimde doğrulanamıyor. Komisyon zinciri hiç kanıtlanmadı. | FAZ 5, FAZ 9 |
+| B4 | ~~`conversions` = 0 ve `AWIN_API_TOKEN` üretimde doğrulanamıyor.~~ **Sebep bulundu (FAZ 2):** değişken hiç tanımlı değildi, jeton `awin_OAuth2` adıyla duruyordu; cron her gün 503 dönüyordu. 2026-09-25 23:30 UTC'de `AWIN_API_TOKEN` olarak eklenip redeploy edildi. Cron'un 200 döndüğü henüz doğrulanmadı. | FAZ 5, FAZ 9 |
 | ~~B5~~ | ~~Impact entegrasyonu için hem DB kısıtı hem provider dosyası hem ENV yok.~~ **FAZ 1'de kapandı.** DB kısıtı iddiası YANLIŞTI: dört tablo da `affiliate_networks`'e FK ile bağlı ve `impact` kayıtlı; migration hiç gerekmedi. Provider dosyası ve ENV adları eklendi. | — |
 
 ## Kritik dosyalar

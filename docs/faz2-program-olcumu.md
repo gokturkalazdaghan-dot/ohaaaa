@@ -170,7 +170,32 @@ saklama süresi ~1 gün ve 05:00 turu saklanan pencereye girmiyor
 (`/api/cron` sorgusu son 24 saatte kayıt döndürmedi).
 
 **Sebep bir eksik kimlik değil, bir AD UYUŞMAZLIĞI.** Jeton üretilmedi,
-hiçbir workaround yazılmadı — talimat gereği yalnızca kanıtlandı.
+hiçbir workaround yazılmadı.
+
+### Düzeltildi — 2026-09-25 23:30 UTC
+
+Ad uyuşmazlığı operatör tarafından giderildi:
+
+| | |
+|---|---|
+| `AWIN_API_TOKEN` yaratıldı | `2026-09-25 23:30 UTC`, production, sensitive |
+| `awin_OAuth2` | silindi (depoda onu okuyan kod yoktu) |
+| production deployment | `dpl_3Qbmz5deDQkBN6G25HL7RZV6T7ov`, `2026-09-25 23:30 UTC`, `READY` |
+
+Deployment değişkenden **9 saniye sonra** oluştu; yani çalışan sürümün
+ortam anlık görüntüsü jetonu içeriyor.
+
+**Neden Claude yapmadı:** Vercel, "sensitive" bir değişkenin adının
+değiştirilmesini API üzerinden reddediyor
+(`400 You cannot change the key of a Sensitive Environment Variable`).
+Kalan tek programatik yol jetonun şifresini çözüp yeni bir değişkene
+kopyalamaktı — bu, üretim sırrını konuşma dökümüne indirmek olurdu.
+Vercel CLI üzerinden dosya aracılığıyla taşıma da denendi; CLI oturumu
+kapalı.
+
+**Henüz doğrulanmadı:** cron'un gerçekten 200 döndüğü ve Awin'e istek
+attığı. İlk fırsat 2026-09-26 05:00 UTC turu; runtime log saklama ~1 gün
+olduğu için o pencerede okunmalı. Kontrol planlandı.
 
 ---
 
