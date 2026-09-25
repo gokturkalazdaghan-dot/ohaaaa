@@ -36,6 +36,22 @@
  * Reklamveren adı, ürün adları ve fiyatlar doğrudan veritabanına gider.
  * `awin-feed-directory.mjs` ile aynı kural.
  *
+ * ---------------------------------------------------------------------------
+ * ÖLÇÜLDÜ (2026-09-25) -- NE ÇALIŞIR, NE ÇALIŞMAZ
+ * ---------------------------------------------------------------------------
+ * Yoklama iki bilinen feed'de Awin'in kendi bildirdiği sayıyı BİREBİR
+ * tutturdu: fid 58891 -> 6470 ürün, fid 488 -> 315 ürün. Sayaç doğru.
+ *
+ * Üyelik ENGEL DEĞİL: "Not Joined" bir reklamverenin feed'i (fid 117783)
+ * sorunsuz indi (50 ürün, EUR). Yani 404 alan bir numara "katılmadık"
+ * demek değil, "bu anahtar o feed'e HİÇ erişemiyor" demek.
+ *
+ * `ui.awin.com/productdata-darwin-download/...` adresi sunucudan
+ * ÇALIŞMIYOR. On yol varyantı denendi (`/health` dahil); hepsi
+ * `404 {"message":"No route found..."}`. Ağ geçidi servis önekini kesip
+ * isteği rotasız bir uygulamaya bırakıyor. O adresler tarayıcı oturumuna
+ * ait; `F` öneki de oraya ait -- bu uç nokta SAYISAL fid istiyor.
+ *
  * KULLANIM
  *   AWIN_PROBE_FIDS=3336,115564 node scripts/awin-feed-probe.mjs
  */
