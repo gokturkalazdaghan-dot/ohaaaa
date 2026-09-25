@@ -116,6 +116,8 @@ export const metadata: Metadata = {
    */
   other: {
     'apple-mobile-web-app-capable': 'yes',
+    /* Mitgo (Admitad) yayıncı sitesi doğrulaması; kaldırılırsa doğrulama düşer. */
+    'mitgo-verification': '8fffcb72-28d1-455e-940f-bff53fde6df1',
   },
   ...(searchConsoleVerification
     ? { verification: { google: searchConsoleVerification } }
