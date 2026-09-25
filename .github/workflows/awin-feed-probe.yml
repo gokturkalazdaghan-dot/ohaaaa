@@ -1,0 +1,67 @@
+# =============================================================================
+# AWIN FEED YOKLAMASI
+# =============================================================================
+# Verilen feed ID'lerini Awin'den İNDİRİR, içeriğini ölçer ve sonucu
+# `programs` + `program_feeds` tablolarına yazar.
+#
+# NEDEN DİZİNDEN AYRI
+# `awin-feed-directory.yml` liste uç noktasını okur. O liste her feed'i
+# içermiyor: yeni açılan bir ortaklık listede hiç görünmeyebiliyor
+# (ölçüldü -- 655 feed'lik dizinde Voghion yok). Elde yalnızca çıplak bir
+# numara kaldığında tek yol feed'in kendisini indirmek.
+#
+# NEDEN BURADA
+# `AWIN_DATAFEED_API_KEY` bir depo gizlisi ve API ile OKUNAMAZ. Anahtarı
+# bir yere kopyalamak yerine anahtarı zaten GÖREBİLEN yerde çalışıyoruz.
+#
+# DEPO PUBLIC -- GÜNLÜĞE VERİ YAZILMAZ
+# Günlüğe yalnızca feed numarası, HTTP durumu ve sayılar düşer. Reklamveren
+# adı, ürün adları ve fiyatlar doğrudan veritabanına gider.
+name: Awin feed yoklaması
+
+on:
+  workflow_dispatch:
+    inputs:
+      fids:
+        description: 'Sayısal Awin feed ID (virgülle ayrılmış). UI adresindeki F öneki API''ye ait değil, atılmalı.'
+        required: true
+        type: string
+      language:
+        description: 'Feed dili (en, pl, de...)'
+        required: false
+        default: 'en'
+        type: string
+
+# Aynı anda iki koşu aynı satırı yazmasın.
+concurrency:
+  group: awin-feed-probe
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  yokla:
+    runs-on: ubuntu-latest
+    # Feed'ler yüzlerce megabayt olabiliyor; indirme dakikalar sürüyor.
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Feed'leri yokla ve ölç
+        env:
+          AWIN_DATAFEED_API_KEY: ${{ secrets.AWIN_DATAFEED_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AWIN_PROBE_FIDS: ${{ inputs.fids }}
+          AWIN_PROBE_LANG: ${{ inputs.language }}
+          OHAAAA_USER_AGENT: 'OhaaaaBot/1.0 (+https://ohaaaa.com/bot; iletisim@ohaaaa.com)'
+        run: node scripts/awin-feed-probe.mjs

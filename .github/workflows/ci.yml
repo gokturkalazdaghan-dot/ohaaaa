@@ -134,6 +134,11 @@ jobs:
       - name: Bagimlilik acigi taramasi
         run: npm audit --audit-level=high
 
+      # `npm test` calisma alanlarini VE scripts/ altindaki node:test
+      # dosyalarini kosuyor. Ikincisi uzun sure hic kosmuyordu: Awin feed
+      # cozumleyicilerinin testleri yazildi ama hicbir ise baglanmadi --
+      # yani yesil CI onlar hakkinda HICBIR SEY soylemiyordu. Bir CSV
+      # cozumleyicisinin sessiz hatasi uretim verisini bozar.
       - name: Birim testleri
         run: npm test
 
