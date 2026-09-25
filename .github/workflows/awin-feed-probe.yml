@@ -1,0 +1,99 @@
+# ============================================================================
+# Awin feed sondası — elle tetiklenir, VERİTABANINA YAZMAZ
+# ----------------------------------------------------------------------------
+# NEDEN CI'DA: `AWIN_DATAFEED_API_KEY` burada zaten depo sırrı olarak duruyor
+# (`ingest.yml` onu kullanıyor ve turlar başarılı). Ölçümü burada yapmak,
+# anahtarı başka bir yere kopyalamamak demek -- sır ne bir geliştirici
+# makinesine, ne bir konuşma dökümüne iner.
+#
+# NEDEN `schedule` YOK: bu bir ölçüm aleti, bir iş değil. Kendi başına
+# çalışması gerekmiyor; gerektiğinde elle tetiklenir.
+#
+# NE YAPMAZ: `products`, `product_groups`, `program_feeds` -- hiçbirine
+# yazmaz. Betik yalnızca `program_feeds`ten feed adresini OKUR.
+# ============================================================================
+
+name: Awin feed sondası
+
+on:
+  workflow_dispatch:
+    inputs:
+      fid:
+        description: 'Awin feed ID (network_feed_id). Örn. 84173 = Lunzo PL parça 0'
+        required: true
+      rows:
+        description: 'Kaç satır örneklenecek (1-50000, varsayılan 2000)'
+        required: false
+        default: '2000'
+      json:
+        description: 'JSON çıktı'
+        type: boolean
+        default: false
+
+# Bu iş yalnızca kodu okur; issue açmaz, commit atmaz, paket yayınlamaz.
+permissions:
+  contents: read
+
+concurrency:
+  # Aynı anda iki sonda, aynı kaynağa iki istek demek. Nezaket ayarını
+  # anlamsız kılmamak için sıraya alınıyor.
+  group: awin-feed-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # Eylemler commit SHA'sına sabitli -- gerekçe `ingest.yml` içinde
+      # ayrıntılı yazılı: `v4` bir sürüm değil takma addır ve bakımcı onu
+      # haber vermeden taşır.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # Jeton diskte durmasın: bu iş hiçbir yere itme yapmıyor.
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build --workspace @ohaaaa/shared
+      - run: npm run build --workspace @ohaaaa/ingest
+
+      - name: Sondayı çalıştır
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AWIN_DATAFEED_API_KEY: ${{ secrets.AWIN_DATAFEED_API_KEY }}
+          OHAAAA_USER_AGENT: 'OhaaaaBot/1.0 (+https://ohaaaa.com/bot; iletisim@ohaaaa.com)'
+          # KULLANICI GİRDİSİ KABUĞA DEĞİL ORTAMA GİRER.
+          # `${{ inputs.x }}` kabuk çalışmadan ÖNCE metin olarak yerine
+          # konur; `; curl ...` yazan bir girdi komutun kendisi olurdu -- ve
+          # aynı adımın ortamında iki sır duruyor. Gerekçenin uzun hâli
+          # `ingest.yml` içinde.
+          INPUT_FID: ${{ inputs.fid }}
+          INPUT_ROWS: ${{ inputs.rows }}
+          INPUT_JSON: ${{ inputs.json }}
+        run: |
+          set -euo pipefail
+
+          # İkinci katman: biçim denetimi. Tırnak zaten enjeksiyonu kesiyor;
+          # bu, biçimsiz bir değerin betiğe ulaşmasını da engelliyor.
+          if ! printf '%s' "$INPUT_FID" | grep -qE '^[0-9]{1,12}$'; then
+            echo "Gecersiz feed ID. Yalnizca rakam (1-12 hane)." >&2
+            exit 1
+          fi
+          if ! printf '%s' "${INPUT_ROWS:-2000}" | grep -qE '^[0-9]{1,5}$'; then
+            echo "Gecersiz satir sayisi." >&2
+            exit 1
+          fi
+
+          args=("--fid=${INPUT_FID}" "--rows=${INPUT_ROWS:-2000}")
+          if [ "${INPUT_JSON:-false}" = "true" ]; then
+            args+=("--json=true")
+          fi
+
+          node scripts/awin-feed-probe.mjs "${args[@]}"

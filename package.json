@@ -26,6 +26,7 @@
     "verify:brand": "node scripts/verify-brand.mjs",
     "verify:headers": "node scripts/verify-headers.mjs",
     "verify:secrets": "node scripts/verify-secrets.mjs",
+    "test:scripts": "node --test scripts/*.test.mjs",
     "agent:locale": "node scripts/agent-locale-parity.mjs",
     "agent:contract": "node scripts/agent-contract-verify.mjs"
   },
