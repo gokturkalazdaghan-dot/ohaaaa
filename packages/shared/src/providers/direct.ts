@@ -64,6 +64,35 @@ export const directProvider: AffiliateProvider = {
   // Doğrudan anlaşmada mağaza BİZE imzalı bildirim gönderir; sır zorunlu.
   conversionSource: 'postback',
 
+  /*
+   * YETENEK İLANI — DAVRANIŞ DEĞİŞTİRMEZ.
+   *
+   * `programs: 'manual'` çünkü doğrudan anlaşmada keşfedilecek bir ağ
+   * dizini yoktur: mağazayı operatör açar. `catalog: 'feed'` çünkü ürünler
+   * mağazanın kendi beslemesinden ya da taşeron API'sinden gelir.
+   *
+   * Sınırlar `null`: karşı taraf tek bir ağ değil, her anlaşmada başka bir
+   * mağaza. Ortak bir kota uydurmak, kimisi için fazla gevşek kimisi için
+   * fazla sıkı olurdu; nezaket ayarı `sources.requests_per_minute` ile
+   * MAĞAZA BAŞINA tutuluyor.
+   */
+  capabilities: {
+    programs: 'manual',
+    catalog: 'feed',
+    deeplink: 'template',
+    clicks: 'local',
+    conversions: 'postback',
+    commissions: 'in_conversion',
+  },
+
+  limits: {
+    requestsPerMinute: null,
+    requestsPerHour: null,
+    maxRangeDays: null,
+    maxPageSize: null,
+    maxPagedResults: null,
+  },
+
   verifyPostback(context: PostbackContext): boolean {
     const signature =
       context.headers.get('x-signature') ??

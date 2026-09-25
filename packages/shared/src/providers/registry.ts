@@ -12,6 +12,7 @@
 
 import { awinProvider } from './awin.js';
 import { directProvider } from './direct.js';
+import { impactProvider } from './impact.js';
 import { ProviderError, type AffiliateProvider } from './types.js';
 
 /**
@@ -21,7 +22,11 @@ import { ProviderError, type AffiliateProvider } from './types.js';
  * + `merchants.network` kısıtına bir değer. `/git/:offerId`, `clicks`,
  * `conversions` ve open-redirect savunması değişmez.
  */
-const PROVIDERS: readonly AffiliateProvider[] = [directProvider, awinProvider];
+const PROVIDERS: readonly AffiliateProvider[] = [
+  directProvider,
+  awinProvider,
+  impactProvider,
+];
 
 const BY_NETWORK = new Map<string, AffiliateProvider>(
   PROVIDERS.map((provider) => [provider.network, provider]),

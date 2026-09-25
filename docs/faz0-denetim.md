@@ -13,7 +13,7 @@ Kanıtlar üç kaynaktan: (1) depo kodu, (2) üretim veritabanı (Supabase
 |---|---|---|---|
 | 1 | Awin provider | **PASS** | `packages/shared/src/providers/awin.ts` (362 sat.) — pull tabanlı dönüşüm, clickref↔subid, mid↔mağaza eşlemesi. Canlı yönlendirme doğrulandı. |
 | 2 | Affiliate abstraction | **PARTIAL** | Sözleşme yalnızca postback/deeplink/dönüşümü kapsıyor. `programs`, `catalog/feed`, `offers`, `commissions` arayüzde YOK. |
-| 3 | Impact hazırlığı | **FAIL** | Yalnızca `affiliate_networks` satırı var. Provider dosyası yok, ENV yok, `merchant_network_links` CHECK kısıtı `('direct','awin')` ile kapalı. |
+| 3 | Impact hazırlığı | **FAIL** | Yalnızca `affiliate_networks` satırı var. Provider dosyası yok, ENV yok. *(DÜZELTME — FAZ 1: DB tarafı kapalı DEĞİL; 20260908100900 göçü CHECK kısıtını `affiliate_networks`'e FK'ye çevirmiş ve `impact` satırı zaten kayıtlı.)* |
 | 4 | CJ | **FAIL** | Aynı durum: DB satırı var, kod yok. |
 | 5 | Direct provider | **PASS** | HMAC-SHA256 postback doğrulaması, testli. |
 | 6 | Feed ingestion | **PASS** | 3 kaynak, günlük çalışıyor; son tur `bto-instock` 35.478 kalem, `success`. Idempotent RPC upsert + fingerprint farkı. |
@@ -64,7 +64,7 @@ Kanıtlar üç kaynaktan: (1) depo kodu, (2) üretim veritabanı (Supabase
 | B2 | Keşfedilen Lunzo/Lapert feed'lerinin her biri **~676.000 kalem** ilan ediyor; 9 program ≈ 6M teklif. Mevcut satır boyuyla (~8,9 KB) bu **~53 GB** eder; 8 GB disk buna yetmez. Kontrollü/filtreli alım şart. | FAZ 2, FAZ 7 |
 | B3 | `program_feeds.feed_access` hepsinde `unverified`; hiçbir feed URL'si doğrulanmadı, ürün alanları ölçülmedi. | FAZ 2 |
 | B4 | `conversions` = 0 ve `AWIN_API_TOKEN` üretimde doğrulanamıyor. Komisyon zinciri hiç kanıtlanmadı. | FAZ 5, FAZ 9 |
-| B5 | Impact entegrasyonu için hem DB kısıtı hem provider dosyası hem ENV yok. | FAZ 1, FAZ 3 |
+| ~~B5~~ | ~~Impact entegrasyonu için hem DB kısıtı hem provider dosyası hem ENV yok.~~ **FAZ 1'de kapandı.** DB kısıtı iddiası YANLIŞTI: dört tablo da `affiliate_networks`'e FK ile bağlı ve `impact` kayıtlı; migration hiç gerekmedi. Provider dosyası ve ENV adları eklendi. | — |
 
 ## Kritik dosyalar
 
@@ -79,6 +79,6 @@ Kanıtlar üç kaynaktan: (1) depo kodu, (2) üretim veritabanı (Supabase
 | `packages/ingest/src/runner.ts` | Zamanlayıcı + worker; tek alım yolu |
 | `apps/web/src/app/git/[offerId]/route.ts` | Tıklama kaydı + yönlendirme |
 | `apps/web/src/app/api/cron/donusum-esitle/route.ts` | Awin dönüşüm çekme turu |
-| `supabase/migrations/20260908100600_merchant_network_links.sql` | Ağ CHECK kısıtı (B5) |
+| `supabase/migrations/20260908100900_network_registry.sql` | Ağ FK'si + ağ kayıt defteri (B5'in gerçek hâli) |
 | `supabase/migrations/20260908100700_incremental_sync.sql` | Ölü incremental şema |
 | `scripts/awin-feed-directory.mjs` | Feed dizini keşfi (618 feed) |

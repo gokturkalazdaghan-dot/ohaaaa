@@ -39,6 +39,7 @@ import {
   type ConversionStatus,
   type NormalizedConversion,
   type PostbackContext,
+  type ProviderRequest,
   type PulledConversion,
 } from './types.js';
 
@@ -50,6 +51,25 @@ import {
  * anahtarlarıdır; onlar koda hiç girmez, ortamdan okunur.
  */
 export const AWIN_PUBLISHER_ID = '3074081';
+
+/**
+ * Transactions API jetonunun ortam değişkeni adı.
+ *
+ * ADI KODDA, DEĞERİ ORTAMDA. `ProviderRequest.credential` yalnızca bu adı
+ * taşır; jetonun kendisi bu pakete hiç girmez. FAZ 0'da ölçülen eksik
+ * buydu: ad yalnızca `apps/web/.../donusum-esitle/route.ts` içinde geçiyor
+ * ve `.env.example` onu hiç anmıyordu.
+ */
+export const AWIN_TOKEN_ENV = 'AWIN_API_TOKEN';
+
+/**
+ * Ürün feed'i (datafeed) indirme anahtarının ortam değişkeni adı.
+ *
+ * Awin'de katalog REST'ten değil CSV datafeed'inden gelir ve o adres
+ * `sources.endpoint_url` içinde `${AWIN_DATAFEED_API_KEY}` yer tutucusuyla
+ * durur. Ad burada da yazılı ki tek kaynak olsun.
+ */
+export const AWIN_DATAFEED_ENV = 'AWIN_DATAFEED_API_KEY';
 
 /**
  * Deeplink şablonu iskeleti — OPERATÖR İÇİN REFERANS.
@@ -350,6 +370,40 @@ export const awinProvider: AffiliateProvider = {
   displayName: 'Awin',
   conversionSource: 'pull',
 
+  /*
+   * YETENEK İLANI — DAVRANIŞ DEĞİŞTİRMEZ.
+   *
+   * Aşağısı bu dosyada zaten var olan gerçeği yazıya döküyor; tek satır
+   * kod akışı değişmedi. Gerekçesi FAZ 0'da ölçüldü: "bu ağ katalog veriyor
+   * mu, programları API'den mi geliyor" sorusunun cevabı hiçbir yerde
+   * yazılı değildi ve ikinci bir ağ eklerken her çağıran kendi varsayımını
+   * kurardı.
+   *
+   * `catalog: 'feed'` çünkü Awin'de ürünler REST'ten değil, CSV
+   * datafeed'inden gelir (`sources.endpoint_url`, `packages/ingest`).
+   * `deeplink: 'template'` çünkü `buildDeeplink` bilerek tanımsız.
+   */
+  capabilities: {
+    programs: 'api',
+    catalog: 'feed',
+    deeplink: 'template',
+    clicks: 'local',
+    conversions: 'pull',
+    commissions: 'in_conversion',
+  },
+
+  limits: {
+    requestsPerMinute: AWIN_RATE_LIMIT_PER_MINUTE,
+    // Saatlik bir sınır yayınlanmıyor: `null` "sınırsız" değil "bilinmiyor".
+    requestsPerHour: null,
+    maxRangeDays: AWIN_MAX_RANGE_DAYS,
+    // Transactions uç noktası sayfalama parametresi belgelemez; pencere
+    // bölerek daraltılır. Uydurulmuş bir sayfa boyutu sessizce veri
+    // kaybettirirdi.
+    maxPageSize: null,
+    maxPagedResults: null,
+  },
+
   verifyPostback(_context: PostbackContext): never {
     throw new ProviderError(POSTBACK_KAPALI, 'verification_unavailable');
   },
@@ -358,5 +412,38 @@ export const awinProvider: AffiliateProvider = {
     throw new ProviderError(POSTBACK_KAPALI, 'verification_unavailable');
   },
 
+  /*
+   * DÖNÜŞÜM ÇEKME — MEVCUT FONKSİYONLARIN ÜZERİNE İNCE BİR SARMAL.
+   *
+   * `awinTransactionsUrl` ve `awinTransactionToConversion` OLDUĞU GİBİ
+   * duruyor ve bugünkü çağıran (`lib/awin/donusum-cek.ts`) onları doğrudan
+   * kullanmaya devam ediyor. Buradaki iki üye yalnızca AYNI mantığı
+   * sözleşme üzerinden de erişilebilir kılıyor.
+   *
+   * İkizleme değil, yönlendirme: gövde yok, çağrı var. İki kopya olsaydı
+   * biri zamanla sapardı ve sapma sessiz olurdu.
+   */
+  conversionsRequest(context): ProviderRequest {
+    return {
+      method: 'GET',
+      url: awinTransactionsUrl({
+        publisherId: context.accountSid?.trim() || AWIN_PUBLISHER_ID,
+        startDate: context.startDate,
+        endDate: context.endDate,
+        advertiserIds: context.programIds,
+      }),
+      credential: { kind: 'bearer', tokenEnv: AWIN_TOKEN_ENV },
+    };
+  },
+
+  parsePulledConversions(ham: unknown): PulledConversion[] {
+    // Awin transactions yanıtı düz bir dizidir, zarf yok.
+    if (!Array.isArray(ham)) return [];
+    return ham
+      .map(awinTransactionToConversion)
+      .filter((c): c is PulledConversion => c !== null);
+  },
+
   // buildDeeplink BILEREK TANIMSIZ: ortak sablon akisi Awin'i zaten karsiliyor.
+  // nextPageRequest de TANIMSIZ: Awin sayfalamaz, pencere bolerek daraltilir.
 };

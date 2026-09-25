@@ -54,8 +54,8 @@ test('bos network degeri de reddedilir', () => {
   }
 });
 
-test('kayitli aglar direct ve awin', () => {
-  assert.deepEqual(knownNetworks(), ['awin', 'direct']);
+test('kayitli aglar direct, awin ve impact', () => {
+  assert.deepEqual(knownNetworks(), ['awin', 'direct', 'impact']);
   assert.equal(isKnownNetwork('direct'), true);
   assert.equal(isKnownNetwork('awin'), true);
   assert.equal(isKnownNetwork('amazon'), false);
