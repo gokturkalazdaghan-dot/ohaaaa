@@ -1,7 +1,8 @@
 -- =============================================================================
 -- RLS: auth.uid() satır başına değil, sorgu başına bir kez hesaplansın
 -- =============================================================================
--- Supabase performans denetçisi (auth_rls_initplan) 17 politikayı işaretledi:
+-- Supabase performans denetçisi (auth_rls_initplan) 17 politikayı işaretledi
+-- (15'i burada düzeltilir, ikisi aşağıdaki nedenle bilerek bırakılır):
 -- `auth.uid()` çıplak yazıldığında Postgres onu HER SATIR için yeniden
 -- çağırır. `(select auth.uid())` yazıldığında planlayıcı bunu bir InitPlan'a
 -- çevirir ve sorgu başına tek kez hesaplar. Sonuç kümesi birebir aynıdır;
@@ -14,6 +15,16 @@
 -- `auth.uid()` -> `(select auth.uid())`.
 --
 -- Kaynak: https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select
+--
+-- BİLEREK DOKUNULMAYAN İKİ POLİTİKA: users_select_self, vendors_owner_read.
+-- `users_update_self` ve `vendors_owner_update` WITH CHECK içinde KENDİ
+-- tablolarını okuyan bir alt sorgu taşır (rol/komisyon/durum kilidi). O alt
+-- sorgu tablonun SELECT politikalarını yeniden açar; SELECT politikası da bir
+-- alt sorgu (`(select auth.uid())`) içerdiğinde Postgres bunu özyineleme
+-- sayar: "infinite recursion detected in policy for relation vendors".
+-- Ölçüldü: 20_rls_test.sql bu yüzden düştü ve canlıda da aynı hata üretildi
+-- (taşeron kendi kaydını, kullanıcı kendi profilini güncelleyemiyordu).
+-- Bu ikisi çıplak `auth.uid()` ile kalır; kazanç küçük, kırılma büyük.
 -- =============================================================================
 
 alter policy addresses_own_all on public.addresses
@@ -69,9 +80,6 @@ alter policy reviews_update_own on public.reviews
   using (user_id = (select auth.uid()))
   with check (user_id = (select auth.uid()));
 
-alter policy users_select_self on public.users
-  using ((id = (select auth.uid())) or public.is_admin());
-
 alter policy users_update_self on public.users
   using (id = (select auth.uid()))
   with check (
@@ -86,9 +94,6 @@ alter policy vendors_owner_insert on public.vendors
   with check ((owner_id = (select auth.uid()))
               and status = 'pending'::public.vendor_status
               and approved_at is null);
-
-alter policy vendors_owner_read on public.vendors
-  using ((owner_id = (select auth.uid())) or public.is_admin());
 
 alter policy vendors_owner_update on public.vendors
   using (owner_id = (select auth.uid()))
