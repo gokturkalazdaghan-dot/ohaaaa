@@ -9,7 +9,17 @@
  * içinde `</script>` geçerse etiket erken kapanır ve XSS oluşur; bu yüzden
  * `<` karakteri kaçırılır.
  */
-export function JsonLd({ data }: { data: Record<string, unknown> | Record<string, unknown>[] }) {
+import type { Thing, WithContext } from 'schema-dts';
+
+/**
+ * TİP: schema-dts (Google, yalnızca tip -- pakete çalışma zamanı kodu girmez).
+ * Yanlış yazılmış bir `@type`, schema.org'da olmayan bir alan ya da yanlış
+ * türde bir değer DERLEMEDE yakalanır; sessizce bozuk JSON-LD yayınlanıp
+ * arama sonucundaki fiyat/puan görünümünün kaybolması önlenir.
+ */
+export type JsonLdData = WithContext<Thing> | WithContext<Thing>[];
+
+export function JsonLd({ data }: { data: JsonLdData }) {
   const json = JSON.stringify(data).replace(/</g, '\\u003c');
 
   return (
