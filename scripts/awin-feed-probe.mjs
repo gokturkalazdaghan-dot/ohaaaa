@@ -1,440 +1,464 @@
 #!/usr/bin/env node
 /**
- * Awin feed sondası — ÖLÇER, YAZMAZ.
+ * AWIN FEED YOKLAMASI — bir feed ID'sinin arkasında NE olduğunu ölçer.
  *
- * ======================================================================
- * NE İŞE YARAR
- * ======================================================================
- * `program_feeds` tablosunda dört sütun var ve hiçbirini yazan kod yoktu:
+ * ÇÖZDÜĞÜ SORUN
+ * `awin-feed-directory.mjs` Awin'in liste uç noktasını okur. O liste her
+ * feed'i İÇERMİYOR: yeni açılan bir ortaklık (ölçüldü: Voghion) listede
+ * hiç görünmeyebiliyor. Elimizde yalnızca çıplak bir feed numarası
+ * kaldığında dizin bir işe yaramıyor.
  *
- *   measured_item_count · ingestable_count · measured_currency · checked_at
+ * Bu betik listeyi atlar ve feed'i DOĞRUDAN indirir. Ürünün kendisi
+ * reklamverenin kim olduğunu zaten söylüyor: her satırda `merchant_id`,
+ * `merchant_name` ve `currency` var. "Numara neyin numarası" sorusunun
+ * en güvenilir cevabı feed'in kendisi.
  *
- * Şema bu ölçümü bekliyordu (`program_feeds_measure_needs_time` kısıtı
- * ikisini birbirine bağlıyor), ama ölçen taraf hiç yazılmamıştı. Sonucu
- * FAZ 2'de görüldü: on programın ürün sayısı Awin'in İLANINDAN okunuyordu,
- * ölçümden değil. İlan edilen 200.000 kalemin kaçının gerçekten
- * alınabileceği bilinmiyordu.
+ * ---------------------------------------------------------------------------
+ * NEDEN TAHMİN DEĞİL ÖLÇÜM
+ * ---------------------------------------------------------------------------
+ * Bir kaynak açmak için pazar, ülke ve para birimi gerekiyor. Bunları
+ * "global bir pazaryeri, herhalde USD" diye doldurmak fiyatları sessizce
+ * yanlış para biriminde gösterirdi. Feed ne diyorsa o yazılır; feed
+ * karışık para birimi taşıyorsa satır ölçüm olarak kaydedilir ama
+ * `measured_currency` BOŞ bırakılır -- tek bir değer doğru değildir.
  *
- * Bu betik o boşluğu kapatır: bir feed parçasının İLK N SATIRINI indirir,
- * alan doluluk oranlarını sayar ve raporlar.
+ * ---------------------------------------------------------------------------
+ * NEDEN AKIŞ HÂLİNDE
+ * ---------------------------------------------------------------------------
+ * Bu dosyalar yüzlerce megabayt (ölçüldü: 255 MB tek dosya). Belleğe
+ * almak koşucuyu düşürür. Gzip akıştan çözülür, satırlar sayılırken
+ * yalnızca ilk birkaçı saklanır.
  *
- * ======================================================================
- * VERİTABANINA YAZMAZ
- * ======================================================================
- * Bilinçli. Ölçüm ile alım aynı komutta olsaydı "önce ölç, sonra karar ver"
- * kuralı ilk acele eden kişide bozulurdu. Bu betik yalnızca OKUR ve
- * stdout'a yazar; `products` tablosuna bir satır bile girmez.
+ * ---------------------------------------------------------------------------
+ * DEPO PUBLIC — GÜNLÜĞE VERİ YAZILMAZ
+ * ---------------------------------------------------------------------------
+ * Günlüğe yalnızca feed numarası, HTTP durumu ve SAYILAR düşer.
+ * Reklamveren adı, ürün adları ve fiyatlar doğrudan veritabanına gider.
+ * `awin-feed-directory.mjs` ile aynı kural.
  *
- * ======================================================================
- * TAM İNDİRMEZ — ERKEN KOPARIR
- * ======================================================================
- * Lunzo/Lapert feed'leri parça başına 200.000 kalem ilan ediyor. Tamamını
- * indirmek ölçüm için gereksiz, kaynağa karşı da nezaketsiz. Bu yüzden
- * istek, yeterli satır toplandığı anda `AbortController` ile KESİLİR.
+ * ---------------------------------------------------------------------------
+ * ÖLÇÜLDÜ (2026-09-25) -- NE ÇALIŞIR, NE ÇALIŞMAZ
+ * ---------------------------------------------------------------------------
+ * Yoklama iki bilinen feed'de Awin'in kendi bildirdiği sayıyı BİREBİR
+ * tutturdu: fid 58891 -> 6470 ürün, fid 488 -> 315 ürün. Sayaç doğru.
  *
- * NEDEN `createPoliteClient` DEĞİL: o istemci gövdeyi tamponlar ve
- * `maxBytes` aşılınca `ResponseTooLargeError` FIRLATIR -- kırpmaz. 200.000
- * satırlık bir feed'de bu, örnek yerine hata demekti. Sondanın ihtiyacı
- * tam tersi: sınırı aşınca durup ELDEKİNİ vermek. O yüzden burada doğrudan
- * `fetch` + erken kopar + sert bayt tavanı var, ve host bizim kendi
- * veritabanımızdan gelse bile AÇIK LİSTEYE karşı doğrulanıyor.
+ * Üyelik ENGEL DEĞİL: "Not Joined" bir reklamverenin feed'i (fid 117783)
+ * sorunsuz indi (50 ürün, EUR). Yani 404 alan bir numara "katılmadık"
+ * demek değil, "bu anahtar o feed'e HİÇ erişemiyor" demek.
  *
- * ======================================================================
- * ANAHTAR HİÇBİR ÇIKTIYA GİRMEZ
- * ======================================================================
- * Feed adresi `${AWIN_DATAFEED_API_KEY}` yer tutucusuyla veritabanında
- * duruyor; gerçek değer yalnızca ortamdan okunur, isteğin içinde kalır ve
- * basılan her adreste `/apikey/<REDACTED>/` olarak maskelenir. Hata
- * mesajları da aynı maskeden geçer -- bir istisna metninin içinde sızması
- * en olası yol olurdu.
+ * `ui.awin.com/productdata-darwin-download/...` adresi sunucudan
+ * ÇALIŞMIYOR. On yol varyantı denendi (`/health` dahil); hepsi
+ * `404 {"message":"No route found..."}`. Ağ geçidi servis önekini kesip
+ * isteği rotasız bir uygulamaya bırakıyor. O adresler tarayıcı oturumuna
+ * ait; `F` öneki de oraya ait -- bu uç nokta SAYISAL fid istiyor.
  *
  * KULLANIM
- *   node scripts/awin-feed-probe.mjs --fid=84173 [--rows=2000] [--json]
- *
- * ORTAM
- *   AWIN_DATAFEED_API_KEY   feed indirme anahtarı (zorunlu)
- *   SUPABASE_URL            feed adresini okumak için
- *   SUPABASE_SERVICE_ROLE_KEY
- *
- * ÇIKIŞ KODLARI
- *   0  ölçüm tamam
- *   2  yapılandırma eksik (anahtar/ortam)
- *   3  ağ ya da HTTP hatası
+ *   AWIN_PROBE_FIDS=3336,115564 node scripts/awin-feed-probe.mjs
  */
 
+import { StringDecoder } from 'node:string_decoder';
 import { createGunzip } from 'node:zlib';
-import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 
 import { createClient } from '@supabase/supabase-js';
-import { parseCsv } from '@ohaaaa/ingest';
-
-/** Sondanın çıkabileceği TEK host. Veritabanı ele geçse bile istek başka yere gitmez. */
-const IZINLI_HOST = 'productdata.awin.com';
-
-/** Sert bayt tavanı (sıkıştırılmış). Satır hedefine ulaşılmasa da burada durur. */
-const MAX_BAYT = 12 * 1024 * 1024;
-
-const VARSAYILAN_SATIR = 2000;
-
-const USER_AGENT =
-  process.env.OHAAAA_USER_AGENT ??
-  'OhaaaaBot/1.0 (+https://ohaaaa.com/bot; iletisim@ohaaaa.com)';
 
 /**
- * Adresteki anahtarı maskeler.
+ * İNDİRME ADRESİ ALIM İLE BİREBİR AYNI.
  *
- * HER ÇIKTI BUNDAN GEÇER -- log, hata, JSON. Tek bir yerde unutulsa
- * anahtar CI günlüğüne düşerdi ve CI günlükleri kalıcıdır.
+ * Yoklama ile gerçek alım farklı kolonlar isteseydi, yoklamanın "temiz"
+ * dediği bir feed alımda boş çıkabilirdi. Kolon listesi üretimdeki
+ * `grade-mobile-main` kaynağından kopyalandı.
  */
-function maskele(metin) {
-  return String(metin).replace(/\/apikey\/[^/]+/g, '/apikey/<REDACTED>');
-}
+const KOLONLAR = [
+  'data_feed_id', 'merchant_id', 'merchant_name', 'aw_product_id',
+  'aw_deep_link', 'merchant_deep_link', 'aw_image_url', 'product_name',
+  'description', 'search_price', 'rrp_price', 'currency', 'in_stock',
+  'stock_status', 'ean', 'brand_name', 'merchant_image_url',
+  'merchant_category', 'merchant_product_id', 'delivery_cost', 'last_updated',
+].join(',');
 
-function cik(kod, mesaj) {
-  console.error(maskele(mesaj));
-  process.exit(kod);
-}
+/** Yarım kayıt için ayrılan en büyük tampon (4 MB). */
+const TAMPON_SINIRI = 4 * 1024 * 1024;
 
-function argOku() {
-  const arg = new Map();
-  for (const ham of process.argv.slice(2)) {
-    const esitlik = ham.indexOf('=');
-    if (ham.startsWith('--') && esitlik > 2) {
-      arg.set(ham.slice(2, esitlik), ham.slice(esitlik + 1));
-    } else if (ham.startsWith('--')) {
-      arg.set(ham.slice(2), 'true');
-    }
-  }
-  return arg;
-}
-
-/** `${AD}` yer tutucularını ortamdan doldurur. Eksik değişken SESSİZ GEÇMEZ. */
-function yerTutucuDoldur(adres) {
-  const eksik = [];
-  const dolu = adres.replace(/\$\{([A-Z0-9_]+)\}/g, (_, ad) => {
-    const deger = process.env[ad];
-    if (!deger) {
-      eksik.push(ad);
-      return '';
-    }
-    return encodeURIComponent(deger);
-  });
-  return { dolu, eksik };
+/** Yer tutuculu biçim: veritabanına YALNIZCA bu hâli yazılır. */
+export function feedAdresi(fid, dil = 'en', anahtar = '${AWIN_DATAFEED_API_KEY}') {
+  return `https://productdata.awin.com/datafeed/download/apikey/${anahtar}` +
+    `/language/${dil}/fid/${fid}/columns/${KOLONLAR}` +
+    '/format/csv/delimiter/%2C/compression/gzip/adultcontent/1/';
 }
 
 /**
- * Feed adresini veritabanından okur.
+ * Tırnak durumunu TAKİP EDEN satır sayacı.
  *
- * ADRES KODA GÖMÜLMEZ: tek doğru kaynak `program_feeds.feed_url` ve o
- * satır Awin'in kendi dizininden geliyor. Buraya kopyalamak, dizin
- * yenilendiğinde sessizce eskiyen ikinci bir kopya demekti.
+ * Ürün açıklamalarında satır sonu var ve tırnak içinde duruyor. `\n`
+ * saymak ürün sayısını katlardı -- ve sonuç "ölçüldü" etiketiyle
+ * veritabanına yazılırdı. Yanlış bir ölçüm, ölçüm olmamasından kötü.
  */
-async function feedAdresiniOku(fid) {
-  const url = process.env.SUPABASE_URL?.trim();
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  if (!url || !key) {
-    cik(2, 'SUPABASE_URL ve SUPABASE_SERVICE_ROLE_KEY tanimli olmali.');
-  }
-
-  const supabase = createClient(url, key, { auth: { persistSession: false } });
-  const { data, error } = await supabase
-    .from('program_feeds')
-    .select('network_feed_id, feed_name, region, language, network_item_count, feed_url, program_id')
-    .eq('network_feed_id', String(fid))
-    .limit(1);
-
-  if (error) cik(3, `program_feeds okunamadi: ${error.message}`);
-  if (!data || data.length === 0) cik(2, `network_feed_id=${fid} icin satir yok.`);
-  return data[0];
-}
-
-/**
- * İlk N satırı indirir. Yeterli satır toplanınca isteği KESER.
- *
- * Dönen metin son satırın ortasında bitebilir; o satır `parseCsv`'ye
- * verilmeden ATILIR -- yarım bir satırı alan sayısı eksik diye "bozuk
- * kayıt" saymak, ölçümü kendi kırpmamızla kirletmek olurdu.
- */
-async function ilkSatirlariCek(adres, hedefSatir) {
-  const kontrol = new AbortController();
-  const baslangic = Date.now();
-
-  let yanit;
-  try {
-    yanit = await fetch(adres, {
-      signal: kontrol.signal,
-      headers: { 'user-agent': USER_AGENT, accept: 'text/csv,*/*' },
-      redirect: 'follow',
-    });
-  } catch (hata) {
-    cik(3, `istek basarisiz: ${hata instanceof Error ? hata.message : hata}`);
-  }
-
-  if (!yanit.ok) {
-    /*
-     * 404 BURADA ÖZELLİKLE ANLAMLIDIR.
-     * Ölçüldü (FAZ 2): Awin'in indirme ucu GEÇERSİZ ANAHTARA da 404 diyor,
-     * 401 demiyor. Yani "feed kalkmış" ile "anahtar bozuk" aynı koda
-     * düşüyor. Bu yüzden mesaj ikisini birlikte söylüyor -- sessiz bir
-     * "feed yok" yorumu boş katalogla sonuçlanırdı.
-     */
-    const ipucu =
-      yanit.status === 404
-        ? ' (DİKKAT: Awin gecersiz ANAHTARA da 404 donuyor; feed yok demek olmayabilir)'
-        : '';
-    cik(3, `HTTP ${yanit.status}${ipucu} — ${maskele(adres)}`);
-  }
-
-  const gzipli = /gzip/i.test(yanit.headers.get('content-encoding') ?? '')
-    ? false // fetch zaten açtı
-    : /\.gz|gzip/i.test(adres) || (yanit.headers.get('content-type') ?? '').includes('gzip');
-
-  let hamBayt = 0;
-  let metin = '';
-  let satirSayisi = 0;
-  let kesildi = false;
-
-  const kaynak = Readable.fromWeb(yanit.body);
-  kaynak.on('data', (parca) => {
-    hamBayt += parca.length;
-    if (hamBayt > MAX_BAYT) {
-      kesildi = true;
-      kontrol.abort();
-    }
-  });
-
-  const tuket = async (akis) => {
-    for await (const parca of akis) {
-      metin += parca.toString('utf8');
-      satirSayisi = 0;
-      for (let i = 0; i < metin.length; i += 1) if (metin[i] === '\n') satirSayisi += 1;
-      if (satirSayisi > hedefSatir) {
-        kesildi = true;
-        kontrol.abort();
-        break;
-      }
-    }
-  };
-
-  try {
-    if (gzipli) {
-      const gunzip = createGunzip();
-      await Promise.all([pipeline(kaynak, gunzip), tuket(gunzip)]);
-    } else {
-      await tuket(kaynak);
-    }
-  } catch (hata) {
-    // Erken kopardığımız için gelen iptal/akış hatası BEKLENEN durumdur.
-    const mesaj = hata instanceof Error ? hata.message : String(hata);
-    const beklenen = kesildi || /abort|premature close|ERR_STREAM/i.test(mesaj);
-    if (!beklenen) cik(3, `akis hatasi: ${mesaj}`);
-  }
-
+export function satirSayaci() {
+  let tirnakta = false;
+  let hicKarakter = false;
+  let sonSatirSonu = true;
+  let toplam = 0;
   return {
-    metin,
-    sikistirilmisBayt: hamBayt,
-    kesildi,
-    sureMs: Date.now() - baslangic,
-    contentLength: Number(yanit.headers.get('content-length')) || null,
-    contentType: yanit.headers.get('content-type'),
-  };
-}
-
-/** Son satır yarım olabilir; onu atar. */
-function yarimSatiriAt(metin) {
-  const son = metin.lastIndexOf('\n');
-  return son === -1 ? metin : metin.slice(0, son);
-}
-
-function sayiMi(deger) {
-  if (typeof deger !== 'string') return false;
-  const t = deger.trim().replace(',', '.');
-  if (t === '') return false;
-  return Number.isFinite(Number(t)) && Number(t) > 0;
-}
-
-function olc(kayitlar) {
-  if (kayitlar.length === 0) return { kolonlar: [], ozet: {} };
-
-  const kolonlar = Object.keys(kayitlar[0]);
-  const doluluk = {};
-  for (const k of kolonlar) doluluk[k] = 0;
-
-  const paraBirimleri = new Map();
-  const stokDegerleri = new Map();
-  const hostlar = new Map();
-  let fiyatOkunan = 0;
-
-  for (const kayit of kayitlar) {
-    for (const k of kolonlar) {
-      const v = kayit[k];
-      if (v !== undefined && v !== null && String(v).trim() !== '') doluluk[k] += 1;
-    }
-
-    const para = (kayit.currency ?? '').trim().toUpperCase();
-    if (para) paraBirimleri.set(para, (paraBirimleri.get(para) ?? 0) + 1);
-
-    const stok = (kayit.in_stock ?? kayit.stock_status ?? '').trim();
-    if (stok) stokDegerleri.set(stok, (stokDegerleri.get(stok) ?? 0) + 1);
-
-    if (sayiMi(kayit.search_price)) fiyatOkunan += 1;
-
-    const adres = kayit.aw_deep_link || kayit.merchant_deep_link || '';
-    if (adres) {
-      try {
-        hostlar.set(new URL(adres).host, (hostlar.get(new URL(adres).host) ?? 0) + 1);
-      } catch {
-        hostlar.set('<gecersiz-url>', (hostlar.get('<gecersiz-url>') ?? 0) + 1);
+    /** Parçayı yutar. */
+    yut(parca) {
+      for (let i = 0; i < parca.length; i += 1) {
+        const k = parca[i];
+        hicKarakter = true;
+        if (tirnakta) {
+          if (k === '"') tirnakta = false;
+          continue;
+        }
+        if (k === '"') { tirnakta = true; sonSatirSonu = false; continue; }
+        if (k === '\n') { toplam += 1; sonSatirSonu = true; continue; }
+        if (k === '\r') continue;
+        sonSatirSonu = false;
       }
-    }
-  }
-
-  const n = kayitlar.length;
-  const oran = (x) => Number(((x / n) * 100).toFixed(1));
-
-  return {
-    kolonlar,
-    ornekSatir: n,
-    doluluk: Object.fromEntries(kolonlar.map((k) => [k, oran(doluluk[k])])),
-    paraBirimleri: Object.fromEntries(paraBirimleri),
-    stokDegerleri: Object.fromEntries(stokDegerleri),
-    deeplinkHostlari: Object.fromEntries(hostlar),
-    fiyatOkunabilirYuzde: oran(fiyatOkunan),
-    /*
-     * ALINABİLİR SATIR: pipeline'ın zorunlu alanları
-     * (`normalize.ts` red gerekçeleri: external_id, title, url, price).
-     * Para birimi kolonu olmayan feed'lerde `defaultCurrency` devreye
-     * girdiği için burada ARANMIYOR.
-     */
-    alinabilirYuzde: oran(
-      kayitlar.filter(
-        (k) =>
-          String(k.aw_product_id ?? '').trim() !== '' &&
-          String(k.product_name ?? '').trim() !== '' &&
-          /*
-           * `||` KULLANILIYOR, `??` DEĞİL.
-           * `??` yalnızca null/undefined'da geri düşer; feed'de boş bir
-           * `aw_deep_link` kolonu BOŞ DİZE olarak gelir ve `??` onu geçerli
-           * sayıp `merchant_deep_link`e hiç bakmazdı. Sonuç: adresi olan
-           * satırlar "alınamaz" sayılır ve kapsam kararı olduğundan kötü
-           * bir sayının üstüne kurulurdu. Testle yakalandı.
-           */
-          String(k.aw_deep_link || k.merchant_deep_link || '').trim() !== '' &&
-          sayiMi(k.search_price),
-      ).length,
-    ),
-    kimlikler: {
-      ean: oran(kayitlar.filter((k) => String(k.ean ?? '').trim() !== '').length),
-      upc: oran(kayitlar.filter((k) => String(k.upc ?? '').trim() !== '').length),
-      mpn: oran(
-        kayitlar.filter(
-          (k) => String(k.mpn ?? k.model_number ?? '').trim() !== '',
-        ).length,
-      ),
-      sku: oran(
-        kayitlar.filter((k) => String(k.merchant_product_id ?? '').trim() !== '').length,
-      ),
     },
+    /**
+     * Dosya satır sonuyla BİTMEYEBİLİR. Son satırı saymamak, her feed'i
+     * bir ürün eksik ölçmek olurdu -- küçük ama sistematik bir hata.
+     */
+    get toplam() { return toplam + (hicKarakter && !sonSatirSonu ? 1 : 0); },
+    get acikTirnak() { return tirnakta; },
   };
+}
+
+/**
+ * Tamponu TIRNAĞA SAYGIYLA satırlara böler; yarım satırı geri verir.
+ *
+ * ÖLÇÜLEN HATA: ilk sürüm `indexOf('\n')` ile bölüyordu. Ürün adındaki
+ * satır sonu bir ürünü İKİ satır gösterdi ve örneklem bozuldu --
+ * alınabilirlik oranı da onunla birlikte. Satır sayacı tırnağı zaten
+ * takip ediyordu; ayırıcının etmemesi tutarsızlıktı.
+ *
+ * TIRNAK DURUMU PARÇALAR ARASI TAŞINMAZ, TAŞINMASINA GEREK YOK: `kalan`
+ * her zaman YARIM BİR KAYDIN BAŞINDAN başlar ve bir kayıt tırnak dışında
+ * başlar. Durumu taşımak, aynı öneki iki kez ve yanlış durumla taramak
+ * olurdu.
+ */
+export function satirlariAyir(tampon) {
+  const satirlar = [];
+  let tirnakta = false;
+  let bas = 0;
+  for (let i = 0; i < tampon.length; i += 1) {
+    const k = tampon[i];
+    if (tirnakta) {
+      if (k === '"') tirnakta = false;
+      continue;
+    }
+    if (k === '"') { tirnakta = true; continue; }
+    if (k === '\n') {
+      satirlar.push(tampon.slice(bas, i).replace(/\r$/, ''));
+      bas = i + 1;
+    }
+  }
+  return { satirlar, kalan: tampon.slice(bas), tirnakta };
+}
+
+/** Tek bir CSV satırını alanlara böler (tırnak ve ikiye katlanmış tırnak dahil). */
+export function satiriBol(satir) {
+  const alanlar = [];
+  let alan = '';
+  let tirnakta = false;
+  for (let i = 0; i < satir.length; i += 1) {
+    const k = satir[i];
+    if (tirnakta) {
+      if (k === '"') {
+        if (satir[i + 1] === '"') { alan += '"'; i += 1; }
+        else tirnakta = false;
+      } else alan += k;
+      continue;
+    }
+    if (k === '"') { tirnakta = true; continue; }
+    if (k === ',') { alanlar.push(alan); alan = ''; continue; }
+    alan += k;
+  }
+  alanlar.push(alan);
+  return alanlar;
+}
+
+/**
+ * Bir satırın ALINABİLİR olup olmadığı.
+ *
+ * `packages/ingest` bir satırı ancak başlık, adres, pozitif fiyat ve para
+ * birimi varsa ürün yapabiliyor. Yoklamanın "kaç ürün" cevabı, feed'in
+ * bildirdiği toplam değil, BİZİM alabileceğimiz sayı olmalı: aradaki fark
+ * bir kaynağı açıp açmamaya karar verdiriyor.
+ */
+export function alinabilirMi(kayit) {
+  if (!kayit.product_name?.trim()) return false;
+  if (!(kayit.merchant_deep_link?.trim() || kayit.aw_deep_link?.trim())) return false;
+  if (!/^[A-Za-z]{3}$/.test(kayit.currency?.trim() ?? '')) return false;
+  const fiyat = Number(String(kayit.search_price ?? '').replace(',', '.'));
+  return Number.isFinite(fiyat) && fiyat > 0;
+}
+
+/**
+ * Feed'i indirir ve ölçer. Ağ ve çözümleme dışında hiçbir yan etkisi yok.
+ *
+ * `ornekSiniri` kadar satırın ALANLARI okunur (reklamvereni öğrenmek
+ * için); gerisi yalnızca sayılır. Alınabilirlik oranı da bu örnekten
+ * gelir: 255 MB'lık bir dosyanın her satırını çözümlemek koşucunun
+ * dakikalarını yer ve cevabı değiştirmez.
+ */
+export async function feediOlc(fid, anahtar, { dil = 'en', ornekSiniri = 2000, getir = fetch } = {}) {
+  const cevap = await getir(feedAdresi(fid, dil, anahtar), {
+    headers: { 'user-agent': process.env.OHAAAA_USER_AGENT ?? 'OhaaaaBot/1.0' },
+  });
+
+  /* Adres anahtarı İÇERİYOR; hata metnine koymuyoruz. */
+  if (!cevap.ok) return { fid, durum: cevap.status, hata: `HTTP ${cevap.status}` };
+  if (!cevap.body) return { fid, durum: cevap.status, hata: 'gövde boş' };
+
+  const akis = Readable.fromWeb(cevap.body).pipe(createGunzip());
+
+  /*
+   * ÇOK BAYTLI HARF PARÇA SINIRINDA BÖLÜNEBİLİR.
+   *
+   * `buffer.toString('utf8')` yarım kalan bir harfi bozuk karakterle
+   * değiştirir ve bir daha geri gelmez. Türkçe ve Lehçe feed'lerde ürün
+   * adları bundan etkilenirdi. `StringDecoder` yarım baytı bir sonraki
+   * parçaya taşır.
+   */
+  const cozucu = new StringDecoder('utf8');
+
+  const sayac = satirSayaci();
+  let bayt = 0;
+  let artik = '';
+  let baslik = null;
+  let baslikVar = false;
+  let ornek = 0;
+  let alinabilir = 0;
+  const paraBirimleri = new Map();
+  const saticilar = new Map();
+  let ilk = null;
+
+  for await (const parca of akis) {
+    const metin = cozucu.write(parca);
+    bayt += parca.length;
+    sayac.yut(metin);
+
+    /* Örnek dolduysa artık yalnızca sayıyoruz: çözümleme boşa iş. */
+    if (ornek >= ornekSiniri) continue;
+
+    const ayrilan = satirlariAyir(artik + metin);
+    artik = ayrilan.kalan;
+
+    /*
+     * KAPANMAYAN TIRNAK BELLEĞİ YER.
+     *
+     * Bozuk bir feed'de ilk satırın tırnağı hiç kapanmazsa `artik`
+     * dosyanın tamamı kadar büyür ve koşucu düşer. Örneklem zaten birkaç
+     * kilobaytlık kayıtlar için; bu sınırı aşan tampon çözümlenemez
+     * sayılır ve yalnızca SAYMA sürer.
+     */
+    if (artik.length > TAMPON_SINIRI) { artik = ''; ornek = ornekSiniri; }
+
+    for (const satir of ayrilan.satirlar) {
+      if (ornek >= ornekSiniri) break;
+      if (satir === '') continue;
+
+      const alanlar = satiriBol(satir);
+
+      /*
+       * BAŞLIK VAR MI DİYE BAKILIR, VARSAYILMAZ.
+       *
+       * Awin kolon listesi verilen indirmelerde başlık basıyor ama bu
+       * ayarlanabilir bir davranış. Başlık yokken ilk ÜRÜNÜ başlık sanmak
+       * bütün alanları bir satır kaydırırdı -- ve ölçüm sessizce yanlış
+       * çıkardı. İlk satırda beklenen kolon adı yoksa adres verdiğimiz
+       * kolon sırasına düşülür.
+       */
+      if (baslik === null) {
+        const temiz = alanlar.map((h) => h.trim());
+        baslikVar = temiz.includes('product_name');
+        baslik = baslikVar ? temiz : KOLONLAR.split(',');
+        if (baslikVar) continue;
+      }
+
+      const kayit = {};
+      baslik.forEach((ad, i) => { kayit[ad] = alanlar[i]; });
+      ornek += 1;
+      if (ilk === null) ilk = kayit;
+      if (alinabilirMi(kayit)) alinabilir += 1;
+
+      const pb = (kayit.currency ?? '').trim().toUpperCase();
+      if (/^[A-Z]{3}$/.test(pb)) paraBirimleri.set(pb, (paraBirimleri.get(pb) ?? 0) + 1);
+      const mid = (kayit.merchant_id ?? '').trim();
+      if (/^[0-9]{1,12}$/.test(mid)) saticilar.set(mid, (saticilar.get(mid) ?? 0) + 1);
+    }
+  }
+
+  /*
+   * SON SATIR SATIR SONUYLA BİTMEYEBİLİR.
+   *
+   * Sayaç bunu zaten hesaba katıyor; örneklem de katmalı, yoksa küçük bir
+   * feed'in son ürünü hiç görülmez.
+   */
+  const kuyruk = artik + cozucu.end();
+  if (ornek < ornekSiniri && kuyruk.trim() !== '' && baslik !== null) {
+    const alanlar = satiriBol(kuyruk.replace(/\r$/, ''));
+    const kayit = {};
+    baslik.forEach((ad, i) => { kayit[ad] = alanlar[i]; });
+    ornek += 1;
+    if (ilk === null) ilk = kayit;
+    if (alinabilirMi(kayit)) alinabilir += 1;
+    const pbSon = (kayit.currency ?? '').trim().toUpperCase();
+    if (/^[A-Z]{3}$/.test(pbSon)) paraBirimleri.set(pbSon, (paraBirimleri.get(pbSon) ?? 0) + 1);
+    const midSon = (kayit.merchant_id ?? '').trim();
+    if (/^[0-9]{1,12}$/.test(midSon)) saticilar.set(midSon, (saticilar.get(midSon) ?? 0) + 1);
+  }
+
+  /* Başlık satırı ürün değil. */
+  const urunSatiri = Math.max(0, sayac.toplam - (baslikVar ? 1 : 0));
+
+  return {
+    fid,
+    durum: cevap.status,
+    bayt,
+    baslik,
+    urunSatiri,
+    ornek,
+    alinabilirOran: ornek > 0 ? alinabilir / ornek : 0,
+    /* Örnekten tahmin: tam sayım için dosyanın tamamını çözümlemek gerekirdi. */
+    alinabilirTahmin: ornek > 0 ? Math.round(urunSatiri * (alinabilir / ornek)) : null,
+    paraBirimleri: [...paraBirimleri.entries()].sort((a, b) => b[1] - a[1]),
+    saticilar: [...saticilar.entries()].sort((a, b) => b[1] - a[1]),
+    merchantName: (ilk?.merchant_name ?? '').trim() || null,
+    dataFeedId: (ilk?.data_feed_id ?? '').trim() || null,
+    ornekAdres: (ilk?.merchant_deep_link ?? ilk?.aw_deep_link ?? '').trim() || null,
+  };
+}
+
+/**
+ * Ölçümü `programs` + `program_feeds` tablolarına yazar.
+ *
+ * `application_state` DISCOVERED kalır: feed'i indirebilmek ticari onay
+ * DEĞİL. `awin-feed-directory.mjs` ile aynı kural; bir programı yayına
+ * yalnızca insan kararı alır.
+ */
+async function olcumuYaz(supabase, olcum) {
+  const advId = olcum.saticilar[0]?.[0];
+  if (!advId) throw new Error(`fid ${olcum.fid}: satırlarda merchant_id yok, yazılmadı.`);
+
+  const simdi = new Date().toISOString();
+
+  const { data: mevcut, error: okumaHatasi } = await supabase
+    .from('programs')
+    .select('id')
+    .eq('network', 'awin')
+    .eq('network_program_id', advId)
+    .maybeSingle();
+  if (okumaHatasi) throw new Error(`programs okunamadı: ${okumaHatasi.message}`);
+
+  let programId = mevcut?.id;
+  if (!programId) {
+    const { data, error } = await supabase
+      .from('programs')
+      .insert({
+        network: 'awin',
+        network_program_id: advId,
+        merchant_name: olcum.merchantName ?? `Awin ${advId}`,
+        application_state: 'DISCOVERED',
+        first_seen_at: simdi,
+        last_verified_at: simdi,
+      })
+      .select('id')
+      .single();
+    if (error) throw new Error(`programs yazılamadı: ${error.message}`);
+    programId = data.id;
+  }
+
+  /*
+   * TEK PARA BİRİMİ YOKSA BOŞ BIRAKILIR.
+   *
+   * Karışık feed'de baskın olanı yazmak, azınlıktaki satırların fiyatını
+   * yanlış para biriminde göstermek demek. Boş bırakmak kaynağı açmadan
+   * önce insan kararı gerektirir -- istenen davranış bu.
+   */
+  const tekParaBirimi = olcum.paraBirimleri.length === 1 ? olcum.paraBirimleri[0][0] : null;
+
+  const { error } = await supabase.from('program_feeds').upsert({
+    program_id: programId,
+    network: 'awin',
+    network_feed_id: String(olcum.fid),
+    feed_url: feedAdresi(olcum.fid),
+    feed_access: 'verified',
+    measured_item_count: olcum.urunSatiri,
+    ingestable_count: olcum.alinabilirTahmin,
+    measured_currency: tekParaBirimi,
+    checked_at: simdi,
+  }, { onConflict: 'network,network_feed_id', ignoreDuplicates: false });
+  if (error) throw new Error(`program_feeds yazılamadı: ${error.message}`);
+
+  return { advId, programId, tekParaBirimi };
 }
 
 async function main() {
-  const arg = argOku();
-  const fid = arg.get('fid');
-  if (!fid || !/^\d{1,12}$/.test(fid)) {
-    cik(2, 'Kullanim: node scripts/awin-feed-probe.mjs --fid=<feedId> [--rows=2000] [--json]');
+  const anahtar = process.env.AWIN_DATAFEED_API_KEY;
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const servisAnahtari = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const fidler = String(process.env.AWIN_PROBE_FIDS ?? '')
+    .split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+
+  if (!anahtar) throw new Error('AWIN_DATAFEED_API_KEY tanımlı değil.');
+  if (!supabaseUrl || !servisAnahtari) {
+    throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY tanımlı değil.');
+  }
+  if (fidler.length === 0) throw new Error('AWIN_PROBE_FIDS boş.');
+  if (fidler.some((f) => !/^[0-9]{1,12}$/.test(f))) {
+    throw new Error('AWIN_PROBE_FIDS yalnızca sayısal feed ID içerebilir (F öneki UI adresine ait, API\'ye değil).');
   }
 
-  const hedefSatir = Number(arg.get('rows') ?? VARSAYILAN_SATIR);
-  if (!Number.isInteger(hedefSatir) || hedefSatir < 1 || hedefSatir > 50_000) {
-    cik(2, '--rows 1 ile 50000 arasinda bir tam sayi olmali.');
+  const dil = (process.env.AWIN_PROBE_LANG ?? 'en').toLowerCase();
+  const supabase = createClient(supabaseUrl, servisAnahtari, { auth: { persistSession: false } });
+
+  let basarili = 0;
+  for (const fid of fidler) {
+    console.log(`\n--- fid ${fid} (language/${dil}) ---`);
+    let olcum;
+    try {
+      olcum = await feediOlc(fid, anahtar, { dil });
+    } catch (hata) {
+      console.log(`  HATA: ${hata instanceof Error ? hata.message : String(hata)}`);
+      continue;
+    }
+
+    if (olcum.hata) { console.log(`  ${olcum.hata}`); continue; }
+
+    /* SAYILAR günlüğe, İSİMLER veritabanına. */
+    console.log(`  HTTP ${olcum.durum}, ${(olcum.bayt / 1048576).toFixed(1)} MB açılmış`);
+    console.log(`  ürün satırı      : ${olcum.urunSatiri}`);
+    console.log(`  örneklenen satır : ${olcum.ornek}`);
+    console.log(`  alınabilir oran  : %${(olcum.alinabilirOran * 100).toFixed(1)}`);
+    console.log(`  para birimi sayısı: ${olcum.paraBirimleri.length}`);
+    console.log(`  reklamveren sayısı: ${olcum.saticilar.length}`);
+
+    if (olcum.urunSatiri === 0) { console.log('  boş feed, yazılmadı.'); continue; }
+    if (olcum.saticilar.length > 1) {
+      /*
+       * `sources.merchant_id` TEK mağaza. Birleşik bir feed'i tek kaynak
+       * yapmak bütün ürünleri yanlış mağazaya bağlardı.
+       */
+      console.log('  UYARI: feed birden fazla reklamveren taşıyor; kaynak olarak açılamaz.');
+    }
+
+    const yazim = await olcumuYaz(supabase, olcum);
+    console.log(`  yazıldı: program ${yazim.advId}, para birimi ${yazim.tekParaBirimi ?? '(karışık, boş bırakıldı)'}`);
+    basarili += 1;
   }
 
-  if (!process.env.AWIN_DATAFEED_API_KEY?.trim()) {
-    cik(2, 'AWIN_DATAFEED_API_KEY tanimli degil. Sonda kimliksiz istek ATMAZ.');
-  }
-
-  const feed = await feedAdresiniOku(fid);
-  if (!feed.feed_url) cik(2, `fid=${fid} icin feed_url bos.`);
-
-  const { dolu, eksik } = yerTutucuDoldur(feed.feed_url);
-  if (eksik.length > 0) {
-    cik(2, `Adresteki gizli degisken(ler) ortamda yok: ${eksik.join(', ')}`);
-  }
-
-  let hedef;
-  try {
-    hedef = new URL(dolu);
-  } catch {
-    cik(2, 'feed_url gecerli bir adres degil.');
-  }
-  if (hedef.protocol !== 'https:' || hedef.host !== IZINLI_HOST) {
-    cik(2, `Adres izinli host disinda: ${hedef.protocol}//${hedef.host} (izinli: https://${IZINLI_HOST})`);
-  }
-
-  const indirme = await ilkSatirlariCek(hedef.toString(), hedefSatir);
-  const { records, warnings } = parseCsv(yarimSatiriAt(indirme.metin));
-  const olcum = olc(records);
-
-  const rapor = {
-    feed: {
-      network_feed_id: feed.network_feed_id,
-      feed_name: feed.feed_name,
-      region: feed.region,
-      language: feed.language,
-      ilanEdilenKalem: feed.network_item_count,
-    },
-    indirme: {
-      sikistirilmisBayt: indirme.sikistirilmisBayt,
-      contentLength: indirme.contentLength,
-      contentType: indirme.contentType,
-      erkenKesildi: indirme.kesildi,
-      sureMs: indirme.sureMs,
-    },
-    olcum,
-    uyarilar: warnings,
-  };
-
-  if (arg.get('json') === 'true') {
-    console.log(maskele(JSON.stringify(rapor, null, 2)));
-    return;
-  }
-
-  const y = (s) => console.log(maskele(s));
-  y(`\n=== FEED ${feed.network_feed_id} — ${feed.feed_name ?? '(adsiz)'} ===`);
-  y(`bolge/dil        : ${feed.region ?? '?'} / ${feed.language ?? '?'}`);
-  y(`ilan edilen kalem: ${feed.network_item_count ?? '?'}`);
-  y(`indirilen        : ${indirme.sikistirilmisBayt} bayt${indirme.kesildi ? ' (ERKEN KESILDI)' : ''}, ${indirme.sureMs} ms`);
-  y(`content-length   : ${indirme.contentLength ?? '(bildirilmedi)'}`);
-  y(`ornek satir      : ${olcum.ornekSatir}`);
-  y(`kolon sayisi     : ${olcum.kolonlar?.length ?? 0}`);
-  y(`fiyat okunabilir : ${olcum.fiyatOkunabilirYuzde}%`);
-  y(`ALINABILIR       : ${olcum.alinabilirYuzde}%  (external_id+title+url+price)`);
-  y(`para birimleri   : ${JSON.stringify(olcum.paraBirimleri)}`);
-  y(`stok degerleri   : ${JSON.stringify(olcum.stokDegerleri)}`);
-  y(`deeplink hostlari: ${JSON.stringify(olcum.deeplinkHostlari)}`);
-  y(`kimlikler %      : ${JSON.stringify(olcum.kimlikler)}`);
-  if (warnings.length > 0) y(`uyarilar         : ${warnings.join(' | ')}`);
-  y('\n--- kolon doluluk % ---');
-  for (const [k, v] of Object.entries(olcum.doluluk ?? {})) y(`  ${k.padEnd(32)} ${v}`);
-  y('');
+  console.log(`\nYoklanan: ${fidler.length}, yazılan: ${basarili}.`);
+  console.log('Ayrıntı veritabanında; günlüğe yalnızca sayılar yazıldı.');
 }
 
-/*
- * SAF PARÇALAR TEST İÇİN İHRAÇ EDİLİYOR.
- *
- * Maskeleme ve "alınabilir satır" sayımı sessizce bozulabilecek iki yer:
- * biri anahtarı CI günlüğüne sızdırır, diğeri yanlış bir kapsam kararına
- * yol açar. İkisi de testle sabitlendi (`awin-feed-probe.test.mjs`).
- *
- * `main` yalnızca betik DOĞRUDAN çalıştırıldığında koşar; test dosyası
- * import ettiğinde ağa çıkmaz.
- */
-export { maskele, yarimSatiriAt, olc, yerTutucuDoldur, sayiMi, IZINLI_HOST };
+const dogrudanCalisiyor =
+  process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (dogrudanCalisiyor) {
   main().catch((hata) => {
-    cik(3, `beklenmeyen hata: ${hata instanceof Error ? hata.message : hata}`);
+    console.error(hata instanceof Error ? hata.message : String(hata));
+    process.exitCode = 1;
   });
 }

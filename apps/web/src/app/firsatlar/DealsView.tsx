@@ -62,7 +62,7 @@ export function DealsView({
             ...(activeCategory
               ? [
                   {
-                    '@type': 'ListItem',
+                    '@type': 'ListItem' as const,
                     position: 3,
                     name: activeCategory.name,
                     item: `${siteUrl}${yol}`,

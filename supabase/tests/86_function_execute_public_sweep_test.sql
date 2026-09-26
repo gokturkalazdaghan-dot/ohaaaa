@@ -183,7 +183,13 @@ select set_eq(
     'is_admin', 'owns_vendor',
     'order_belongs_to_current_user', 'order_has_vendor_of_current_user',
     -- Vitrinin okudugu skor/fiyat fonksiyonlari
-    'deal_score', 'ohaaaa_score', 'offer_freshness',
+    /*
+     * deal_score ve offer_freshness CIKARILDI (20260926090000).
+     * Depoda cagirani yok ve ikisi de RLS'i atlayip TASLAK urunun
+     * fiyat/zaman bilgisini anon'a donduruyordu. Vitrine cikarlarsa
+     * ohaaaa_score'daki gorunurluk kapisiyla birlikte bilerek acilir.
+     */
+    'ohaaaa_score',
     'price_drops', 'price_history',
     /*
      * kategori_yonlendirme — BILEREK eklendi (20260920105000).
@@ -222,7 +228,7 @@ select set_eq(
      */
     'sunulan_pazarlar'
   ],
-  'anon''a acik SECURITY DEFINER kumesi tam olarak belgelenen 11 fonksiyon'
+  'anon''a acik SECURITY DEFINER kumesi tam olarak belgelenen 9 fonksiyon'
 );
 
 -- ---------------------------------------------------------------------------

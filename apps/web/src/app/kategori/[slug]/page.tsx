@@ -254,7 +254,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
             },
             ...(parent
               ? [{
-                  '@type': 'ListItem',
+                  '@type': 'ListItem' as const,
                   position: 2,
                   name: parent.name,
                   item: `${siteUrl}/kategori/${parent.slug}`,

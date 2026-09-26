@@ -13,14 +13,24 @@
 # ve başlık satırını (kolon adları) yazar; reklamveren adları, ülkeleri ve
 # ürün sayıları doğrudan veritabanına gider.
 #
-# ZAMANLAMA YOK
-# Bilerek elle tetiklenir. Dizin nadiren değişir ve her koşu Awin'e bir istek
-# demek; altı saatte bir çekmek karşılıksız yük olurdu.
+# HAFTADA BİR
+# Önce bilerek yalnızca elle tetikleniyordu. Ölçülen ihtiyaç bunu değiştirdi:
+# bir ortaklık (Voghion) dizinde HİÇ görünmüyordu ve "acaba şimdi çıktı mı"
+# sorusunun tek cevabı birinin gidip işi elle koşturması oluyordu. Dizin
+# nadiren değişiyor ama değiştiğinde haftalarca fark edilmemesi de kabul
+# edilebilir değil.
+#
+# Haftada bir koşu Awin'e YILDA 52 istek demek -- altı saatte bir çekmenin
+# (1460) yanında ihmal edilebilir. Dakika bilerek 0 değil: saat başları
+# koşucu kuyruğunun en kalabalık olduğu an.
 name: Awin feed dizini
 
 on:
   # Ana dalda: elle tetikleme.
   workflow_dispatch:
+  # Haftalık tazeleme: pazartesi sabahı.
+  schedule:
+    - cron: '17 6 * * 1'
   # Geliştirme dalında: itilince koşar, böylece `main` kirletilmeden
   # denenebilir. `paths` filtresi ŞART -- bu dal başka işler için de
   # kullanılıyor ve her itişte Awin'e istek atmak karşılıksız yük olurdu.

@@ -15,6 +15,7 @@ import { UserMenu } from '@/components/UserMenu';
 import { CartDrawer } from '@/components/CartDrawer';
 import { DemoBanner } from '@/components/DemoBanner';
 import { PrelaunchBanner } from '@/components/PrelaunchBanner';
+import type { Organization, SearchAction, WebSite, WithContext } from 'schema-dts';
 import { JsonLd } from '@/components/JsonLd';
 import { isDemoMode } from '@/data/catalog';
 import {
@@ -116,13 +117,30 @@ export const metadata: Metadata = {
    */
   other: {
     'apple-mobile-web-app-capable': 'yes',
+    /* Mitgo (Admitad) yayıncı sitesi doğrulaması; kaldırılırsa doğrulama düşer. */
+    'mitgo-verification': '8fffcb72-28d1-455e-940f-bff53fde6df1',
   },
   ...(searchConsoleVerification
     ? { verification: { google: searchConsoleVerification } }
     : {}),
 };
 
-const siteJsonLd = [
+/**
+ * `query-input` Google'in site içi arama kutusu sözdizimidir; schema.org
+ * tiplerinde (schema-dts) yer almadığı için buraya açıkça eklenir.
+ */
+type SiteSearchAction = SearchAction & { 'query-input': string };
+
+const siteSearchAction: SiteSearchAction = {
+  '@type': 'SearchAction',
+  target: {
+    '@type': 'EntryPoint',
+    urlTemplate: `${siteUrl}/arama?q={search_term_string}`,
+  },
+  'query-input': 'required name=search_term_string',
+};
+
+const siteJsonLd: [WithContext<Organization>, WithContext<WebSite>] = [
   {
     '@context': 'https://schema.org',
     '@type': 'Organization',
@@ -139,14 +157,7 @@ const siteJsonLd = [
     name: 'Ohaaaa',
     inLanguage: 'tr-TR',
     publisher: { '@id': `${siteUrl}/#organization` },
-    potentialAction: {
-      '@type': 'SearchAction',
-      target: {
-        '@type': 'EntryPoint',
-        urlTemplate: `${siteUrl}/arama?q={search_term_string}`,
-      },
-      'query-input': 'required name=search_term_string',
-    },
+    potentialAction: siteSearchAction,
   },
 ];
 

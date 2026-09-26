@@ -6,6 +6,7 @@ import { formatCount, formatMoney, gtinDisplayForm, t } from '@ohaaaa/shared';
 
 import { DataUnavailable } from '@/components/DataUnavailable';
 import { ShieldIcon, TruckIcon } from '@/components/Icons';
+import type { BreadcrumbList, Product, WithContext } from 'schema-dts';
 import { JsonLd } from '@/components/JsonLd';
 import { OfferRow } from '@/components/OfferRow';
 import { FavoriteButton } from '@/components/FavoriteButton';
@@ -167,7 +168,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   const gtin = gtinDisplayForm(group.gtin);
 
-  const productJsonLd = {
+  const productJsonLd: WithContext<Product> = {
     '@context': 'https://schema.org',
     '@type': 'Product',
     '@id': `${productUrl}#product`,
@@ -278,7 +279,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
   };
 
   /** Sayfa yolu şeması — arama sonucunda kırıntı yolu gösterir. */
-  const breadcrumbJsonLd = {
+  const breadcrumbJsonLd: WithContext<BreadcrumbList> = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
