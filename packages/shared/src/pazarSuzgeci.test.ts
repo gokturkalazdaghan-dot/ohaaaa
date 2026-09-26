@@ -9,12 +9,20 @@ import { uygulanacakPazar } from './pazarSuzgeci.js';
  * olan bir sayfayı boşaltmamalı.
  */
 
-/** Canlıda ölçülen küme (26 Eylül 2026). */
-const KATALOG = ['UK', 'AT', 'IE', 'PL', 'US', 'IT'];
+/**
+ * Canlıda ölçülen küme (26 Eylül 2026, P0.1 temizliğinden SONRA).
+ *
+ * Kapsam kesin olarak UK + Euro Bölgesi. ABD ve Polonya aktif ticaretten
+ * çıkarıldı: ürünleri arşivlendi, kaynakları kapatıldı, `markets` satırları
+ * `is_active = false`. Dolayısıyla `katalog_pazarlari()` ikisini de
+ * döndürmüyor ve bu sabit o gerçeği yansıtıyor.
+ */
+const KATALOG = ['UK', 'AT', 'IE', 'IT'];
 
 test('urunu olan pazar suzulur', () => {
+  assert.equal(uygulanacakPazar('UK', KATALOG), 'UK');
   assert.equal(uygulanacakPazar('AT', KATALOG), 'AT');
-  assert.equal(uygulanacakPazar('US', KATALOG), 'US');
+  assert.equal(uygulanacakPazar('IE', KATALOG), 'IE');
 });
 
 test('URUNU OLMAYAN PAZAR SUZULMEZ -- ana sayfa bosalmaz', () => {
@@ -24,6 +32,21 @@ test('URUNU OLMAYAN PAZAR SUZULMEZ -- ana sayfa bosalmaz', () => {
    */
   assert.equal(uygulanacakPazar('TR', KATALOG), undefined);
   assert.equal(uygulanacakPazar('DE', KATALOG), undefined);
+});
+
+test('KAPSAM DISI PAZAR SUZGEC ACMAZ (ABD, Polonya)', () => {
+  /*
+   * P0.1'de ABD ve Polonya aktif ticaretten çıkarıldı. Bu satırlar o kararı
+   * çalıştırılabilir biçimde sabitliyor: ikisi de katalog kümesinde
+   * olmadığı için süzgeç UYGULANMAZ ve ziyaretçi boş sayfa değil, mevcut
+   * UK/Euro katalogunu görür.
+   *
+   * Envanterleri geri açılırsa bu test KENDİLİĞİNDEN düşmez -- düşmesi
+   * gereken yer `katalog_pazarlari()`; oraya girdikleri gün süzgeç de
+   * kendiliğinden açılır. Burada sabitlenen şey kural, veri değil.
+   */
+  assert.equal(uygulanacakPazar('US', KATALOG), undefined);
+  assert.equal(uygulanacakPazar('PL', KATALOG), undefined);
 });
 
 test('pazar istenmediyse suzgec yok', () => {
