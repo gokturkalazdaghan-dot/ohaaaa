@@ -132,7 +132,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   const { slug } = await params;
   const { sirala, sayfa } = await searchParams;
   const page = readPage(sayfa);
-  const { contentLocale, contentTag } = await getRequestLocale();
+  const { contentLocale, contentTag, market } = await getRequestLocale();
 
   let categories: Awaited<ReturnType<typeof getCategories>>;
   let results: Awaited<ReturnType<typeof searchProducts>>;
@@ -169,6 +169,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
       sort,
       limit: PAGE_SIZE,
       offset: (page - 1) * PAGE_SIZE,
+      market,
     });
   } catch (error) {
     // notFound() ve permanentRedirect() birer hata fırlatarak çalışır; onları yutmamalıyız.
