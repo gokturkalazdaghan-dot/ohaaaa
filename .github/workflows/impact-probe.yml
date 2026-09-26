@@ -1,0 +1,39 @@
+# =============================================================================
+# IMPACT ANAHTAR YOKLAMASI
+# =============================================================================
+# Impact panelinde açılan API anahtarının (ad: "Ohaaaa-Production-API")
+# gerçekten çalıştığını tek bir salt-okur çağrıyla ölçer.
+#
+# GEREKEN DEPO GİZLİLERİ (Settings -> Secrets and variables -> Actions)
+#   IMPACT_ACCOUNT_SID  -- Impact: Settings -> API -> Account SID
+#   IMPACT_AUTH_TOKEN   -- aynı sayfada anahtarın Auth Token'ı
+# Anahtarın ADI (Ohaaaa-Production-API) bir etiket; isteğe girmez.
+#
+# DEPO PUBLIC -- GÜNLÜĞE VERİ YAZILMAZ
+# Günlüğe yalnızca HTTP durumu ve kampanya SAYISI düşer.
+name: Impact anahtar yoklaması
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  yokla:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Anahtarı yokla
+        env:
+          IMPACT_ACCOUNT_SID: ${{ secrets.IMPACT_ACCOUNT_SID }}
+          IMPACT_AUTH_TOKEN: ${{ secrets.IMPACT_AUTH_TOKEN }}
+          OHAAAA_USER_AGENT: 'OhaaaaBot/1.0 (+https://ohaaaa.com/bot; iletisim@ohaaaa.com)'
+        run: node scripts/impact-probe.mjs
