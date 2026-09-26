@@ -80,7 +80,12 @@ export default async function HomePage() {
    * SAYFA DİLİ. `getRequestLocale` çevirisi GERÇEKTEN olan bir dil döndürür
    * (sözlükten türetiliyor), dolayısıyla burada ayrıca kontrol gerekmiyor.
    */
-  const { contentLocale } = await getRequestLocale();
+  /*
+   * `market` ziyaretçinin pazarı: adres önekinden (`/de-at`), hesabından ya
+   * da IP'den. Katalog süzgeci buna bağlanıyor -- daha önce bağlanmıyordu ve
+   * Avusturyalı ziyaretçi 629 £'lik bir iPad görüyordu (ölçüldü).
+   */
+  const { contentLocale, market } = await getRequestLocale();
   /*
    * ANA SAYFA ARTIK KESİNTİDE ÇÖKMÜYOR.
    *
@@ -110,8 +115,8 @@ export default async function HomePage() {
      * 16 isteniyor ama 8 gosteriliyor: asagida vitrindeki urunler bu
      * listeden ELENIYOR ve eleme sonrasi yine sekiz kart kalmali.
      */
-    fetched('one-cikanlar', searchProducts({ sort: 'offers', limit: 16 })),
-    fetched('vitrin', getShowcaseTiers({ tiers: 3, perTier: 5 })),
+    fetched('one-cikanlar', searchProducts({ sort: 'offers', limit: 16, market })),
+    fetched('vitrin', getShowcaseTiers({ tiers: 3, perTier: 5, market })),
     fetched('arama-ipuclari', getSearchHints(5)),
     ]);
 

@@ -144,4 +144,199 @@ export interface AffiliateProvider {
    * `buildAffiliateUrl` akışını kullanır — mevcut davranış korunur.
    */
   buildDeeplink?(context: DeeplinkContext): string;
+
+  // -------------------------------------------------------------------------
+  // YETENEK İLANI (FAZ 1) — ayrıntı için dosyanın sonundaki bölüm
+  // -------------------------------------------------------------------------
+  /**
+   * Bu ağ neyi, hangi taşıma ile sunar. ZORUNLU: bir ağın katalog verip
+   * vermediği çalışma anında denenerek değil, önceden BİLİNEREK öğrenilmeli.
+   */
+  readonly capabilities: ProviderCapabilities;
+  /** Ağın ilan ettiği kota ve sayfalama sınırları. */
+  readonly limits: ProviderLimits;
+
+  /**
+   * Program/reklamveren keşfi isteği. `capabilities.programs === 'api'`
+   * değilse TANIMSIZDIR.
+   */
+  programsRequest?(context: ProviderRequestContext & {
+    page?: number;
+    pageSize?: number;
+  }): ProviderRequest;
+  /** Keşif yanıtını ortak modele çevirir. Çevrilemeyen satır DÜŞER. */
+  parsePrograms?(raw: unknown): DiscoveredProgram[];
+
+  /** Katalog listesi isteği (ağda birden çok feed/katalog olabilir). */
+  catalogsRequest?(context: ProviderRequestContext & {
+    programId?: string;
+  }): ProviderRequest;
+  /** Bir katalogun kalemleri. */
+  catalogItemsRequest?(context: ProviderRequestContext & {
+    catalogId: string;
+    page?: number;
+    pageSize?: number;
+  }): ProviderRequest;
+  /** Katalog yanıtını ortak modele çevirir. */
+  parseCatalogItems?(raw: unknown): CatalogOffer[];
+
+  /** Dönüşüm çekme isteği. `conversionSource === 'pull'` olan ağlarda. */
+  conversionsRequest?(context: ProviderRequestContext & {
+    startDate: Date;
+    endDate: Date;
+    programIds?: readonly string[];
+  }): ProviderRequest;
+  /** Çekilen yanıtı ortak modele çevirir. */
+  parsePulledConversions?(raw: unknown): PulledConversion[];
+
+  /**
+   * Sonraki sayfanın isteği. Yanıtın kendi sayfalama bilgisinden okunur;
+   * sayfa numarası TAHMİN EDİLMEZ -- son sayfadan sonra istek atmak kotayı
+   * yer ve bazı ağlarda 400 döner.
+   *
+   * `null` = sayfa kalmadı.
+   */
+  nextPageRequest?(raw: unknown, previous: ProviderRequest): ProviderRequest | null;
+}
+
+// ===========================================================================
+// YETENEK SÖZLEŞMESİ (FAZ 1)
+// ===========================================================================
+/*
+ * NEDEN BURAYA EKLENDİ, NEDEN AYRI BİR DOSYAYA DEĞİL
+ *
+ * Yukarıdaki dört sorumluluk (verify / normalize / deeplink / kimlik) bir
+ * ağın yalnızca DÖNÜŞÜM tarafını tanımlıyordu. Katalog, program keşfi ve
+ * sayfalama Awin'e özgü kodda ve script'lerde dağınık duruyordu; ikinci bir
+ * ağ eklemek "her yeri bul ve bir dal daha aç" demekti.
+ *
+ * Aşağısı o dağınıklığı sözleşmeye taşıyor. Tasarım kararı tek cümlede:
+ *
+ *   SAĞLAYICI İSTEĞİ TARİF EDER VE YANITI ÇÖZER; İSTEĞİ ATMAZ.
+ *
+ * Bu, Awin'de zaten uygulanan kalıptır (`awinTransactionsUrl` adresi kurar,
+ * `awinTransactionToConversion` yanıtı çözer, `fetch` çağıran taraftadır) ve
+ * bilerek korunuyor: SSRF kapısı, nezaket gecikmesi, gövde boyutu sınırı ve
+ * devre kesici `politeClient` içinde TEK yerde duruyor. Sağlayıcıya `fetch`
+ * vermek, o korumaların her ağda yeniden -- ve er geç eksik -- yazılması
+ * demekti.
+ *
+ * İKİNCİ KARAR: SIR PAKETE GİRMEZ.
+ * `ProviderRequest` hazır bir `Authorization` başlığı TAŞIMAZ; yalnızca
+ * hangi ortam değişkeninin gerektiğini SÖYLER. Böylece bu paket hiçbir
+ * koşulda sır taşımaz, sırrı çözen taraf tek ve denetlenebilir kalır, ve
+ * bir ağın hangi değişkeni istediği koda değil VERİYE yazılmış olur.
+ */
+
+/** Bir yeteneğin hangi taşıma ile karşılandığı. `'none'` = ağ bunu sunmuyor. */
+export interface ProviderCapabilities {
+  /** Program/reklamveren keşfi. `'manual'` = operatör elle girer. */
+  programs: 'api' | 'feed' | 'manual';
+  /** Ürün kataloğu. Awin'de CSV feed, Impact'te REST. */
+  catalog: 'api' | 'feed' | 'none';
+  /**
+   * Deeplink üretimi. `'template'` = ortak `buildAffiliateUrl` yeterli;
+   * `'api'` = her link için ağa çağrı gerekir (tıklama anında KULLANILAMAZ).
+   */
+  deeplink: 'template' | 'api';
+  /** Tıklama sayacı. Bugün her ağda bizim `clicks` tablomuz. */
+  clicks: 'local' | 'api';
+  conversions: ConversionSource;
+  /**
+   * Komisyon nereden okunur. `'in_conversion'` = dönüşüm satırının kendi
+   * alanında; `'separate'` = ayrı bir uç nokta gerekir.
+   */
+  commissions: 'in_conversion' | 'separate';
+}
+
+/**
+ * Ağın ilan ettiği sınırlar. Hepsi OPSİYONEL DEĞİL, `null` ile "ağ
+ * yayınlamamış" denir -- bilinmeyen bir sınırı sonsuz saymak, kotayı
+ * tüketip 429 yemenin kestirme yoludur.
+ */
+export interface ProviderLimits {
+  requestsPerMinute: number | null;
+  requestsPerHour: number | null;
+  /** Tek istekte sorulabilecek en geniş tarih aralığı (gün). */
+  maxRangeDays: number | null;
+  maxPageSize: number | null;
+  /** Sayfalamayla ulaşılabilecek en fazla kayıt. Aşılırsa ağ hata döner. */
+  maxPagedResults: number | null;
+}
+
+/**
+ * İsteğin hangi kimlik bilgisini gerektirdiği — DEĞERİ DEĞİL, ADI.
+ *
+ * Çağıran bu adı ortamda arar. Ad koda gömülü olduğu için `.env.example`
+ * ile kodun ayrışması mümkün değil: eksik değişken açık bir hatayla durur,
+ * sessizce kimliksiz istek atılmaz.
+ */
+export type ProviderCredential =
+  | { kind: 'none' }
+  | { kind: 'bearer'; tokenEnv: string }
+  | { kind: 'basic'; usernameEnv: string; passwordEnv: string };
+
+/** Sağlayıcının tarif ettiği tek bir HTTP isteği. */
+export interface ProviderRequest {
+  method: 'GET';
+  url: string;
+  credential: ProviderCredential;
+  /** Ağ varsayılan olarak XML dönüyorsa JSON bunu gerektirir. */
+  accept?: string;
+}
+
+/** Ağın program/reklamveren kaydı — onboarding'in ham girdisi. */
+export interface DiscoveredProgram {
+  /** `programs.network_program_id` */
+  networkProgramId: string;
+  merchantName: string;
+  homepageUrl: string | null;
+  /** Ağın bildirdiği ülkeler (ISO-3166 alpha-2, büyük harf). Boş olabilir. */
+  countryCodes: string[];
+  /** Ham ağ durumu. Normalize EDİLMEZ: ağa özgü sözlük. */
+  status: string | null;
+  deeplinkSupported: boolean | null;
+  /** Ağın verdiği hazır izleme linki — deeplink şablonunun çekirdeği. */
+  trackingLink: string | null;
+}
+
+/**
+ * Ağın katalogundan tek bir teklif.
+ *
+ * Alan adları `public.products` sütunlarıyla hizalı; tutarlar KURUŞ.
+ * Çevrilemeyen alan `null` olur, UYDURULMAZ -- FAZ 0'da ölçüldüğü gibi
+ * sıfıra düşen bir fiyat, olmayan bir indirim gibi görünür.
+ */
+export interface CatalogOffer {
+  /** `products.external_id` — ağın kalem kimliği. */
+  externalId: string;
+  title: string;
+  description: string | null;
+  brand: string | null;
+  gtin: string | null;
+  mpn: string | null;
+  priceCents: number | null;
+  compareAtPriceCents: number | null;
+  /** ISO-4217, üç harf, büyük harf. */
+  currency: string | null;
+  /** `null` = ağ bildirmemiş; `false` ile karıştırılmaz. */
+  inStock: boolean | null;
+  imageUrl: string | null;
+  /** Mağazadaki ürün sayfası ya da ağın izleme adresi. */
+  productUrl: string | null;
+  category: string | null;
+}
+
+/**
+ * Her istek kurucusunun ortak bağlamı.
+ *
+ * `accountSid` ADRESİN parçası olan hesap kimliğidir (Impact'te
+ * `/Mediapartners/{sid}/...`). SIR DEĞİLDİR -- sır olan `AuthToken` ve o
+ * bu pakete hiç girmez; `ProviderRequest.credential` yalnızca adını taşır.
+ *
+ * Kimlik gerektirmeyen ağlarda (Awin: yayıncı kimliği adreste, jeton
+ * başlıkta) bu alan kullanılmaz.
+ */
+export interface ProviderRequestContext {
+  accountSid?: string;
 }

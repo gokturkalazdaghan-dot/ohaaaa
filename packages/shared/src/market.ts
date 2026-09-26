@@ -473,3 +473,35 @@ export function formatCount(value: number, numberLocale?: string): string {
     numberLocale ?? VARSAYILAN_PAZAR_YAPILANDIRMASI.numberLocale,
   ).format(value);
 }
+
+/**
+ * ISO-3166 ülke kodu ile bizim pazar kodumuzun AYRIŞTIĞI yerler.
+ *
+ * ÖLÇÜLEN ARIZA (canlı, 2026-09-26): `/en-gb` `lang="en-US"` döndürüyor ve
+ * `rel="canonical"` HİÇ yazılmıyordu. Sebep: İngiltere'nin pazar kodu `UK`
+ * ama ISO-3166 ülke kodu `GB`; `/en-gb` bilinmeyen bir pazara çözülüp
+ * sessizce varsayılana düşüyordu.
+ *
+ * İki bedeli vardı. Ziyaretçi tarafında: 67.587 teklifin bulunduğu pazara,
+ * herkesin ilk denediği adresten ULAŞILMIYOR. Arama motoru tarafında: aynı
+ * içerik iki adreste ve birinde canonical yok -- kopya içerik sinyali.
+ *
+ * NEDEN YALNIZCA `GB`: pazar kodları arasında `EU`, `ANZ`, `NORDICS` ve
+ * `GCC` de ISO dışı, ama onlar BÖLGE ve tek bir ülke karşılığı yok --
+ * dolayısıyla kimse onların "iso kodunu" deneyemez. `UK`/`GB` aynı yerin
+ * iki adı olduğu için biricik.
+ *
+ * Anahtar ISO kodu, değer pazar kodu.
+ */
+const ISO_PAZAR_TAKMA_ADLARI: Readonly<Record<string, string>> = { GB: 'UK' };
+
+/**
+ * Bir ISO ülke kodunun karşılık geldiği KANONİK pazar kodu.
+ *
+ * Kod zaten kanonikse ya da bilinmiyorsa `null` döner -- çağıran o zaman
+ * yönlendirme yapmaz. `null` "eşleme yok" demek, "varsayılana düş" demek
+ * DEĞİL: sessiz bir düşüş tam olarak bu fonksiyonun düzelttiği arızaydı.
+ */
+export function kanonikPazarKodu(market: string): string | null {
+  return ISO_PAZAR_TAKMA_ADLARI[market.trim().toUpperCase()] ?? null;
+}

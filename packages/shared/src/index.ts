@@ -23,5 +23,6 @@ export * from './listingSort.js';
 export * from './dosyaImzasi.js';
 export * from './listingCount.js';
 export * from './marketCatalog.js';
+export * from './pazarSuzgeci.js';
 export * from './urlLocale.js';
 export * from './governance/index.js';

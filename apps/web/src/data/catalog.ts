@@ -21,6 +21,7 @@ import {
   SAYIM_TAVANI,
   sayimAraligi,
   tavanliSayim,
+  uygulanacakPazar,
   offerSellerName,
   rankShowcase,
   rpcsizListelenebilir,
@@ -128,6 +129,18 @@ export interface SearchParams {
   brands?: string[];
   /** Yalnızca ücretsiz kargolu teklifi olan ürünler. */
   freeShipping?: boolean;
+  /**
+   * İSTENEN pazar (`/de-at` → 'AT'). Verilmezse katalog süzülmez.
+   *
+   * ÖLÇÜLEN ARIZA (canlı, 26 Eylül 2026): bu alan YOKTU, dolayısıyla adres
+   * öneki katalogu hiç süzmüyordu. `/de-at`, `/en-us`, `/en-pl` ve `/en-uk`
+   * dördü de aynı 16 İngiltere ürününü sterlinle gösteriyordu.
+   *
+   * "İstenen" demek önemli: burada yazılan değer doğrudan süzgeç olmuyor.
+   * O pazarda hiç ürün yoksa süzgeç UYGULANMAZ (bkz. `pazarSuzgeci`) --
+   * aksi hâlde TR ziyaretçisi boş bir katalog görürdü.
+   */
+  market?: string;
 }
 
 /*
@@ -366,6 +379,17 @@ async function listelemeOku(params: SearchParams): Promise<SearchPage> {
       )
       .gt('offer_count', 0);
     if (kapsam) q = q.in('category_id', kapsam);
+    /*
+     * PAZAR SÜZGECİ BU YOLDA DA ŞART. Ana sayfa ve kategori sayfası
+     * (serbest metin yok) RPC'ye hiç uğramıyor; yalnızca RPC'yi süzmek,
+     * ölçülen arızanın tam olarak görüldüğü iki sayfayı düzeltmemiş
+     * olmaktı.
+     *
+     * Düz sütun karşılaştırması olduğu için PostgREST bunu doğrudan
+     * ifade edebiliyor ve `product_groups_pazar_*` indeksleri sıralamayı
+     * da karşılıyor (ölçüldü: AT + `title asc` 8,9 ms).
+     */
+    if (params.market) q = q.eq('market_code', params.market);
     for (const anahtar of listelemeSiralamasi(params.sort ?? 'relevance')) {
       q = q.order(anahtar.sutun, { ascending: anahtar.artan, nullsFirst: false });
     }
@@ -390,6 +414,9 @@ async function listelemeOku(params: SearchParams): Promise<SearchPage> {
       .select('id')
       .gt('offer_count', 0);
     if (kapsam) q = q.in('category_id', kapsam);
+    /* Sayım ile liste AYNI filtreyi görmek zorunda; yoksa "11.003 sonuç"
+       yazıp 24 ürün göstermek gibi bir sayfalama yalanı çıkar. */
+    if (params.market) q = q.eq('market_code', params.market);
     /*
      * `range` üst sınırı DAHİL: en çok TAVAN+1 kayıt döner. TAVAN+1 gelmesi
      * "tavandan fazlası var" demenin en ucuz yolu; ek bir sorgu gerekmiyor.
@@ -477,6 +504,12 @@ async function aramaOku(params: SearchParams): Promise<SearchPage> {
       ...base,
       p_brands: params.brands?.length ? params.brands : null,
       p_free_shipping: params.freeShipping ?? false,
+      /*
+       * PAZAR YALNIZCA YENİ İMZAYA GİDER. `base` geri düşüş nesnesi ve eski
+       * imzada `p_market` diye bir parametre yok; oraya koymak, göç
+       * uygulanmamış bir ortamda aramayı büsbütün kırardı.
+       */
+      p_market: params.market ?? null,
     };
 
     let response =
@@ -606,6 +639,9 @@ export async function getSearchFacets(params: SearchParams): Promise<SearchFacet
   // pazar yeri görmek.
   if (!supabase) return demoFacets(params);
 
+  /* `searchProducts` ile AYNI karar: sayaçlar listeyle aynı kümeyi saymalı. */
+  const pazar = await pazarSuzgeci(params.market);
+
   const baseArgs = {
     p_query: params.query ?? null,
     p_category_id: params.categoryId ?? null,
@@ -614,6 +650,12 @@ export async function getSearchFacets(params: SearchParams): Promise<SearchFacet
     ...baseArgs,
     p_brands: params.brands?.length ? params.brands : null,
     p_free_shipping: params.freeShipping ?? false,
+    /*
+     * SAYAÇLAR DA PAZARA GÖRE. Süzgeci listeye uygulayıp facet'e uygulamamak,
+     * 24 Avusturya ürününün yanında "Bilgisayar 8.214" yazan bir sayaç
+     * demekti -- kullanıcı o kategoriye tıklar ve 8.214 değil 60 ürün bulur.
+     */
+    p_market: pazar ?? null,
   };
 
   let facetResponse =
@@ -2883,6 +2925,87 @@ export const getServedMarkets = onbellekle(
   ONBELLEK.taksonomi,
 );
 
+/**
+ * KATALOGDA gerçekten ürünü olan pazarlar.
+ *
+ * NEDEN `getServedMarkets` YETMİYOR
+ * O, `sunulan_pazarlar()` üzerinden `sources` tablosuna bakıyor, yani "alım
+ * yapılandırdık" diyor. Pazar süzgecinin sorduğu soru farklı: "bu pazarda
+ * GÖSTERİLECEK ürün var mı". İkisi bugün aynı kümeyi veriyor (AT, IE, IT,
+ * PL, UK, US -- ölçüldü) ama ayrıştıkları durum tam olarak tehlikeli olan:
+ *
+ *   • Yeni bir program açılır, kaynak etkinleşir, alım henüz koşmamıştır.
+ *     Kaynağa bakan ölçü o pazarı sayar, süzgeç açılır, ziyaretçi BOŞ
+ *     katalog görür.
+ *   • Tersi de yaşandı: Lunzo PL kaynağı bellek taşmasından sonra
+ *     kapatıldı, ama 1.006 PL grubu veritabanında duruyor.
+ *
+ * OKUNAMAZSA BOŞ DÖNER ve süzgeç hiç uygulanmaz -- yani bugünkü davranış.
+ * Geçici bir okuma hatası katalogu boşaltmamalı.
+ */
+async function katalogPazarlariniOku(): Promise<string[]> {
+  const supabase = createAnonClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase.rpc('katalog_pazarlari');
+
+  if (error) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'Katalog pazarlari okunamadi; pazar suzgeci uygulanmayacak',
+        hata: error.message,
+      }),
+    );
+    return [];
+  }
+
+  const kodlar = new Set<string>();
+  for (const satir of (data ?? []) as { market_code: string | null }[]) {
+    if (satir.market_code) kodlar.add(String(satir.market_code));
+  }
+  return [...kodlar].sort();
+}
+
+/**
+ * Katalogda ürünü olan pazarlar. `taksonomi` süresi kullanılıyor: bu küme
+ * ancak yeni bir ülkenin ilk ürünü geldiğinde değişiyor, yani fiyattan çok
+ * daha yavaş.
+ */
+export const getCatalogMarkets = onbellekle(
+  'katalog-pazarlari',
+  katalogPazarlariniOku,
+  ONBELLEK.taksonomi,
+);
+
+/**
+ * İSTENEN pazarı UYGULANACAK süzgece çevirir.
+ *
+ * TEK KARAR NOKTASI. Bu mantık sayfalara bırakılsaydı üç sayfa (ana sayfa,
+ * kategori, arama) üç farklı davranış üretebilirdi ve fark ekrandan
+ * anlaşılmazdı. `searchProducts` ve `getSearchFacets` bunu kendi içinde
+ * çağırıyor; çağıran taraf yalnızca ziyaretçinin pazarını söylüyor.
+ *
+ * NEDEN HER ZAMAN SÜZMÜYORUZ
+ * ÖLÇÜLDÜ: `search_products(p_market => 'TR')` SIFIR satır döndürüyor ve TR
+ * varsayılan pazar. Koşulsuz süzmek, sitenin ana sayfasını -- öneksiz,
+ * çoğunluğun gördüğü sayfayı -- boşaltırdı.
+ *
+ * Ürünü olmayan bir pazarda süzgeci kapatmak "her şeyi göster" demek, yani
+ * BUGÜNKÜ davranış: bir gerileme değil, olduğu yerde bırakma. Türkiye'ye
+ * özel teklif geldiği gün bu satır kendiliğinden süzmeye başlar -- kod
+ * değişmeden, çünkü karar veriden geliyor.
+ */
+async function pazarSuzgeci(market: string | undefined): Promise<string | undefined> {
+  /*
+   * Kararın KENDİSİ `@ohaaaa/shared` içinde ve testli. Burada yalnızca
+   * veriyi okuyup ona veriyoruz -- kuralı burada da yazmak, ikisi
+   * ayrıştığında hangisinin doğru olduğu belirsiz iki kopya üretirdi.
+   */
+  if (!market) return undefined;
+  return uygulanacakPazar(market, await getCatalogMarkets());
+}
+
 export const getCategoryTree = onbellekle('kategori-agaci', kategoriAgaciniOku, ONBELLEK.taksonomi);
 
 /** Bu kategoride gösterilecek ürün var mı. */
@@ -2954,9 +3077,17 @@ const rpcListelemeOnbellekli = onbellekle('listeleme-rpc', aramaOku, ONBELLEK.li
  * onlar önbelleğe alınıyor.
  */
 export async function searchProducts(params: SearchParams): Promise<SearchPage> {
-  if (params.query && params.query.trim().length > 0) return aramaOku(params);
-  if (rpcsizListelenebilir(params)) return listelemeOnbellekli(params);
-  return rpcListelemeOnbellekli(params);
+  /*
+   * Pazar burada, ÜÇ YOLA DAĞILMADAN ÖNCE çözülüyor. Aşağıdaki üç dalın
+   * ikisi önbellekli; süzgeci dalların içinde çözmek, önbellek anahtarına
+   * istenen pazarın değil uygulanan pazarın girmesini gerektirirdi ve
+   * "AT süzülüyor" ile "AT süzülmüyor" aynı anahtarı paylaşabilirdi.
+   */
+  const etkin: SearchParams = { ...params, market: await pazarSuzgeci(params.market) };
+
+  if (etkin.query && etkin.query.trim().length > 0) return aramaOku(etkin);
+  if (rpcsizListelenebilir(etkin)) return listelemeOnbellekli(etkin);
+  return rpcListelemeOnbellekli(etkin);
 }
 
 // ---------------------------------------------------------------------------
@@ -3244,9 +3375,19 @@ function demoShowcaseTiers(tiers: number, perTier: number): ShowcaseTier[] {
 async function vitriniOku(options?: {
   tiers?: number;
   perTier?: number;
+  /**
+   * Ziyaretçinin pazarı. Verilmezse vitrin süzülmez (bugünkü davranış).
+   *
+   * Vitrin ana sayfada ÜRÜN KARTI çiziyor, yani pazar süzgeci ona da
+   * uygulanmazsa Avusturyalı ziyaretçi üstteki ızgarada euro, hemen
+   * altındaki vitrinde sterlin görürdü -- aynı sayfada iki ayrı para
+   * birimi, aynı arızanın yarım düzeltilmiş hâli.
+   */
+  market?: string;
 }): Promise<ShowcaseTier[]> {
   const tiers = Math.max(1, options?.tiers ?? 3);
   const perTier = Math.max(1, options?.perTier ?? 5);
+  const pazar = await pazarSuzgeci(options?.market);
 
   const supabase = createAnonClient();
   if (!supabase) return demoShowcaseTiers(tiers, perTier);
@@ -3296,13 +3437,15 @@ async function vitriniOku(options?: {
         .eq('status', 'active');
       return { magaza, adet: count ?? 0 };
     }),
-    supabase
-      .from('product_groups')
-      .select('id, slug, title, brand, image_url, min_price_cents, offer_count')
-      .gt('offer_count', 0)
-      .not('image_url', 'is', null)
-      .order('offer_count', { ascending: false })
-      .limit(VITRIN_ADAY_HAVUZU * tiers),
+    (() => {
+      let q = supabase
+        .from('product_groups')
+        .select('id, slug, title, brand, image_url, min_price_cents, offer_count')
+        .gt('offer_count', 0)
+        .not('image_url', 'is', null);
+      if (pazar) q = q.eq('market_code', pazar);
+      return q.order('offer_count', { ascending: false }).limit(VITRIN_ADAY_HAVUZU * tiers);
+    })(),
   ]);
 
   const secilenler = sayimlar

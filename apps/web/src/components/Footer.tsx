@@ -96,6 +96,48 @@ export function Footer() {
           </ul>
         </div>
       </div>
+      {/*
+        TELEFONA AL — KARE KOD, MASAÜSTÜNDE, HER SAYFADA.
+
+        Yukarıdaki nota göre kurulum ÇAĞRISI footer'dan taşındı ve o karar
+        geçerli: telefonda footer 4.495 pikselde kalıyor, oraya inen olmuyor.
+        Burada çizilen o çağrı DEĞİL.
+
+        Kare kodun işi başka: "bilgisayardayım, bunu telefonuma geçireyim."
+        Onu gören kişi zaten masaüstünde ve kendi ekranındaki kodu kendi
+        telefonuyla okutuyor. Telefonda hiç çizilmiyor -- insanın kendi
+        ekranındaki kodu kendi kamerasıyla okutması anlamsız.
+
+        `lg:` eşiğinden sonra görünüyor ve bu JS'siz: platform tespiti için
+        istemci bileşeni yapmak, footer'ı bütün sayfalara istemci yükü
+        bindirmek demekti. Görünüm genişliği burada "masaüstü mü" sorusunun
+        yeterli vekili.
+
+        `InstallApp` ana sayfada masaüstünde aynı kodu gösteriyor; yani ana
+        sayfada masaüstünde iki kod birden görünüyor. Bilinçli bir bedel:
+        footer HER sayfada, InstallApp yalnızca ana sayfada. Kategori, ürün
+        ve arama sayfalarındaki masaüstü ziyaretçisinin başka yolu yok.
+      */}
+      <div className="mx-auto hidden max-w-6xl items-center gap-4 px-4 pb-8 lg:flex sm:px-6">
+        {/*
+          Kare kod SABİT bir dosya: içinde yalnızca ana sayfanın adresi var,
+          kişiye özel hiçbir şey yok. Çalışma anında üretmek bir kitaplık
+          eklemek demekti.
+        */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/marka/ohaaaa-qr.svg"
+          alt="ohaaaa.com adresini açan kare kod"
+          width={72}
+          height={72}
+          className="h-[72px] w-[72px] shrink-0 rounded-lg border border-line bg-white p-1"
+        />
+        <p className="text-xs leading-relaxed text-muted">
+          <strong className="block text-fg">Ohaaaa’yı telefonuna al</strong>
+          Kamerayı koda tut. Tarayıcıdan kurulan bir web uygulaması —
+          uygulama mağazasına gerek yok.
+        </p>
+      </div>
       <p className="mx-auto max-w-6xl px-4 pb-8 text-xs text-subtle sm:px-6">
         © {new Date().getFullYear()} Armanalabs. Ohaaaa.com, Armanalabs tarafından işletilir.
         Fiyatları satıcı belirler.

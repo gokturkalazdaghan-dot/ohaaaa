@@ -120,7 +120,7 @@ function readPositiveInt(raw: string | undefined, max: number): number | undefin
 export default async function SearchPage({ searchParams }: SearchPageProps) {
   const params = await searchParams;
   const { q, kategori, sirala } = params;
-  const { contentLocale, contentTag } = await getRequestLocale();
+  const { contentLocale, contentTag, market } = await getRequestLocale();
 
   /*
    * Barkod yolu.
@@ -288,12 +288,16 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       offset: (page - 1) * PAGE_SIZE,
       brands: selectedBrands,
       freeShipping,
+      market,
       }),
       getSearchFacets({
         query: q,
         categoryId: undefined,
         brands: selectedBrands,
         freeShipping,
+        /* Şerit ile sonuçlar AYNI pazarı görmeli; yoksa kullanıcı 60 ürünlük
+           bir kategoriye "8.214" yazan bir sayaçtan tıklar. */
+        market,
       }).catch(() => ({
         minPriceCents: null,
         maxPriceCents: null,

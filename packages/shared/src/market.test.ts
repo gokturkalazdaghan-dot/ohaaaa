@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+  kanonikPazarKodu,
   DEFAULT_LOCALE,
   DEFAULT_MARKET,
   MARKETS,
@@ -285,4 +286,30 @@ test('formatCount kucuk sayilari bozmaz', () => {
 
 test('formatCount etiket verilmezse varsayilan pazara duser', () => {
   assert.equal(formatCount(1234), formatCount(1234, VARSAYILAN_PAZAR_YAPILANDIRMASI.numberLocale));
+});
+
+// ===========================================================================
+// ISO ÜLKE KODU → PAZAR KODU
+// ===========================================================================
+
+test('GB, UK pazarina esleniyor', () => {
+  // Ölçülen arıza: `/en-gb` bilinmeyen pazara düşüp varsayılanı sunuyordu.
+  assert.equal(kanonikPazarKodu('GB'), 'UK');
+});
+
+test('kucuk harf ve bosluk tolere edilir', () => {
+  assert.equal(kanonikPazarKodu('gb'), 'UK');
+  assert.equal(kanonikPazarKodu(' Gb '), 'UK');
+});
+
+test('zaten kanonik olan kod eslenmez', () => {
+  // `UK` doğru kod; yönlendirme yapmak sonsuz döngü olurdu.
+  assert.equal(kanonikPazarKodu('UK'), null);
+});
+
+test('bilinmeyen kod null doner, varsayilana DUSMEZ', () => {
+  // Sessiz düşüş tam olarak bu fonksiyonun düzelttiği arızaydı.
+  for (const kod of ['ZZ', '', 'TR', 'US', 'EU', 'ANZ']) {
+    assert.equal(kanonikPazarKodu(kod), null);
+  }
 });
