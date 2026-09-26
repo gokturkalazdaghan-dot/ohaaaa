@@ -290,16 +290,30 @@ engellenir.
 
 ## 7. Bu sistemde henüz olmayanlar
 
-Dürüst liste — üretime almadan önce gerekenler:
+Dürüst liste. Son gözden geçirme: 2026-09-26 (kodla karşılaştırılarak).
 
-- **Gerçek ortaklık hesapları.** Şu an demo mağazalar var. Amazon Associates,
-  Trendyol ve Hepsiburada ortaklık başvuruları yapılmalı; onay sonrası
-  `merchants` tablosuna gerçek `tracking_id` ve `deeplink_template` girilmeli.
-- **Kimlik doğrulama arayüzü.** Supabase Auth şema ve RLS seviyesinde bağlı,
-  giriş/kayıt ekranları yazılmadı.
-- **Ödeme entegrasyonu** (marketplace tarafı için).
-- **Görsel barındırma** — şu an yer tutucu kullanılıyor.
-- **Yasal metinler**: ortaklık linki açıklaması (reklam mevzuatı gereği zaten
-  `rel="sponsored"` ve "satış X'te tamamlanır" notu var, ama ayrıca bir
-  bilgilendirme sayfası gerekir), KVKK aydınlatma metni, çerez politikası.
-- **Admin paneli** — `affiliate_dashboard()` fonksiyonu hazır, arayüzü yok.
+### Hâlâ eksik
+
+- **Awin dışındaki ortaklık ağları.** `affiliate_networks` tablosunda 12 ağ
+  kayıtlı; kod ile bağlı olan yalnızca `awin` (feed alımı + dönüşüm çekme).
+  - Impact: API anahtarı doğrulandı (`impact-probe.yml`, 200), fakat katılınmış
+    kampanya sayısı 0. Kampanya onayı gelmeden sağlayıcı yazılmaz.
+  - Voghion (Awin üzerinden): reklamveren kimlikleri bulundu, feed erişimi yok.
+  - Amazon Associates, Trendyol, Hepsiburada: başvuru yapılmadı.
+- **Ödeme entegrasyonu** (marketplace tarafı için). `/odeme` akışı ve
+  `api/checkout` var; sağlayıcı (iyzico, PayTR, Stripe…) bağlı değil — yeri
+  `apps/web/src/app/api/checkout/route.ts` içinde işaretli.
+- **Ürün görseli barındırma.** Görseller kaynağın kendi sunucusundan
+  (`OHAAAA_IMAGE_HOSTS` izin listesi) geliyor. Taşeronların görsel yükleyeceği
+  bir depolama yok; Supabase Storage yalnızca taşeron belgeleri için kullanılıyor.
+- **Ödünç ürün vitrini.** Karar belgesi hazır
+  (`docs/odunc-urun-vitrini-karari.md`), kod yok; belgedeki OPEN DECISION
+  maddeleri kapanmadan başlanmamalı.
+
+### Tamamlananlar (önceki sürümde eksik yazıyordu)
+
+- **Kimlik doğrulama arayüzü:** `/giris`, `/kayit` ve hesap sayfaları
+  (siparişlerim, adreslerim, favoriler, fiyat takibi).
+- **Yasal metinler:** `/ortaklik-aciklamasi`, `/kvkk`, `/gizlilik`, `/kosullar`.
+- **Admin paneli:** `/yonetim` (`affiliate_dashboard()` bağlı), başvurular,
+  ortaklar, tahsilat, belgeler.
