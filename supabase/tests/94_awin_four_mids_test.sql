@@ -121,9 +121,17 @@ select throws_ok(
 -- dizin kanitiyla doldurdugu 14 firmada dolu. Yeni eklenen hicbir kayit onu
 -- DEVRALMAZ; devralsaydi merchants_active_needs_verified_terms kapisi o
 -- kayitlar icin sessizce acilirdi.
+--
+-- 20260926140000 hesap sahibinin yayina aldigi, Awin uyeligi `active` olarak
+-- olculmus magazalari acikca dogrular; onlar bu iddianin konusu degil ve
+-- adlariyla disarida birakilir.
 select is(
   (select count(*)::int from public.merchants
-    where network = 'awin' and terms_verified_at is not null),
+    where network = 'awin' and terms_verified_at is not null
+      and slug not in ('decathlon-ie', 'hairdressing-supplies', 'belleek',
+                       'eonon-us', 'kippy-it', 'enjox-toys', 'tsarbomba',
+                       'giftlab', 'mooncool', 'pandahall', 'dyu-bikes',
+                       'dima-eyewear-us', 'fullscopemd')),
   14,
   '12) dogrulanmis sart sayisi hala 14 -- yeni kayitlar dogrulama devralmadi');
 

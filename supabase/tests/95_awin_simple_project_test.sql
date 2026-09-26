@@ -93,9 +93,16 @@ select throws_ok(
 -- sayima bagli bir iddia, gocla ilgisiz bir sebepten duserdi. Kararli olan
 -- degismez, `terms_verified_at`in yalnizca dizin kanitiyla doldurulmus 14
 -- firmada dolu olmasi.
+--
+-- 20260926140000'in acikca dogruladigi magazalar (Awin uyeligi `active`
+-- olculdu, hesap sahibi yayina aldi) bu iddianin konusu degil.
 select is(
   (select count(*)::int from public.merchants
-    where network = 'awin' and terms_verified_at is not null),
+    where network = 'awin' and terms_verified_at is not null
+      and slug not in ('decathlon-ie', 'hairdressing-supplies', 'belleek',
+                       'eonon-us', 'kippy-it', 'enjox-toys', 'tsarbomba',
+                       'giftlab', 'mooncool', 'pandahall', 'dyu-bikes',
+                       'dima-eyewear-us', 'fullscopemd')),
   14,
   '9) dogrulanmis sart sayisi hala 14 -- Simple Project dogrulama devralmadi');
 
