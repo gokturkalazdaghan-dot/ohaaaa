@@ -35,7 +35,7 @@ import type {
   SourceConfig,
 } from './types.js';
 
-import { parseCsv } from './adapters/csv.js';
+import { parseCsv, truncateCsvRecords } from './adapters/csv.js';
 import { parseJson } from './adapters/json.js';
 import { parseXml } from './adapters/xml.js';
 import { normalizeRecords } from './normalize.js';
@@ -263,8 +263,40 @@ export async function runSource(
     const basliklar = buildAuthHeaders(source);
     const { body } = await deps.fetcher.get(adres, { headers: basliklar });
 
+    /*
+     * TAVAN AYRIŞTIRMADAN ÖNCE UYGULANIR.
+     *
+     * Aşağıdaki ikinci tavan (ayrıştırmadan SONRA) veritabanını koruyordu
+     * ama belleği korumuyordu: 200.000 satırlık bir feed önce tamamen
+     * nesneye çevrilip ancak sonra 50.000'e kesiliyordu.
+     *
+     * Üretimde ölçüldü (GitHub Actions, 2026-09-26, Lunzo PL parça 0):
+     *   FATAL ERROR: Allocation failed - JavaScript heap out of memory
+     *   (exit 134) -- alım hiç başlamadan düştü.
+     *
+     * Kırpma yalnızca SATIR TABANLI biçimde anlamlı. XML ve JSON'da bir
+     * kaydın nerede bittiğini satır sonu söylemez; oralarda kesmek belgeyi
+     * bozardı, o yüzden onlar aşağıdaki ikinci tavana kalıyor.
+     */
+    let govde = body;
+    let kirpmaOnce = false;
+    if (source.kind === 'feed_csv') {
+      const kirpma = truncateCsvRecords(body, MAX_ITEMS_PER_RUN);
+      govde = kirpma.text;
+      kirpmaOnce = kirpma.truncated;
+      if (kirpmaOnce) {
+        summary.sampleErrors.push({
+          externalId: null,
+          reason:
+            `Feed ${MAX_ITEMS_PER_RUN} kalemden uzun; ayrıştırmadan ÖNCE kırpıldı `
+            + '(bellek koruması). Anlık görüntü eksik sayıldı; bu turda '
+            + 'bayatlatma yapılmayacak.',
+        });
+      }
+    }
+
     // --- 2) Ayrıştır ---------------------------------------------------------
-    const parsed = adapter(body);
+    const parsed = adapter(govde);
     let records: RawRecord[] = parsed.records;
 
     /*
@@ -277,7 +309,7 @@ export async function runSource(
      * geçersizleştirme. Sıralama değişirse de her turda başka 10.000'i
      * gidip geliyordu.
      */
-    let kirpildi = false;
+    let kirpildi = kirpmaOnce;
     if (records.length > MAX_ITEMS_PER_RUN) {
       kirpildi = true;
       summary.sampleErrors.push({

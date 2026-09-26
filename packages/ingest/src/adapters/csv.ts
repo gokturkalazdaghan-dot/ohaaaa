@@ -152,3 +152,76 @@ function splitRows(text: string, sep: string): string[][] {
 
   return rows;
 }
+
+/**
+ * Metni en fazla `maxRecords` veri satırına kırpar — **AYRIŞTIRMADAN ÖNCE**.
+ *
+ * ======================================================================
+ * NEDEN VAR: ÖLÇÜLMÜŞ BİR OOM
+ * ======================================================================
+ * `pipeline.ts` içindeki `MAX_ITEMS_PER_RUN` tavanı AYRIŞTIRMADAN SONRA
+ * uygulanıyordu. Yani tavan veritabanını koruyor ama BELLEĞİ korumuyordu:
+ * 200.000 satırlık bir feed önce tamamen nesneye çevriliyor, ancak sonra
+ * ilk 50.000'e kesiliyordu.
+ *
+ * Üretimde ölçüldü (GitHub Actions, 2026-09-26, Lunzo PL parça 0 —
+ * 200.000 kalem):
+ *
+ *   FATAL ERROR: Ineffective mark-compacts near heap limit
+ *   Allocation failed - JavaScript heap out of memory   (exit 134)
+ *
+ * Alım hiç başlamadan düştü. Dizeyi ayrıştırmadan ÖNCE kesmek, nesne
+ * patlamasını hiç oluşturmuyor.
+ *
+ * ======================================================================
+ * TIRNAK FARKINDALIĞI ŞART, YOKSA KIRPMA VERİYİ BOZAR
+ * ======================================================================
+ * CSV'de tırnak içinde satır sonu OLABİLİR ve ürün açıklamalarında sık
+ * görülür. Ham `\n` sayarak kesmek, bir kaydın ORTASINDAN bölmek demekti:
+ * kalan yarım satır ayrıştırıcıda kolonları kaymış bir kayda dönüşür ve o
+ * kayıt "bozuk veri" sanılır. Kendi kırpmamızla ürettiğimiz bir hatayı
+ * satıcının feed'ine yazmak, ölçümü sessizce kirletirdi.
+ *
+ * Bu yüzden tarama tırnak durumunu izliyor ve yalnızca tırnak DIŞINDAKİ
+ * satır sonlarını sayıyor. `""` (kaçırılmış tırnak) iki kez geçiş yapar,
+ * yani net etkisi yok -- doğru davranış.
+ *
+ * Kesme noktası daima gerçek bir kayıt sınırı olduğu için kalan metin
+ * kendi başına geçerli bir CSV'dir.
+ *
+ * `maxRecords` VERİ satırını sayar; başlık satırı ayrıca korunur.
+ */
+export function truncateCsvRecords(
+  text: string,
+  maxRecords: number,
+): { text: string; truncated: boolean } {
+  if (maxRecords < 0) return { text, truncated: false };
+
+  let inQuotes = false;
+  /** Görülen satır sonu sayısı (başlık dahil). */
+  let boundaries = 0;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (ch === '\n' && !inQuotes) {
+      boundaries += 1;
+      /*
+       * Başlık + `maxRecords` veri satırı = `maxRecords + 1` sınır.
+       * O sınıra gelindiğinde metin BURADA biter; sonrası hiç
+       * ayrıştırılmaz.
+       */
+      if (boundaries >= maxRecords + 1) {
+        // Son satır sonu dahil edilmiyor: kalan metin tam kayıtlarla biter.
+        return { text: text.slice(0, i), truncated: i < text.length - 1 };
+      }
+    }
+  }
+
+  return { text, truncated: false };
+}

@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 
-import { parseCsv } from './csv.js';
+import { parseCsv, truncateCsvRecords } from './csv.js';
 import { parseJson } from './json.js';
 import { parseXml } from './xml.js';
 
@@ -157,4 +157,77 @@ test('JSON: bozuk gövde çökmez, uyarı döner', () => {
   const { records, warnings } = parseJson('{ bozuk');
   assert.equal(records.length, 0);
   assert.match(warnings[0]!, /ayrıştırılamadı/);
+});
+
+// ===========================================================================
+// AYRIŞTIRMADAN ÖNCE KIRPMA — ölçülmüş bir OOM'un düzeltmesi
+// ===========================================================================
+
+test('truncateCsvRecords: tavanin altindaki metin degismez', () => {
+  const metin = 'a,b\n1,2\n3,4';
+  const sonuc = truncateCsvRecords(metin, 50);
+  assert.equal(sonuc.text, metin);
+  assert.equal(sonuc.truncated, false);
+});
+
+test('truncateCsvRecords: tavan kadar VERI satiri kalir, baslik ayrica korunur', () => {
+  const metin = 'a,b\n1,1\n2,2\n3,3\n4,4';
+  const sonuc = truncateCsvRecords(metin, 2);
+  assert.equal(sonuc.truncated, true);
+  // Başlık + 2 veri satırı.
+  assert.equal(sonuc.text, 'a,b\n1,1\n2,2');
+
+  // Kalan metin kendi başına geçerli bir CSV olmalı.
+  const { records } = parseCsv(sonuc.text);
+  assert.equal(records.length, 2);
+  assert.equal(records[0]!.a, '1');
+});
+
+test('truncateCsvRecords: TIRNAK ICINDEKI satir sonu kaydi bolmez', () => {
+  /*
+   * Ham `\n` sayan bir kırpma burada ikinci kaydın ORTASINDAN keserdi ve
+   * kalan yarım satır "kolonları kaymış bozuk kayıt" olarak görünürdü --
+   * yani kendi kırpmamızla ürettiğimiz bir hatayı satıcının feed'ine
+   * yazmış olurduk.
+   */
+  const metin = 'ad,aciklama\nUrun1,"iki\nsatirli aciklama"\nUrun2,tek satir\nUrun3,x';
+  const sonuc = truncateCsvRecords(metin, 2);
+
+  assert.equal(sonuc.truncated, true);
+  const { records } = parseCsv(sonuc.text);
+  assert.equal(records.length, 2);
+  assert.equal(records[0]!.ad, 'Urun1');
+  // Açıklama bütün hâlde kalmalı: kesme noktası kaydın ortası değil sonu.
+  assert.equal(records[0]!.aciklama, 'iki\nsatirli aciklama');
+  assert.equal(records[1]!.ad, 'Urun2');
+});
+
+test('truncateCsvRecords: kacirilmis tirnak ("") durumu bozmaz', () => {
+  // `""` iki kez geçiş yapar, net etkisi yok.
+  const metin = 'ad,not\nA,"12"" ekran"\nB,y\nC,z';
+  const sonuc = truncateCsvRecords(metin, 2);
+  const { records } = parseCsv(sonuc.text);
+  assert.equal(records.length, 2);
+  assert.equal(records[0]!.not, '12" ekran');
+});
+
+test('truncateCsvRecords: CRLF satir sonlariyla da calisir', () => {
+  const metin = 'a,b\r\n1,1\r\n2,2\r\n3,3';
+  const sonuc = truncateCsvRecords(metin, 2);
+  assert.equal(sonuc.truncated, true);
+  const { records } = parseCsv(sonuc.text);
+  assert.equal(records.length, 2);
+  assert.equal(records[1]!.a, '2');
+});
+
+test('truncateCsvRecords: tavan 0 ise yalnizca baslik kalir', () => {
+  const sonuc = truncateCsvRecords('a,b\n1,2\n3,4', 0);
+  assert.equal(sonuc.text, 'a,b');
+  assert.equal(sonuc.truncated, true);
+});
+
+test('truncateCsvRecords: son satirda satir sonu varsa kirpilmis SAYILMAZ', () => {
+  // `a,b\n1,2\n` = başlık + 1 veri satırı. Tavan 1 ile kırpılmamalı.
+  const sonuc = truncateCsvRecords('a,b\n1,2\n', 1);
+  assert.equal(sonuc.truncated, false);
 });
