@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import {
   BOS_KATALOG,
   DEFAULT_LOCALE,
+  DEFAULT_MARKET,
   MARKET_CONFIG,
   isLocale,
   isTranslatedLocale,
@@ -121,6 +122,28 @@ function sunulacakDil(
 
   const pazarDili = MARKET_CONFIG[market]?.defaultLocale;
   if (pazarDili && isTranslated(pazarDili)) return pazarDili;
+
+  /*
+   * SON YEDEK PAZARA GÖRE SEÇİLİR.
+   *
+   * ÖLÇÜLEN ARIZA (canlı, 2026-09-26): `/de-at` `lang="tr-AT"` döndürüyordu
+   * -- Avusturyalı ziyaretçiye TÜRKÇE arayüz. Zincirin üç adımı da Almancaya
+   * işaret ediyor (istenen `de`, AT'nin ülke dili `de`) ve Almanca sözlüğümüz
+   * yok, dolayısıyla genel varsayılana düşüyordu. Aynı şey Lehçe, Çekçe ve
+   * Slovakça pazarlar için de geçerli -- yani bütün Avrupa açılımı için.
+   *
+   * `DEFAULT_LOCALE` Türkçe ve TÜRKİYE PAZARI İÇİN doğru. Türkiye dışında
+   * ise, dilini sunamadığımız bir ziyaretçiye Türkçe göstermek İngilizce
+   * göstermekten kötüdür: İngilizce en azından uluslararası ortak dil.
+   *
+   * Türkçe konuşan ziyaretçi bundan ETKİLENMEZ: bu satıra ancak İSTENEN
+   * dilin sözlüğü yokken geliniyor ve `tr` istendiğinde fonksiyon en başta
+   * dönüyor. Yani Almanya'daki Türkçe tarayıcı yine Türkçe görüyor.
+   *
+   * Almanca sözlük eklendiği gün bu yedek Avusturya için kendiliğinden
+   * devreden çıkar -- yukarıdaki ülke dili adımı onu yakalar.
+   */
+  if (market !== DEFAULT_MARKET) return 'en';
 
   return DEFAULT_LOCALE;
 }

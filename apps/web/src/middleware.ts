@@ -14,7 +14,8 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { yoluAyristir } from '@ohaaaa/shared';
+import { kanonikPazarKodu, yolSegmentiYaz, yoluAyristir } from '@ohaaaa/shared';
+
 
 /**
  * Adresteki dil ve pazarın sunucu bileşenlerine taşındığı başlıklar.
@@ -230,6 +231,40 @@ export async function middleware(request: NextRequest) {
    */
   if (pathname.startsWith('/api/v1/')) {
     return NextResponse.next();
+  }
+
+  /*
+   * ISO ÜLKE KODU → PAZAR KODU (301).
+   *
+   * ÖLÇÜLEN ARIZA: `/en-gb` canlıda `lang="en-US"` döndürüyordu ve
+   * `rel="canonical"` HİÇ yazılmıyordu. Sebep: İngiltere'nin pazar kodu
+   * `UK` ama ISO-3166 ülke kodu `GB`. `/en-gb` bilinmeyen bir pazara
+   * çözülüp sessizce varsayılana düşüyordu.
+   *
+   * Bunun iki bedeli var. Ziyaretçi tarafında: 67.587 teklifin bulunduğu
+   * pazara, herkesin ilk denediği adresten ULAŞILMIYOR. Arama motoru
+   * tarafında: aynı içerik iki adreste ve birinde canonical yok --
+   * kopya içerik sinyali.
+   *
+   * NEDEN 301, NEDEN NORMALIZE DEĞİL: `/en-gb`'yi sessizce `UK` gibi
+   * okumak iki adresi de yaşatırdı. Kalıcı yönlendirme tek kanonik adres
+   * bırakıyor ve arama motoruna hangisinin doğru olduğunu söylüyor.
+   *
+   * YALNIZCA `GB` VAR, ÇÜNKÜ TEK AYRIŞMA O. Pazar kodları arasında
+   * `EU`, `ANZ`, `NORDICS`, `GCC` de ISO dışı -- ama onlar BÖLGE ve tek
+   * bir ISO ülke karşılığı yok, dolayısıyla kimse "iso kodunu" deneyemez.
+   * `UK`/`GB` aynı yerin iki adı olduğu için biricik.
+   */
+  const { segment: adresSegmenti } = yoluAyristir(request.nextUrl.pathname);
+  const kanonikPazar = adresSegmenti ? kanonikPazarKodu(adresSegmenti.market) : null;
+  if (adresSegmenti && kanonikPazar) {
+    const hedef = request.nextUrl.clone();
+    hedef.pathname = `/${yolSegmentiYaz(adresSegmenti.locale, kanonikPazar)}${
+      pathname === '/' ? '' : pathname
+    }`;
+    // 308 DEĞİL 301: yöntem korunmasına ihtiyaç yok ve bu yol yalnızca
+    // GET ile geziliyor; 301 arama motorlarının en iyi anladığı sinyal.
+    return NextResponse.redirect(hedef, 301);
   }
 
   const nonce = makeNonce();
