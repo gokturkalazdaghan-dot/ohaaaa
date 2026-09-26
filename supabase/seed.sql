@@ -11,6 +11,16 @@
 begin;
 
 -- ---------------------------------------------------------------------------
+-- Fiyat alt sınırı geliştirme/test veritabanında KAPALI
+-- ---------------------------------------------------------------------------
+-- Üretimde 50 USD altındaki teklif yayına girmez (20260926160000). Buradaki
+-- demo teklifleri ve SQL testlerinin kendi ürün fikstürleri o kurala göre
+-- yazılmadı; sınır açık kalsaydı onları sessizce arşive atar ve alakasız
+-- testleri düşürürdü. Bu dosya üretime UYGULANMAZ (bkz. setup-production.sh).
+-- Kuralın kendisi 109_fiyat_alt_siniri_test.sql içinde sınırı açarak sınanır.
+update public.listing_price_floor set amount_cents = 0;
+
+-- ---------------------------------------------------------------------------
 -- Kullanıcılar (auth.users → trigger ile public.users profili oluşur)
 -- ---------------------------------------------------------------------------
 insert into auth.users (id, email, raw_user_meta_data) values
